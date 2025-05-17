@@ -77,7 +77,13 @@ export class ModelSelector {
 		);
 
 		if (scene) {
-			this.addModelToPreview(modelData, modelIdx);
+			// Set the model name in the DOM element
+			const element = scene.userData.element as HTMLElement;
+			if (element) {
+				element.dataset.modelName = modelData.name;
+			}
+
+			this.addModelToScene(modelIdx, modelData.model, modelData.name);
 		}
 	}
 

@@ -5,15 +5,19 @@ import { Voxelizer } from "./models/Voxelizer";
 import * as THREE from "three";
 import gsap from "gsap";
 import { ExportFormat } from "./utils/ModelExporter";
+import { ModelUploader } from "./utils/ModelUploader";
 
 export class App {
 	private viewer: VoxelModelViewer;
 	private modelLoader: ModelLoader;
 	private modelSelector: ModelSelector;
 	private voxelizer: Voxelizer;
+	private modelUploader: ModelUploader;
 	private isInitialized = false;
 	private loaderElement: HTMLElement | null;
 	private activeModelIdx = 4; // Start with Bonsai (index 4)
+	private userModels: { name: string; url: string; model: THREE.Group }[] =
+		[];
 
 	constructor() {
 		// Log for debugging
@@ -27,10 +31,12 @@ export class App {
 		this.modelLoader = new ModelLoader();
 		this.voxelizer = new Voxelizer();
 		this.modelSelector = new ModelSelector();
+		this.modelUploader = new ModelUploader();
 
 		// Setup export buttons
 		this.setupExportButton();
 		this.setupPngExportButton();
+		this.setupModelUploader();
 
 		// Listen for model cycle clicks
 		this.setupModelCycling();
@@ -279,5 +285,172 @@ export class App {
 				});
 			}
 		}, 5000);
+	}
+
+	/**
+	 * Setup the model upload button
+	 */
+	private setupModelUploader(): void {
+		const uploadInput = document.getElementById(
+			"model-upload"
+		) as HTMLInputElement;
+		if (!uploadInput) return;
+
+		uploadInput.addEventListener("change", async (event) => {
+			const target = event.target as HTMLInputElement;
+			const files = target.files;
+
+			if (!files || files.length === 0) return;
+
+			const file = files[0];
+
+			// Show loading message
+			if (this.loaderElement) {
+				this.loaderElement.innerHTML = "Processing uploaded model...";
+				this.loaderElement.style.display = "block";
+				this.loaderElement.style.opacity = "1";
+			}
+
+			try {
+				// Load the model
+				const model = await this.modelUploader.loadUserModel(file);
+
+				// Get model name from file
+				const name = ModelUploader.getModelNameFromFile(file);
+
+				// Create a data URL as a placeholder "url" for the model
+				const modelData = {
+					name,
+					url: `user-model://${name}`,
+					model,
+				};
+
+				// Add to user models
+				this.userModels.push(modelData);
+
+				// Create a new index for this model
+				const modelIdx =
+					this.modelLoader.getURLs().length +
+					this.userModels.length -
+					1;
+
+				// Create preview scene for the model
+				this.modelSelector.createPreviewScene(modelIdx);
+
+				// Add the model to the selector preview
+				this.modelSelector.addModelPreview(modelData, modelIdx);
+
+				// Voxelize the model
+				const modelVoxels = this.voxelizer.voxelizeModel(
+					modelIdx,
+					model
+				);
+				console.log(
+					`User model voxelized with ${modelVoxels.length} voxels`
+				);
+
+				// Add voxels to the viewer
+				this.viewer.addVoxelsForModel(modelIdx, modelVoxels);
+
+				// Switch to the new model
+				this.modelSelector.setActiveModelIndex(modelIdx);
+				this.viewer.animateToModel(this.activeModelIdx, modelIdx);
+				this.activeModelIdx = modelIdx;
+
+				// Hide the loader
+				if (this.loaderElement) {
+					gsap.to(this.loaderElement, {
+						duration: 0.3,
+						opacity: 0,
+						onComplete: () => {
+							if (this.loaderElement) {
+								this.loaderElement.style.display = "none";
+							}
+						},
+					});
+				}
+
+				// Show success notification
+				this.showUploadSuccess(name);
+			} catch (error) {
+				console.error("Error processing uploaded model:", error);
+
+				// Show error message
+				if (this.loaderElement) {
+					this.loaderElement.innerHTML = "Error processing model";
+					setTimeout(() => {
+						if (this.loaderElement) {
+							gsap.to(this.loaderElement, {
+								duration: 0.3,
+								opacity: 0,
+								onComplete: () => {
+									if (this.loaderElement) {
+										this.loaderElement.style.display =
+											"none";
+									}
+								},
+							});
+						}
+					}, 2000);
+				}
+			}
+
+			// Reset input so same file can be uploaded again
+			uploadInput.value = "";
+		});
+	}
+
+	/**
+	 * Show success notification after model upload
+	 */
+	private showUploadSuccess(modelName: string): void {
+		// Create notification element
+		const notification = document.createElement("div");
+		notification.className = "export-notification";
+
+		// Add checkmark icon for success
+		const successIcon = document.createElementNS(
+			"http://www.w3.org/2000/svg",
+			"svg"
+		);
+		successIcon.setAttribute("width", "16");
+		successIcon.setAttribute("height", "16");
+		successIcon.setAttribute("viewBox", "0 0 24 24");
+		successIcon.setAttribute("fill", "none");
+		successIcon.setAttribute("stroke", "currentColor");
+		successIcon.setAttribute("stroke-width", "2");
+		successIcon.setAttribute("stroke-linecap", "round");
+		successIcon.setAttribute("stroke-linejoin", "round");
+
+		const path = document.createElementNS(
+			"http://www.w3.org/2000/svg",
+			"path"
+		);
+		path.setAttribute("d", "M20 6L9 17l-5-5");
+		successIcon.appendChild(path);
+
+		// Text content
+		const textSpan = document.createElement("span");
+		textSpan.textContent = `${modelName} uploaded and voxelized`;
+
+		// Append elements
+		notification.appendChild(successIcon);
+		notification.appendChild(textSpan);
+
+		// Style the container
+		notification.style.display = "flex";
+		notification.style.alignItems = "center";
+		notification.style.gap = "6px";
+
+		// Add to DOM
+		document.body.appendChild(notification);
+
+		// Remove after delay with fade-out animation
+		setTimeout(() => {
+			notification.classList.add("fade-out");
+			notification.addEventListener("animationend", () => {
+				notification.remove();
+			});
+		}, 3000);
 	}
 }

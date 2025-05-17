@@ -66,14 +66,9 @@ export class Voxelizer {
 						meshCnt++
 					) {
 						const mesh = importedMeshes[meshCnt];
-
-						const color = new THREE.Color();
-						const material =
-							mesh.material as THREE.MeshStandardMaterial;
-
-						// Use exact color from the model material without modifications
-						color.copy(material.color);
-
+						const color = this.extractColorFromMaterial(
+							mesh.material
+						);
 						const pos = new THREE.Vector3(i, j, k);
 
 						if (
@@ -102,5 +97,41 @@ export class Voxelizer {
 		this.rayCaster.set(pos, ray);
 		this.rayCasterIntersects = this.rayCaster.intersectObject(mesh, false);
 		return this.rayCasterIntersects.length % 2 === 1;
+	}
+
+	/**
+	 * Extract color from any type of material
+	 * @param material The material to extract color from
+	 * @returns The extracted color
+	 */
+	private extractColorFromMaterial(
+		material: THREE.Material | THREE.Material[]
+	): THREE.Color {
+		// Handle array of materials by using the first one
+		if (Array.isArray(material)) {
+			return this.extractColorFromMaterial(material[0]);
+		}
+
+		// Default color if we can't extract one
+		const defaultColor = new THREE.Color(0xffffff);
+
+		// Try to extract color from various material types
+		if ("color" in material && material.color instanceof THREE.Color) {
+			// Most materials have a color property
+			return material.color.clone();
+		} else if (
+			"emissive" in material &&
+			material.emissive instanceof THREE.Color
+		) {
+			// MeshPhongMaterial and MeshStandardMaterial have emissive
+			return material.emissive.clone();
+		} else if ("map" in material && material.map) {
+			// If there's a texture map but no direct color, create a color based on model index
+			// This is better than default white
+			return new THREE.Color().setHSL(Math.random(), 0.8, 0.5);
+		}
+
+		// Fallback to default color
+		return defaultColor;
 	}
 }

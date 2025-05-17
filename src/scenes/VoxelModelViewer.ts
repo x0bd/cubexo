@@ -537,10 +537,15 @@ export class VoxelModelViewer {
 
 	/**
 	 * Export a high-resolution PNG image of the current view (2000x2000 pixels)
-	 * Uses the current camera angle set by the user
+	 * Uses the current camera angle set by the user but zooms in for better detail
 	 */
 	public exportAsPng(): void {
-		if (!this.renderer || !this.scene || !this.camera) {
+		if (
+			!this.renderer ||
+			!this.scene ||
+			!this.camera ||
+			!this.instancedMesh
+		) {
 			console.error("Cannot export: renderer not initialized");
 			return;
 		}
@@ -558,11 +563,27 @@ export class VoxelModelViewer {
 			.toLowerCase()
 			.replace(/[^a-z0-9]/g, "-")}.png`;
 
-		// Store original renderer size and pixel ratio
+		// Store original renderer size, pixel ratio and settings
 		const originalSize = {
 			width: this.renderer.domElement.width,
 			height: this.renderer.domElement.height,
 			pixelRatio: this.renderer.getPixelRatio(),
+		};
+
+		// Store camera state
+		const originalCamera = {
+			position: this.camera.position.clone(),
+			target: new THREE.Vector3(0, 0, 0),
+			zoom: this.camera.zoom,
+			fov: this.camera.fov,
+		};
+
+		// Store renderer settings
+		const originalRendererSettings = {
+			shadowMapEnabled: this.renderer.shadowMap.enabled,
+			shadowMapType: this.renderer.shadowMap.type,
+			toneMapping: this.renderer.toneMapping,
+			toneMappingExposure: this.renderer.toneMappingExposure,
 		};
 
 		// Temporarily disable controls
@@ -570,13 +591,57 @@ export class VoxelModelViewer {
 			this.controls.enabled = false;
 		}
 
-		// Configure renderer for high-res screenshot
+		// Enhance renderer for high-quality export
 		this.renderer.setSize(2000, 2000);
-		this.renderer.setPixelRatio(1);
+		this.renderer.setPixelRatio(2); // Adjusted from 3 to 2 for balanced quality and performance
 
-		// Use current camera angle for the export (keep user's chosen angle)
-		// Just update projection matrix for the new aspect ratio
-		this.camera.aspect = 1; // Square aspect ratio for the export
+		// Enhance shadows and tone mapping for export
+		this.renderer.shadowMap.enabled = true;
+		this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+		this.renderer.toneMappingExposure = 1.2;
+
+		// Get the current camera direction and target
+		const cameraDirection = new THREE.Vector3();
+		this.camera.getWorldDirection(cameraDirection);
+
+		// Calculate the center of the model
+		const box = new THREE.Box3().setFromObject(this.instancedMesh);
+		const center = new THREE.Vector3();
+		box.getCenter(center);
+
+		// Store original camera target
+		if (this.controls) {
+			originalCamera.target = this.controls.target.clone();
+		}
+
+		// Calculate model size for zoom factor
+		const size = new THREE.Vector3();
+		box.getSize(size);
+		const maxDim = Math.max(size.x, size.y, size.z);
+
+		// Zoom in by moving camera closer along its current direction
+		// Keep the same viewing angle but get closer
+		const zoomFactor = 0.4; // Adjusted from 0.6 to 0.4 for a closer zoom (larger model in frame)
+		const originalDistance = this.camera.position.distanceTo(center);
+		const newDistance = originalDistance * zoomFactor;
+
+		// Move camera closer to the model along its current direction
+		const newPosition = center
+			.clone()
+			.add(cameraDirection.multiplyScalar(-newDistance));
+
+		// Apply new camera position
+		this.camera.position.copy(newPosition);
+
+		// Update controls if needed
+		if (this.controls) {
+			this.controls.target = center;
+			this.controls.update();
+		}
+
+		// Use square aspect ratio for the export
+		this.camera.aspect = 1;
 		this.camera.updateProjectionMatrix();
 
 		// Render the scene
@@ -591,7 +656,7 @@ export class VoxelModelViewer {
 			link.click();
 
 			// Show export notification
-			this.showExportNotification("PNG exported with your custom angle");
+			this.showExportNotification("High-quality PNG exported");
 		} catch (error) {
 			console.error("Error exporting PNG:", error);
 		}
@@ -599,13 +664,24 @@ export class VoxelModelViewer {
 		// Restore original renderer settings
 		this.renderer.setSize(originalSize.width, originalSize.height);
 		this.renderer.setPixelRatio(originalSize.pixelRatio);
+		this.renderer.shadowMap.enabled =
+			originalRendererSettings.shadowMapEnabled;
+		this.renderer.shadowMap.type = originalRendererSettings.shadowMapType;
+		this.renderer.toneMapping = originalRendererSettings.toneMapping;
+		this.renderer.toneMappingExposure =
+			originalRendererSettings.toneMappingExposure;
 
-		// Restore camera aspect ratio
+		// Restore camera position and properties
+		this.camera.position.copy(originalCamera.position);
+		this.camera.zoom = originalCamera.zoom;
 		this.camera.aspect = originalSize.width / originalSize.height;
+		this.camera.fov = originalCamera.fov;
 		this.camera.updateProjectionMatrix();
 
-		// Re-enable controls
+		// Restore controls
 		if (this.controls) {
+			this.controls.target.copy(originalCamera.target);
+			this.controls.update();
 			this.controls.enabled = true;
 		}
 	}
