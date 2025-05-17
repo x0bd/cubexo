@@ -70,9 +70,10 @@ export class Voxelizer {
 						const color = new THREE.Color();
 						const material =
 							mesh.material as THREE.MeshStandardMaterial;
-						const hsl = { h: 0, s: 0, l: 0 };
-						material.color.getHSL(hsl);
-						color.setHSL(hsl.h, hsl.s * 0.8, hsl.l * 0.8 + 0.2);
+
+						// Use exact color from the model material without modifications
+						color.copy(material.color);
+
 						const pos = new THREE.Vector3(i, j, k);
 
 						if (

@@ -13,7 +13,7 @@ export class VoxelModelViewer {
 	private raycaster: THREE.Raycaster | null = null;
 
 	private voxelGeometry: RoundedBoxGeometry | null = null;
-	private voxelMaterial: THREE.MeshLambertMaterial | null = null;
+	private voxelMaterial: THREE.Material | null = null;
 	private instancedMesh: THREE.InstancedMesh | null = null;
 	private dummy: THREE.Object3D = new THREE.Object3D();
 
@@ -195,10 +195,19 @@ export class VoxelModelViewer {
 		this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		this.renderer.setClearColor(0x000000, 0);
 		this.renderer.shadowMap.enabled = true;
+		this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+		// Use standard color space for accurate colors
+		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+		// Disable tone mapping for accurate color reproduction
+		this.renderer.toneMapping = THREE.NoToneMapping;
 	}
 
 	private setupScene(): void {
 		this.scene = new THREE.Scene();
+		// White background for better color accuracy perception
+		this.scene.background = new THREE.Color(0xffffff);
 	}
 
 	private setupCamera(): void {
@@ -229,34 +238,39 @@ export class VoxelModelViewer {
 	private setupLights(): void {
 		if (!this.scene) return;
 
-		// Ambient light
-		const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+		// Bright ambient light for even illumination - important for accurate colors
+		const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
 		this.scene.add(ambientLight);
 
 		// Create a group to hold the lights
 		this.lightHolder = new THREE.Group();
 
-		// Main spotlight
-		const topLight = new THREE.SpotLight(0xffffff, 0.4);
-		topLight.position.set(0, 15, 3);
+		// Main directional light - brighter than spot for better visibility
+		const topLight = new THREE.DirectionalLight(0xffffff, 1.0);
+		topLight.position.set(0, 15, 5);
 		topLight.castShadow = true;
 		topLight.shadow.camera.near = 10;
 		topLight.shadow.camera.far = 30;
 		topLight.shadow.mapSize = new THREE.Vector2(1024, 1024);
+		topLight.shadow.bias = -0.0001;
 		this.lightHolder.add(topLight);
 
-		// Side light
-		const sideLight = new THREE.SpotLight(0xffffff, 0.4);
-		sideLight.position.set(0, -4, 5);
+		// Side and fill lights for balanced illumination
+		const sideLight = new THREE.DirectionalLight(0xffffff, 0.8);
+		sideLight.position.set(10, 5, 5);
 		this.lightHolder.add(sideLight);
+
+		const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
+		backLight.position.set(-5, 3, -10);
+		this.lightHolder.add(backLight);
 
 		// Add light holder to scene
 		this.scene.add(this.lightHolder);
 
-		// Ground shadow
+		// Light ground shadow
 		const planeGeometry = new THREE.PlaneGeometry(35, 35);
 		const shadowPlaneMaterial = new THREE.ShadowMaterial({
-			opacity: 0.1,
+			opacity: 0.08, // Very light shadow to not detract from colors
 		});
 		const shadowPlaneMesh = new THREE.Mesh(
 			planeGeometry,
@@ -278,8 +292,12 @@ export class VoxelModelViewer {
 			this.params.boxRoundness
 		);
 
-		// Create voxel material
-		this.voxelMaterial = new THREE.MeshLambertMaterial();
+		// Use MeshStandardMaterial for physically accurate color representation
+		this.voxelMaterial = new THREE.MeshStandardMaterial({
+			roughness: 0.2, // Lower roughness for more vibrant color
+			metalness: 0.0, // Non-metallic for accurate diffuse colors
+			flatShading: false, // Smooth shading
+		});
 	}
 
 	public recreateInstancedMesh(count: number): void {
@@ -304,7 +322,8 @@ export class VoxelModelViewer {
 					randomCoordinate(),
 					randomCoordinate()
 				),
-				color: new THREE.Color().setHSL(Math.random(), 0.8, 0.8),
+				// Default white color - will be overridden by actual model colors
+				color: new THREE.Color(1, 1, 1),
 			});
 		}
 
