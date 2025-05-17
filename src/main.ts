@@ -1,24 +1,35 @@
-import './style.css'
-import typescriptLogo from './typescript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.ts'
+import "./style.css";
+import { Scene } from "./core/Scene";
+import { setupUI } from "./utils/ui";
+import { loadingManager } from "./utils/loading";
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="${viteLogo}" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://www.typescriptlang.org/" target="_blank">
-      <img src="${typescriptLogo}" class="logo vanilla" alt="TypeScript logo" />
-    </a>
-    <h1>Vite + TypeScript</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the Vite and TypeScript logos to learn more
-    </p>
-  </div>
-`
+// Create and initialize the scene
+const init = async () => {
+	try {
+		// Show loading screen
+		loadingManager.showLoading();
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+		// Create scene
+		const scene = new Scene();
+
+		// Wait for scene to initialize
+		await scene.init();
+
+		// Setup UI elements
+		setupUI();
+
+		// Hide loading screen when done
+		loadingManager.hideLoading();
+
+		// Handle cleanup on window unload
+		window.addEventListener("beforeunload", () => {
+			scene.dispose();
+		});
+	} catch (error) {
+		console.error("Failed to initialize app:", error);
+		loadingManager.showError("Failed to initialize application");
+	}
+};
+
+// Start the application
+init();

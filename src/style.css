@@ -1,96 +1,137 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+	/* Monochrome palette */
+	--color-background: #000000;
+	--color-foreground: #ffffff;
+	--color-text: #f5f5f5;
+	--color-text-secondary: #888888;
+	--color-accent: #333333;
+	--color-border: #333333;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+	/* Font settings */
+	font-family: "Geist Mono", monospace;
+	font-size: 16px;
+	line-height: 1.5;
+	font-weight: 400;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+	color-scheme: dark;
+	color: var(--color-text);
+	background-color: var(--color-background);
+
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+* {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
 }
 
+html,
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+
+#webgl {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 1;
+}
+
+#ui-container {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 2;
+	pointer-events: none;
+	padding: 2rem;
+}
+
+#header {
+	pointer-events: auto;
 }
 
 h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+	font-size: 1.5rem;
+	font-weight: 600;
+	letter-spacing: -0.025em;
+	margin-bottom: 0.5rem;
 }
 
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+.subtitle {
+	font-size: 0.875rem;
+	color: var(--color-text-secondary);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vanilla:hover {
-  filter: drop-shadow(0 0 2em #3178c6aa);
-}
-
-.card {
-  padding: 2em;
+/* Control panel styling */
+.control-panel {
+	position: absolute;
+	top: 2rem;
+	right: 2rem;
+	width: 320px;
+	background-color: rgba(0, 0, 0, 0.8);
+	border: 1px solid var(--color-border);
+	padding: 1.5rem;
+	backdrop-filter: blur(10px);
+	pointer-events: auto;
 }
 
-.read-the-docs {
-  color: #888;
+.control-panel h2 {
+	font-size: 1rem;
+	margin-bottom: 1rem;
+	color: var(--color-foreground);
 }
 
+/* Button styling */
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+	background-color: var(--color-accent);
+	color: var(--color-text);
+	border: 1px solid var(--color-border);
+	padding: 0.5rem 1rem;
+	cursor: pointer;
+	font-family: "Geist Mono", monospace;
+	font-size: 0.875rem;
+	transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+button:hover {
+	background-color: #444444;
+	border-color: var(--color-foreground);
+}
+
+/* Loading screen */
+.loading-screen {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-color: var(--color-background);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	z-index: 10;
+}
+
+.loading-progress {
+	width: 200px;
+	height: 2px;
+	background-color: var(--color-accent);
+	margin-top: 1rem;
+}
+
+.loading-progress-bar {
+	height: 100%;
+	width: 0%;
+	background-color: var(--color-foreground);
 }
