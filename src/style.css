@@ -247,16 +247,93 @@ canvas#webgl {
 	pointer-events: auto;
 }
 
+/* Click to cycle hint */
+.cycle-hint {
+	position: fixed;
+	top: 40%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 2000;
+	pointer-events: none;
+	animation: hint-in 0.3s ease-out;
+}
+
+.cycle-hint .hint-content {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	background-color: var(--color-text);
+	color: var(--color-bg);
+	padding: 10px 16px;
+	border-radius: 8px;
+	font-family: "Geist Mono", monospace;
+	font-size: 14px;
+	font-weight: 450;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	pointer-events: auto;
+}
+
+.cycle-hint svg {
+	flex-shrink: 0;
+}
+
+.cycle-hint .hint-close {
+	background: transparent;
+	border: none;
+	color: var(--color-bg);
+	cursor: pointer;
+	padding: 4px;
+	margin-left: 4px;
+	border-radius: 4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.cycle-hint .hint-close:hover {
+	background-color: rgba(255, 255, 255, 0.1);
+}
+
+.cycle-hint.hint-fade-out {
+	animation: hint-out 0.3s ease-in forwards;
+}
+
+@keyframes hint-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, -40%);
+	}
+	to {
+		opacity: 1;
+		transform: translate(-50%, -50%);
+	}
+}
+
+@keyframes hint-out {
+	from {
+		opacity: 1;
+		transform: translate(-50%, -50%);
+	}
+	to {
+		opacity: 0;
+		transform: translate(-50%, -40%);
+	}
+}
+
+/* Export hint - make more visible */
 .export-hint {
 	font-family: "Geist Mono", monospace;
-	font-size: 11px;
+	font-size: 12px;
 	color: var(--color-text);
-	opacity: 0.6;
+	opacity: 0.8;
 	background-color: var(--color-bg);
-	padding: 6px 8px;
+	padding: 8px 12px;
 	border-radius: 4px;
 	text-align: right;
-	margin-bottom: -4px;
+	border: 1px solid var(--color-border);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+	margin-bottom: 2px;
+	max-width: 240px;
 }
 
 /* Row of export buttons */

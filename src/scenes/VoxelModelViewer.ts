@@ -86,7 +86,8 @@ export class VoxelModelViewer {
 			gsap.killTweensOf(this.voxels[i].color);
 			gsap.killTweensOf(this.voxels[i].position);
 
-			const duration = 0.5 + 0.5 * Math.pow(Math.random(), 6);
+			// Increase duration for slower, more deliberate transitions
+			const duration = 1.0 + 0.8 * Math.pow(Math.random(), 6); // Increased from 0.5 + 0.5 to 1.0 + 0.8
 			let targetPos: THREE.Vector3;
 
 			// Move to new position if we have one;
@@ -98,8 +99,8 @@ export class VoxelModelViewer {
 			if (this.voxelsPerModel[newModelIdx]?.[i]) {
 				targetPos = this.voxelsPerModel[newModelIdx][i].position;
 				gsap.to(this.voxels[i].color, {
-					delay: 0.7 * Math.random() * duration,
-					duration: 0.05,
+					delay: 0.9 * Math.random() * duration, // Increased from 0.7 to 0.9
+					duration: 0.2, // Increased from 0.05 to 0.2
 					r: this.voxelsPerModel[newModelIdx][i].color.r,
 					g: this.voxelsPerModel[newModelIdx][i].color.g,
 					b: this.voxelsPerModel[newModelIdx][i].color.b,
@@ -131,9 +132,9 @@ export class VoxelModelViewer {
 				}
 			}
 
-			// Move to new position
+			// Move to new position with longer duration
 			gsap.to(this.voxels[i].position, {
-				delay: 0.2 * Math.random(),
+				delay: 0.4 * Math.random(), // Increased from 0.2 to 0.4
 				duration: duration,
 				x: targetPos.x,
 				y: targetPos.y,
@@ -148,16 +149,16 @@ export class VoxelModelViewer {
 		// Increase the model rotation during transition
 		if (this.instancedMesh) {
 			gsap.to(this.instancedMesh.rotation, {
-				duration: 1.2,
+				duration: 2.0, // Increased from 1.2 to 2.0
 				y: "+=" + 1.3 * Math.PI,
 				ease: "power2.out",
 			});
 		}
 
-		// Show the right number of voxels
+		// Show the right number of voxels with longer transition
 		if (this.instancedMesh && this.voxelsPerModel[newModelIdx]) {
 			gsap.to(this.instancedMesh, {
-				duration: 0.4,
+				duration: 0.8, // Increased from 0.4 to 0.8
 				count: this.voxelsPerModel[newModelIdx].length,
 			});
 		}
@@ -166,7 +167,7 @@ export class VoxelModelViewer {
 		gsap.to(
 			{},
 			{
-				duration: 1, // max transition duration
+				duration: 2.2, // Increased from 1.0 to 2.2 for longer overall transition
 				onUpdate: () => {
 					if (this.instancedMesh) {
 						this.instancedMesh.instanceMatrix.needsUpdate = true;
@@ -258,6 +259,75 @@ export class VoxelModelViewer {
 		this.controls.maxPolarAngle = Math.PI * 0.6;
 		this.controls.autoRotate = false; // Disable auto-rotation to let user control the angle
 		this.controls.autoRotateSpeed = 0.5; // Slower rotation for a more premium feel
+
+		// Add the mouse move and up listeners to detect dragging
+		this.canvasElement.addEventListener(
+			"mousedown",
+			this.handleMouseDown.bind(this)
+		);
+	}
+
+	// Track if user is dragging to prevent model cycling when they're just trying to rotate
+	private isDragging = false;
+	private mouseDownTime = 0;
+
+	private handleMouseDown(event: MouseEvent): void {
+		// Only track primary mouse button (left click)
+		if (event.button !== 0) return;
+
+		this.isDragging = false;
+		this.mouseDownTime = Date.now();
+
+		// Add temporary listeners that will be removed after mouse up/out
+		window.addEventListener("mousemove", this.handleMouseMove.bind(this), {
+			once: true,
+		});
+		window.addEventListener("mouseup", this.handleMouseUp.bind(this));
+		this.canvasElement?.addEventListener(
+			"mouseout",
+			this.handleMouseUp.bind(this)
+		);
+	}
+
+	private handleMouseMove(): void {
+		this.isDragging = true;
+	}
+
+	private handleMouseUp(event: MouseEvent): void {
+		// Remove the listeners to avoid memory leaks
+		window.removeEventListener("mouseup", this.handleMouseUp.bind(this));
+		this.canvasElement?.removeEventListener(
+			"mouseout",
+			this.handleMouseUp.bind(this)
+		);
+
+		// If this was a quick click (not a drag) and not on a UI element, it's a valid cycle click
+		const clickDuration = Date.now() - this.mouseDownTime;
+		if (
+			!this.isDragging &&
+			clickDuration < 200 &&
+			!this.isClickingUI(event)
+		) {
+			// Dispatch a custom event to notify about the click on the canvas
+			const cycleEvent = new CustomEvent("model-cycle-click");
+			window.dispatchEvent(cycleEvent);
+		}
+
+		this.isDragging = false;
+	}
+
+	private isClickingUI(event: MouseEvent): boolean {
+		// Check if the click target is a UI element that should not trigger model cycling
+		const target = event.target as HTMLElement;
+
+		// Check if the target is a button or inside UI container
+		const isUiElement =
+			target.closest("#ui-container") !== null ||
+			target.closest(".export-buttons") !== null ||
+			target.closest("#theme-toggle") !== null ||
+			target.tagName === "BUTTON";
+
+		return isUiElement;
 	}
 
 	private setupLights(): void {
