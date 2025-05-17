@@ -15,7 +15,13 @@ export class App {
 	private activeModelIdx = 4; // Start with Bonsai (index 4)
 
 	constructor() {
+		// Log for debugging
+		console.log("App constructor called");
+
+		// Get DOM elements
 		this.loaderElement = document.querySelector("#loader");
+
+		// Initialize components
 		this.viewer = new VoxelModelViewer();
 		this.modelLoader = new ModelLoader();
 		this.voxelizer = new Voxelizer();
@@ -24,79 +30,124 @@ export class App {
 
 	public async init(): Promise<void> {
 		if (this.isInitialized) return;
+		this.isInitialized = true;
 
-		// Set up the scene
+		// Log for debugging
+		console.log("App initializing");
+
+		// Initialize the viewer
 		this.viewer.init();
+
+		// Initialize the selector with callback for model switching
+		this.modelSelector.init((oldIndex, newIndex) => {
+			console.log(`Model selected: ${oldIndex} -> ${newIndex}`);
+			this.viewer.animateToModel(oldIndex, newIndex);
+			this.activeModelIdx = newIndex;
+		});
+
+		// Load models
 		this.loadModels();
 	}
 
 	private loadModels(): void {
+		// Show loading message
 		if (this.loaderElement) {
 			this.loaderElement.innerHTML = "Loading models...";
 		}
 
-		// Load each model
-		let modelsLoadedCount = 0;
-		this.modelLoader.getURLs().forEach((url, modelIdx) => {
-			// Create preview scene
-			const scene = this.modelSelector.createPreviewScene(modelIdx);
+		// Get model URLs
+		const modelURLs = this.modelLoader.getURLs();
 
-			// Load the GLTF model
+		// Log for debugging
+		console.log(`Loading ${modelURLs.length} models`);
+
+		// Create preview scenes first
+		modelURLs.forEach((_, modelIdx) => {
+			this.modelSelector.createPreviewScene(modelIdx);
+		});
+
+		// Counter for loaded models
+		let modelsLoadedCount = 0;
+
+		// Load each model
+		modelURLs.forEach((url, modelIdx) => {
+			console.log(`Loading model ${modelIdx}: ${url}`);
+
 			this.modelLoader.loadModel(
 				url,
 				(model) => {
-					// Add the model to the preview
-					this.modelSelector.addModelToPreview(modelIdx, model);
+					console.log(`Model ${modelIdx} loaded successfully`);
+
+					// Get model name from URL
+					const name = this.modelLoader.getModelNameFromUrl(url);
+
+					// Add the model to the selector preview
+					this.modelSelector.addModelPreview(
+						{
+							name,
+							url,
+							model,
+						},
+						modelIdx
+					);
 
 					// Voxelize the model
 					const modelVoxels = this.voxelizer.voxelizeModel(
 						modelIdx,
 						model
 					);
+					console.log(
+						`Model ${modelIdx} voxelized with ${modelVoxels.length} voxels`
+					);
 
 					// Add voxels to the viewer
 					this.viewer.addVoxelsForModel(modelIdx, modelVoxels);
 
-					// Update loading status
+					// Increment counter
 					modelsLoadedCount++;
+
+					// First model loaded - start rendering
 					if (modelsLoadedCount === 1) {
-						// Once we have the first model loaded, start rendering
+						console.log("First model loaded, starting render loop");
 						if (this.loaderElement) {
 							this.loaderElement.innerHTML =
-								"calculating the voxels...";
+								"Calculating voxels...";
 						}
 						this.viewer.startRenderLoop();
 					}
 
-					if (
-						modelsLoadedCount === this.modelLoader.getURLs().length
-					) {
-						// All models loaded, fade out loader and animate to initial model
+					// All models loaded
+					if (modelsLoadedCount === modelURLs.length) {
+						console.log("All models loaded");
+
+						// Fade out loader
 						if (this.loaderElement) {
 							gsap.to(this.loaderElement, {
 								duration: 0.3,
 								opacity: 0,
+								onComplete: () => {
+									if (this.loaderElement) {
+										this.loaderElement.style.display =
+											"none";
+									}
+								},
 							});
 						}
 
-						// Setup model selector events
-						this.setupSelectorEvents();
+						// Set active model in selector
+						this.modelSelector.setActiveModelIndex(
+							this.activeModelIdx
+						);
 
-						// Animate to the initial model (Bonsai)
+						// Animate to initial model (Bonsai)
+						this.viewer.setActiveModel(this.activeModelIdx);
 						this.viewer.animateToModel(0, this.activeModelIdx);
 					}
 				},
 				(error) => {
-					console.error(`Error loading model: ${error}`);
+					console.error(`Error loading model ${modelIdx}:`, error);
 				}
 			);
-		});
-	}
-
-	private setupSelectorEvents(): void {
-		this.modelSelector.init((oldIndex, newIndex) => {
-			this.viewer.animateToModel(oldIndex, newIndex);
-			this.activeModelIdx = newIndex;
 		});
 	}
 }
