@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700&display=swap");
 
 * {
 	box-sizing: border-box;
@@ -23,7 +23,7 @@
 	--color-text-secondary-dark: #888;
 
 	/* Core variables */
-	--font-sans: "Inter", -apple-system, system-ui, sans-serif;
+	--font-sans: "Geist Mono", monospace;
 	--radius: 4px;
 	--shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -81,9 +81,9 @@ canvas#webgl {
 
 #header h1 {
 	font-size: 24px;
-	font-weight: 600;
+	font-weight: 500;
 	margin: 0;
-	letter-spacing: -0.02em;
+	letter-spacing: -0.01em;
 	color: var(--color-text);
 	pointer-events: auto;
 }
@@ -93,6 +93,7 @@ canvas#webgl {
 	font-weight: 400;
 	color: var(--color-text-secondary);
 	margin-top: 4px;
+	letter-spacing: -0.01em;
 }
 
 /* Simple, clean model selector */
@@ -137,8 +138,9 @@ canvas#webgl {
 	color: var(--color-text);
 	padding: 12px 16px;
 	border-radius: 4px;
-	font-weight: 500;
-	font-size: 14px;
+	font-weight: 400;
+	font-size: 13px;
+	letter-spacing: -0.01em;
 	border: 1px solid var(--color-border);
 	pointer-events: auto;
 	z-index: 1000;
@@ -167,8 +169,9 @@ canvas#webgl {
 	border: none;
 	padding: 8px 16px;
 	border-radius: 4px;
-	font-size: 14px;
+	font-size: 13px;
 	font-weight: 500;
+	letter-spacing: -0.01em;
 	cursor: pointer;
 	z-index: 1000;
 	transition: background-color 0.1s;
@@ -222,9 +225,33 @@ canvas#webgl {
 	color: white;
 	padding: 8px 16px;
 	border-radius: 4px;
-	font-size: 14px;
-	font-weight: 500;
+	font-size: 13px;
+	font-weight: 400;
+	letter-spacing: -0.01em;
 	z-index: 1000;
+	animation: fade-in 0.2s ease-out;
+}
+
+.export-notification.fade-out {
+	animation: fade-out 0.2s ease-in forwards;
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes fade-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
 }
 
 /* Responsive adjustments */

@@ -15,12 +15,16 @@ export class ModelSelector {
 	constructor() {
 		this.selectorElement = document.getElementById("selector");
 
-		// Create a renderer for the preview thumbnails
+		// Create a renderer for the preview thumbnails with improved settings
 		this.renderer = new THREE.WebGLRenderer({
 			antialias: true,
 			alpha: true,
+			powerPreference: "high-performance",
 		});
 		this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+		this.renderer.toneMappingExposure = 1.2;
 		this.renderer.setScissorTest(true);
 
 		// Add renderer to the page with proper z-index to be visible
@@ -69,15 +73,15 @@ export class ModelSelector {
 		);
 
 		if (scene) {
-			this.addModelToPreview(modelIdx, modelData.model);
+			this.addModelToPreview(modelData, modelIdx);
 		}
 	}
 
 	public createPreviewScene(modelIdx: number): THREE.Scene {
 		const scene = new THREE.Scene();
 
-		// Set background color
-		scene.background = new THREE.Color().setHSL(modelIdx / 6, 0.5, 0.7);
+		// Use background color based on model index with better saturation and lightness
+		scene.background = new THREE.Color().setHSL(modelIdx / 6, 0.6, 0.8);
 
 		// Create preview element
 		const element = document.createElement("div");
@@ -85,6 +89,7 @@ export class ModelSelector {
 		element.style.width = `${this.previewWidth}px`;
 		element.style.height = `${this.previewWidth}px`;
 		element.dataset.modelIdx = modelIdx.toString();
+		element.dataset.modelName = `model-${modelIdx}`;
 
 		// Add click handler
 		element.addEventListener("click", (e) => {
@@ -121,13 +126,25 @@ export class ModelSelector {
 		orbit.enableDamping = true;
 		scene.userData.orbit = orbit;
 
-		// Add lights
-		const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+		// Improved lighting setup
+		// 1. Brighter ambient light for better overall illumination
+		const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
 		scene.add(ambientLight);
 
-		const sideLight = new THREE.PointLight(0xffffff, 0.7);
-		sideLight.position.set(2, 0, 5);
-		scene.add(sideLight);
+		// 2. Main directional light for shadows and definition
+		const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+		mainLight.position.set(1, 2, 2);
+		scene.add(mainLight);
+
+		// 3. Fill light from the opposite side to reduce harsh shadows
+		const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+		fillLight.position.set(-2, 0, -1);
+		scene.add(fillLight);
+
+		// 4. Rim light for better edge definition
+		const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+		rimLight.position.set(0, 1, -2);
+		scene.add(rimLight);
 
 		// Initialize rect
 		scene.userData.rect = {
@@ -141,7 +158,21 @@ export class ModelSelector {
 		return scene;
 	}
 
-	public addModelToPreview(modelIdx: number, model: THREE.Group): void {
+	public addModelToPreview(modelData: ModelData, modelIdx: number): void {
+		const scene = this.previewScenes.find(
+			(scene) => scene.userData.modelIdx === modelIdx
+		);
+
+		if (scene) {
+			this.addModelToScene(modelIdx, modelData.model, modelData.name);
+		}
+	}
+
+	private addModelToScene(
+		modelIdx: number,
+		model: THREE.Group,
+		modelName?: string
+	): void {
 		const scene = this.previewScenes.find(
 			(scene) => scene.userData.modelIdx === modelIdx
 		);
@@ -161,6 +192,36 @@ export class ModelSelector {
 		// Clone the model
 		const clonedModel = model.clone();
 
+		// Enhance material properties for better lighting
+		clonedModel.traverse((object) => {
+			if (object instanceof THREE.Mesh) {
+				// Update any existing materials to better reflect light
+				if (object.material) {
+					if (object.material instanceof THREE.MeshStandardMaterial) {
+						object.material = object.material.clone();
+						object.material.roughness = 0.3;
+						object.material.metalness = 0.15;
+						object.material.envMapIntensity = 1.0;
+					} else if (
+						object.material instanceof THREE.MeshPhongMaterial
+					) {
+						object.material = object.material.clone();
+						object.material.shininess = 60;
+						object.material.specular = new THREE.Color(0x333333);
+					} else if (
+						object.material instanceof THREE.MeshLambertMaterial
+					) {
+						object.material = object.material.clone();
+						object.material.emissive = new THREE.Color(0x111111);
+					}
+				}
+
+				// Enable shadows
+				object.castShadow = true;
+				object.receiveShadow = true;
+			}
+		});
+
 		// Scale and center
 		const box = new THREE.Box3().setFromObject(clonedModel);
 		const size = box.getSize(new THREE.Vector3());
@@ -171,6 +232,14 @@ export class ModelSelector {
 			.multiplyScalar(-scaleFactor);
 		clonedModel.position.copy(center);
 		clonedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+		// Store model name in the element for export functionality
+		if (modelName) {
+			const element = scene.userData.element as HTMLElement;
+			if (element) {
+				element.dataset.modelName = modelName;
+			}
+		}
 
 		// Add to scene
 		scene.add(clonedModel);

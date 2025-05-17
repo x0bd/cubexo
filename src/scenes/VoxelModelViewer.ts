@@ -201,9 +201,9 @@ export class VoxelModelViewer {
 		// Use standard color space for accurate colors
 		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-		// Use high-quality tone mapping for more realistic lighting
+		// Brighter tone mapping for better visibility
 		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-		this.renderer.toneMappingExposure = 1.0;
+		this.renderer.toneMappingExposure = 1.2; // Increased exposure for brightness
 	}
 
 	private setupScene(): void {
@@ -263,23 +263,23 @@ export class VoxelModelViewer {
 	private setupLights(): void {
 		if (!this.scene) return;
 
-		// Pure, minimal lighting - Vercel style
-		const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+		// Increase ambient light intensity for better overall brightness
+		const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 		this.scene.add(ambientLight);
 
 		// Create a group to hold the lights
 		this.lightHolder = new THREE.Group();
 
-		// Clean directional light
-		const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
+		// Increase main light intensity
+		const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
 		mainLight.position.set(10, 15, 10);
 		mainLight.castShadow = true;
 		mainLight.shadow.mapSize = new THREE.Vector2(1024, 1024);
 		mainLight.shadow.bias = -0.0001;
 		this.lightHolder.add(mainLight);
 
-		// Subtle fill light
-		const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+		// Brighter fill light
+		const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
 		fillLight.position.set(-10, 5, -5);
 		this.lightHolder.add(fillLight);
 
@@ -290,10 +290,10 @@ export class VoxelModelViewer {
 		const isDark =
 			document.documentElement.classList.contains("dark-theme");
 
-		// Minimal ground shadow
+		// Minimal ground shadow with reduced opacity for better contrast
 		const planeGeometry = new THREE.PlaneGeometry(40, 40);
 		const shadowPlaneMaterial = new THREE.ShadowMaterial({
-			opacity: isDark ? 0.08 : 0.12, // Subtle shadow
+			opacity: isDark ? 0.06 : 0.1, // Reduced shadow opacity
 			transparent: true,
 		});
 		const shadowPlaneMesh = new THREE.Mesh(
@@ -316,11 +316,12 @@ export class VoxelModelViewer {
 			this.params.boxRoundness // Subtle roundness
 		);
 
-		// Clean material
+		// Enhanced material for better light reflection
 		this.voxelMaterial = new THREE.MeshStandardMaterial({
-			roughness: 0.4,
-			metalness: 0.1,
+			roughness: 0.3, // Lower roughness for better light reflection
+			metalness: 0.15, // Slightly more metalness
 			flatShading: false,
+			envMapIntensity: 1.0, // Better environment reflection
 		});
 	}
 
