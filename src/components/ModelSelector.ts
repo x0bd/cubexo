@@ -11,6 +11,8 @@ export class ModelSelector {
 	private modelSelectedCallback:
 		| ((oldIndex: number, newIndex: number) => void)
 		| null = null;
+	private timeOut: number | null = null;
+	private isHeldDown = false;
 
 	constructor() {
 		this.selectorElement = document.getElementById("selector");
@@ -34,11 +36,14 @@ export class ModelSelector {
 		this.renderer.domElement.style.height = "100%";
 		this.renderer.domElement.style.zIndex = "1";
 		this.renderer.domElement.style.pointerEvents = "none";
+
+		// Setup global mouse events
+		this.setupGlobalMouseEvents();
 	}
 
 	public init(callback: (oldIndex: number, newIndex: number) => void): void {
 		this.modelSelectedCallback = callback;
-		this.setupSelectorEvents();
+		this.updateActivePreview();
 		this.startRenderingPreviews();
 
 		// Log for debugging
@@ -88,6 +93,13 @@ export class ModelSelector {
 		element.style.cursor = "pointer";
 		element.style.pointerEvents = "auto";
 
+		// Set proper z-index to ensure clickability
+		element.style.position = "relative";
+		element.style.zIndex = "100";
+
+		// Add click handler directly to this element
+		this.addClickHandlerToElement(element);
+
 		// Store element and index in scene userData
 		scene.userData.element = element;
 		scene.userData.modelIdx = modelIdx;
@@ -131,6 +143,53 @@ export class ModelSelector {
 
 		this.previewScenes.push(scene);
 		return scene;
+	}
+
+	private addClickHandlerToElement(element: HTMLElement): void {
+		element.addEventListener("mousedown", () => {
+			// Clear any existing timeout
+			if (this.timeOut !== null) {
+				window.clearTimeout(this.timeOut);
+			}
+
+			// Start a new timeout to detect if this is a hold
+			this.isHeldDown = false;
+			this.timeOut = window.setTimeout(() => {
+				this.isHeldDown = true;
+			}, 200);
+		});
+
+		element.addEventListener("mouseup", (e) => {
+			// Clear the timeout
+			if (this.timeOut !== null) {
+				window.clearTimeout(this.timeOut);
+			}
+
+			// If this wasn't a hold, treat it as a click
+			if (!this.isHeldDown) {
+				const oldIndex = this.activeModelIdx;
+				const modelIdx = parseInt(element.dataset.modelIdx || "0");
+
+				console.log(`Preview clicked: ${modelIdx}, old: ${oldIndex}`);
+
+				// Update active model index
+				this.activeModelIdx = modelIdx;
+
+				// Update the UI
+				this.updateActivePreview();
+
+				// Call the callback
+				if (this.modelSelectedCallback) {
+					this.modelSelectedCallback(oldIndex, modelIdx);
+				}
+			}
+
+			// Reset state
+			this.isHeldDown = false;
+
+			// Prevent event from bubbling to window
+			e.stopPropagation();
+		});
 	}
 
 	public addModelToPreview(modelIdx: number, model: THREE.Group): void {
@@ -179,68 +238,29 @@ export class ModelSelector {
 		console.log(`Model added to preview ${modelIdx}`);
 	}
 
-	private setupSelectorEvents(): void {
-		// Log for debugging
-		console.log("Setting up selector events");
-
-		const highlightActivePreview = () => {
-			const previews = document.querySelectorAll(".model-prev");
-			previews.forEach((el) => {
-				const idx = parseInt(el.getAttribute("data-model-idx") || "-1");
-				if (idx !== this.activeModelIdx) {
-					el.classList.remove("active");
-				} else {
-					el.classList.add("active");
-				}
-			});
-		};
-
-		let timeOut: number;
-		let isHeldDown = false;
-
-		// Add click event listeners to all preview elements
-		if (this.selectorElement) {
-			const previewElements =
-				this.selectorElement.querySelectorAll(".model-prev");
-			previewElements.forEach((element) => {
-				element.addEventListener("mouseup", (e) => {
-					window.clearTimeout(timeOut);
-					if (!isHeldDown) {
-						const oldIndex = this.activeModelIdx;
-						const modelIdx = parseInt(
-							element.getAttribute("data-model-idx") || "0"
-						);
-						this.activeModelIdx = modelIdx;
-
-						// Log for debugging
-						console.log(`Preview clicked: ${modelIdx}`);
-
-						highlightActivePreview();
-
-						// Call the callback with the new model index
-						if (this.modelSelectedCallback) {
-							this.modelSelectedCallback(
-								oldIndex,
-								this.activeModelIdx
-							);
-						}
-					}
-					isHeldDown = false;
-					e.stopPropagation(); // Prevent the window mouseup from firing
-				});
-			});
-		}
-
+	private setupGlobalMouseEvents(): void {
 		// Window-level mouse events for detecting drag vs click
 		window.addEventListener("mousedown", () => {
-			timeOut = window.setTimeout(() => {
-				isHeldDown = true;
+			// Clear any existing timeout
+			if (this.timeOut !== null) {
+				window.clearTimeout(this.timeOut);
+			}
+
+			// Start a new timeout to detect if this is a hold
+			this.isHeldDown = false;
+			this.timeOut = window.setTimeout(() => {
+				this.isHeldDown = true;
 			}, 200);
 		});
 
 		window.addEventListener("mouseup", (e) => {
-			window.clearTimeout(timeOut);
-			if (!isHeldDown) {
+			// Clear the timeout
+			if (this.timeOut !== null) {
+				window.clearTimeout(this.timeOut);
+			}
+
+			// If this wasn't a hold, and it's not on a preview, cycle to next model
+			if (!this.isHeldDown) {
 				// Check if the click was outside a preview element
 				if (!(e.target as Element).closest(".model-prev")) {
 					const oldIndex = this.activeModelIdx;
@@ -252,9 +272,10 @@ export class ModelSelector {
 						this.activeModelIdx = 0;
 					}
 
-					highlightActivePreview();
+					// Update the UI
+					this.updateActivePreview();
 
-					// Call the callback with the new model index
+					// Call the callback
 					if (this.modelSelectedCallback) {
 						this.modelSelectedCallback(
 							oldIndex,
@@ -263,11 +284,22 @@ export class ModelSelector {
 					}
 				}
 			}
-			isHeldDown = false;
-		});
 
-		// Initial highlight
-		highlightActivePreview();
+			// Reset state
+			this.isHeldDown = false;
+		});
+	}
+
+	private updateActivePreview(): void {
+		const previews = document.querySelectorAll(".model-prev");
+		previews.forEach((el) => {
+			const idx = parseInt(el.getAttribute("data-model-idx") || "-1");
+			if (idx !== this.activeModelIdx) {
+				el.classList.remove("active");
+			} else {
+				el.classList.add("active");
+			}
+		});
 	}
 
 	private updateSceneSize(): void {
@@ -374,16 +406,6 @@ export class ModelSelector {
 		console.log(`Setting active model index to ${index}`);
 
 		this.activeModelIdx = index;
-
-		// Update UI to reflect the change
-		const previews = document.querySelectorAll(".model-prev");
-		previews.forEach((el) => {
-			const idx = parseInt(el.getAttribute("data-model-idx") || "-1");
-			if (idx !== this.activeModelIdx) {
-				el.classList.remove("active");
-			} else {
-				el.classList.add("active");
-			}
-		});
+		this.updateActivePreview();
 	}
 }
