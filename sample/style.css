@@ -1,0 +1,10 @@
+body {
+	font-family: "Inter", sans-serif;
+	margin: 0; /* Reset default body margin */
+	overflow: hidden; /* Prevent scrollbars */
+}
+#threeCanvas {
+	display: block; /* Removes extra space below canvas */
+	width: 100vw;
+	height: 100vh;
+}

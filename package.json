@@ -11,5 +11,10 @@
   "devDependencies": {
     "typescript": "~5.8.3",
     "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "gsap": "^3.13.0",
+    "simplex-noise": "^4.0.3",
+    "three": "^0.176.0"
   }
 }
