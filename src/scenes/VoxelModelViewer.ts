@@ -256,7 +256,7 @@ export class VoxelModelViewer {
 		this.controls.maxDistance = 25;
 		this.controls.minPolarAngle = 0.3;
 		this.controls.maxPolarAngle = Math.PI * 0.6;
-		this.controls.autoRotate = true;
+		this.controls.autoRotate = false; // Disable auto-rotation to let user control the angle
 		this.controls.autoRotateSpeed = 0.5; // Slower rotation for a more premium feel
 	}
 
@@ -467,6 +467,7 @@ export class VoxelModelViewer {
 
 	/**
 	 * Export a high-resolution PNG image of the current view (2000x2000 pixels)
+	 * Uses the current camera angle set by the user
 	 */
 	public exportAsPng(): void {
 		if (!this.renderer || !this.scene || !this.camera) {
@@ -494,16 +495,19 @@ export class VoxelModelViewer {
 			pixelRatio: this.renderer.getPixelRatio(),
 		};
 
+		// Temporarily disable controls
+		if (this.controls) {
+			this.controls.enabled = false;
+		}
+
 		// Configure renderer for high-res screenshot
 		this.renderer.setSize(2000, 2000);
 		this.renderer.setPixelRatio(1);
 
-		// Temporarily stop auto-rotation if enabled
-		const autoRotateWasEnabled = this.controls?.autoRotate || false;
-		if (this.controls) {
-			this.controls.autoRotate = false;
-			this.controls.update();
-		}
+		// Use current camera angle for the export (keep user's chosen angle)
+		// Just update projection matrix for the new aspect ratio
+		this.camera.aspect = 1; // Square aspect ratio for the export
+		this.camera.updateProjectionMatrix();
 
 		// Render the scene
 		this.renderer.render(this.scene, this.camera);
@@ -517,7 +521,7 @@ export class VoxelModelViewer {
 			link.click();
 
 			// Show export notification
-			this.showExportNotification("Image exported");
+			this.showExportNotification("PNG exported with your custom angle");
 		} catch (error) {
 			console.error("Error exporting PNG:", error);
 		}
@@ -526,9 +530,13 @@ export class VoxelModelViewer {
 		this.renderer.setSize(originalSize.width, originalSize.height);
 		this.renderer.setPixelRatio(originalSize.pixelRatio);
 
-		// Restore auto-rotation if it was enabled
-		if (this.controls && autoRotateWasEnabled) {
-			this.controls.autoRotate = true;
+		// Restore camera aspect ratio
+		this.camera.aspect = originalSize.width / originalSize.height;
+		this.camera.updateProjectionMatrix();
+
+		// Re-enable controls
+		if (this.controls) {
+			this.controls.enabled = true;
 		}
 	}
 

@@ -240,9 +240,29 @@ canvas#webgl {
 	bottom: 24px;
 	right: 24px;
 	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
 	gap: 12px;
 	z-index: 1000;
 	pointer-events: auto;
+}
+
+.export-hint {
+	font-family: "Geist Mono", monospace;
+	font-size: 11px;
+	color: var(--color-text);
+	opacity: 0.6;
+	background-color: var(--color-bg);
+	padding: 6px 8px;
+	border-radius: 4px;
+	text-align: right;
+	margin-bottom: -4px;
+}
+
+/* Row of export buttons */
+.export-buttons .button-row {
+	display: flex;
+	gap: 12px;
 }
 
 /* Export buttons - premium Vercel style */
