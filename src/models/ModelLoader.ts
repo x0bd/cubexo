@@ -5,12 +5,9 @@ import type { ModelData } from "../types/types";
 export class ModelLoader {
 	private gltfLoader: GLTFLoader;
 	private modelURLs: string[] = [
-		"https://ksenia-k.com/models/Chili%20Pepper.glb",
-		"https://ksenia-k.com/models/Chicken.glb",
-		"https://ksenia-k.com/models/Cherry.glb",
-		"https://ksenia-k.com/models/Banana%20Bundle.glb",
-		"https://ksenia-k.com/models/Bonsai.glb",
-		"https://ksenia-k.com/models/egg.glb",
+		"https://ksenia-k.com/models/Chili%20Pepper.glb", // Chili Pepper
+		"https://ksenia-k.com/models/Chicken.glb", // Chicken
+		"https://ksenia-k.com/models/egg.glb", // Egg
 	];
 
 	constructor() {

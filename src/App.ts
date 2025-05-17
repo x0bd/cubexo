@@ -15,7 +15,7 @@ export class App {
 	private modelUploader: ModelUploader;
 	private isInitialized = false;
 	private loaderElement: HTMLElement | null;
-	private activeModelIdx = 4; // Start with Bonsai (index 4)
+	private activeModelIdx = 1; // Start with Chicken (index 1)
 	private userModels: { name: string; url: string; model: THREE.Group }[] =
 		[];
 

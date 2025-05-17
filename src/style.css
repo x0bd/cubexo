@@ -99,33 +99,38 @@ canvas#webgl {
 /* Simple, clean model selector */
 #selector {
 	position: fixed;
-	bottom: 40px;
-	left: 40px;
+	bottom: 24px;
+	left: 50%;
+	transform: translateX(-50%);
 	display: flex;
-	gap: 12px;
-	pointer-events: auto;
+	gap: 16px;
+	padding: 16px;
+	overflow-x: auto;
+	max-width: 100%;
+	z-index: 10;
+	justify-content: center;
 }
 
 .model-prev {
-	width: 56px;
-	height: 56px;
-	border-radius: 4px;
-	overflow: hidden;
+	border: 2px solid rgba(0, 0, 0, 0.2);
+	border-radius: 12px;
+	margin: 0 6px;
 	cursor: pointer;
-	border: 1px solid var(--color-border);
-	opacity: 0.8;
-	transition: opacity 0.1s, border-color 0.1s;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	overflow: hidden;
+	transition: transform 0.2s ease, border-color 0.2s ease,
+		box-shadow 0.2s ease;
 }
 
 .model-prev:hover {
-	opacity: 1;
-	border-color: var(--color-text);
+	transform: translateY(-4px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .model-prev.active {
-	opacity: 1;
-	border-color: var(--color-accent);
-	box-shadow: 0 0 0 1px var(--color-accent);
+	border-color: var(--color-text);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+	transform: scale(1.1);
 }
 
 /* Loader */

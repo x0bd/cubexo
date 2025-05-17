@@ -111,19 +111,36 @@ export class ModelUploader {
 		// Extract color from various material types
 		let color = new THREE.Color(0xffffff);
 
-		// Try to get the color from the material
+		// Try to get the color from the material - preserve original colors
 		if ("color" in material && material.color instanceof THREE.Color) {
-			color = material.color;
-		}
+			color = material.color.clone();
+		} else if (
+			"emissive" in material &&
+			material.emissive instanceof THREE.Color
+		) {
+			// MeshPhongMaterial and MeshStandardMaterial have emissive
+			color = material.emissive.clone();
+		} else if ("map" in material && material.map) {
+			// If there's a texture, use a consistent color based on the texture
+			// Generate a deterministic color from the texture
+			let textureId = 0;
+			const map = material.map as THREE.Texture;
 
-		// Check for map/texture based color
-		if ("map" in material && material.map) {
-			// If there's a texture, use a more vibrant base color
-			color = new THREE.Color().setHSL(
-				Math.random(), // Random hue
-				0.8, // High saturation
-				0.5 // Medium lightness
-			);
+			if (map && typeof map === "object" && "uuid" in map) {
+				// Create a simple hash from the UUID string
+				textureId = map.uuid
+					.split("")
+					.reduce((acc: number, char: string) => {
+						return (acc << 5) - acc + char.charCodeAt(0);
+					}, 0);
+			} else {
+				// Fallback to a random number if no UUID
+				textureId = Math.floor(Math.random() * 100);
+			}
+
+			// Generate a color based on the hash (consistent for same texture)
+			const hue = Math.abs(textureId % 100) / 100;
+			color = new THREE.Color().setHSL(hue, 0.85, 0.5);
 		}
 
 		// Create a new standard material with the extracted color
@@ -149,7 +166,7 @@ export class ModelUploader {
 			if (obj instanceof THREE.Mesh) {
 				totalMeshCount++;
 
-				// Check if this mesh has a non-white, non-black color
+				// Check if this mesh has a non-white color
 				if (obj.material) {
 					const materials = Array.isArray(obj.material)
 						? obj.material
@@ -161,12 +178,8 @@ export class ModelUploader {
 							mat.color instanceof THREE.Color
 						) {
 							const c = mat.color;
-							// If color is not grayscale (r=g=b) and not black/white
-							if (
-								!(c.r === c.g && c.g === c.b) &&
-								c.r > 0.1 &&
-								c.r < 0.9
-							) {
+							// Only count as colored if it's not close to white
+							if (!(c.r > 0.9 && c.g > 0.9 && c.b > 0.9)) {
 								coloredMeshCount++;
 								break;
 							}
@@ -176,57 +189,54 @@ export class ModelUploader {
 			}
 		});
 
-		// If less than 30% of meshes have color, add vibrant colors
-		if (coloredMeshCount / Math.max(1, totalMeshCount) < 0.3) {
-			console.log("Model has few colors, adding vibrant colors");
+		// If model has almost no color (very white or no colors at all)
+		// ONLY then add colors (less aggressive than before)
+		if (coloredMeshCount / Math.max(1, totalMeshCount) < 0.1) {
+			console.log("Model has almost no colors, adding basic colors");
 
-			// Generate a color palette
-			const palette = this.generateColorPalette(
-				Math.min(6, Math.max(3, Math.ceil(totalMeshCount / 2)))
-			);
+			// Use a more limited palette with fewer colors for consistency
+			const palette = [
+				new THREE.Color(0xf44336), // Red
+				new THREE.Color(0x2196f3), // Blue
+				new THREE.Color(0x4caf50), // Green
+				new THREE.Color(0xff9800), // Orange
+				new THREE.Color(0x9c27b0), // Purple
+				new THREE.Color(0x00bcd4), // Cyan
+			];
 
 			let colorIndex = 0;
 			model.traverse((obj) => {
 				if (obj instanceof THREE.Mesh) {
-					// Assign a color from the palette
-					const color = palette[colorIndex % palette.length];
-					colorIndex++;
+					// Only change colors of white or very light materials
+					const isWhiteMaterial = (mat: THREE.Material) => {
+						return (
+							"color" in mat &&
+							mat.color instanceof THREE.Color &&
+							mat.color.r > 0.9 &&
+							mat.color.g > 0.9 &&
+							mat.color.b > 0.9
+						);
+					};
 
+					// Process materials
 					if (Array.isArray(obj.material)) {
-						obj.material.forEach((mat) => {
-							if ("color" in mat) {
-								mat.color.set(color);
+						obj.material.forEach((mat, idx) => {
+							if (isWhiteMaterial(mat)) {
+								mat.color.set(
+									palette[(colorIndex + idx) % palette.length]
+								);
 							}
 						});
-					} else if ("color" in obj.material) {
-						obj.material.color.set(color);
+						colorIndex++;
+					} else if (isWhiteMaterial(obj.material)) {
+						obj.material.color.set(
+							palette[colorIndex % palette.length]
+						);
+						colorIndex++;
 					}
 				}
 			});
 		}
-	}
-
-	/**
-	 * Generate a palette of vibrant, visually distinct colors
-	 * @param count Number of colors to generate
-	 * @returns Array of THREE.Color objects
-	 */
-	private generateColorPalette(count: number): THREE.Color[] {
-		const palette: THREE.Color[] = [];
-
-		// Start with some nice, vibrant colors
-		const baseHues = [0, 0.1, 0.3, 0.5, 0.6, 0.8];
-
-		for (let i = 0; i < count; i++) {
-			// Use golden ratio to space out hues evenly
-			const hue = baseHues[i % baseHues.length];
-			const saturation = 0.7 + Math.random() * 0.3; // High saturation
-			const lightness = 0.45 + Math.random() * 0.15; // Medium lightness
-
-			palette.push(new THREE.Color().setHSL(hue, saturation, lightness));
-		}
-
-		return palette;
 	}
 
 	/**
