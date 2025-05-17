@@ -466,23 +466,131 @@ export class VoxelModelViewer {
 	}
 
 	/**
-	 * Display a temporary notification that the model is being exported
+	 * Export a high-resolution PNG image of the current view (2000x2000 pixels)
 	 */
-	private showExportNotification(): void {
+	public exportAsPng(): void {
+		if (!this.renderer || !this.scene || !this.camera) {
+			console.error("Cannot export: renderer not initialized");
+			return;
+		}
+
+		// Get model name for the filename
+		const modelLoader = document.querySelector("#selector")?.childNodes[
+			this.activeModelIndex
+		] as HTMLElement;
+		const modelName =
+			modelLoader?.getAttribute("data-model-name") ||
+			`model-${this.activeModelIndex}`;
+
+		// Create a sanitized filename
+		const filename = `cubexo-${modelName
+			.toLowerCase()
+			.replace(/[^a-z0-9]/g, "-")}.png`;
+
+		// Store original renderer size and pixel ratio
+		const originalSize = {
+			width: this.renderer.domElement.width,
+			height: this.renderer.domElement.height,
+			pixelRatio: this.renderer.getPixelRatio(),
+		};
+
+		// Configure renderer for high-res screenshot
+		this.renderer.setSize(2000, 2000);
+		this.renderer.setPixelRatio(1);
+
+		// Temporarily stop auto-rotation if enabled
+		const autoRotateWasEnabled = this.controls?.autoRotate || false;
+		if (this.controls) {
+			this.controls.autoRotate = false;
+			this.controls.update();
+		}
+
+		// Render the scene
+		this.renderer.render(this.scene, this.camera);
+
+		// Create download link for the PNG
+		try {
+			const dataURL = this.renderer.domElement.toDataURL("image/png");
+			const link = document.createElement("a");
+			link.href = dataURL;
+			link.download = filename;
+			link.click();
+
+			// Show export notification
+			this.showExportNotification("Image exported");
+		} catch (error) {
+			console.error("Error exporting PNG:", error);
+		}
+
+		// Restore original renderer settings
+		this.renderer.setSize(originalSize.width, originalSize.height);
+		this.renderer.setPixelRatio(originalSize.pixelRatio);
+
+		// Restore auto-rotation if it was enabled
+		if (this.controls && autoRotateWasEnabled) {
+			this.controls.autoRotate = true;
+		}
+	}
+
+	/**
+	 * Display a clean, minimal notification when exporting
+	 */
+	private showExportNotification(message: string = "Model exported"): void {
+		// Remove any existing notifications
+		const existingNotification = document.querySelector(
+			".export-notification"
+		);
+		if (existingNotification) {
+			existingNotification.remove();
+		}
+
 		// Create notification element
 		const notification = document.createElement("div");
 		notification.className = "export-notification";
-		notification.textContent = "Exporting GLB...";
+
+		// Add checkmark icon for success
+		const checkIcon = document.createElementNS(
+			"http://www.w3.org/2000/svg",
+			"svg"
+		);
+		checkIcon.setAttribute("width", "16");
+		checkIcon.setAttribute("height", "16");
+		checkIcon.setAttribute("viewBox", "0 0 24 24");
+		checkIcon.setAttribute("fill", "none");
+		checkIcon.setAttribute("stroke", "currentColor");
+		checkIcon.setAttribute("stroke-width", "2");
+		checkIcon.setAttribute("stroke-linecap", "round");
+		checkIcon.setAttribute("stroke-linejoin", "round");
+
+		const path = document.createElementNS(
+			"http://www.w3.org/2000/svg",
+			"path"
+		);
+		path.setAttribute("d", "M20 6L9 17l-5-5");
+		checkIcon.appendChild(path);
+
+		// Text content
+		const textSpan = document.createElement("span");
+		textSpan.textContent = message;
+
+		// Append elements
+		notification.appendChild(checkIcon);
+		notification.appendChild(textSpan);
+
+		// Style the container for horizontal layout
+		notification.style.display = "flex";
+		notification.style.alignItems = "center";
+		notification.style.gap = "6px";
 
 		// Add to DOM
 		document.body.appendChild(notification);
 
-		// Remove after delay
+		// Remove after delay with fade-out animation
 		setTimeout(() => {
 			notification.classList.add("fade-out");
-			setTimeout(() => {
+			notification.addEventListener("animationend", () => {
 				notification.remove();
-			}, 500);
+			});
 		}, 2000);
 	}
 }

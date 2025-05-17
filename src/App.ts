@@ -28,8 +28,9 @@ export class App {
 		this.voxelizer = new Voxelizer();
 		this.modelSelector = new ModelSelector();
 
-		// Setup export button
+		// Setup export buttons
 		this.setupExportButton();
+		this.setupPngExportButton();
 	}
 
 	public async init(): Promise<void> {
@@ -170,6 +171,19 @@ export class App {
 	}
 
 	/**
+	 * Setup the PNG export button functionality
+	 */
+	private setupPngExportButton(): void {
+		const pngExportButton = document.getElementById("export-png");
+		if (!pngExportButton) return;
+
+		pngExportButton.addEventListener("click", () => {
+			console.log("Exporting high-resolution PNG image");
+			this.exportAsPng();
+		});
+	}
+
+	/**
 	 * Export the current model as GLB
 	 */
 	private exportCurrentModel(): void {
@@ -177,5 +191,15 @@ export class App {
 
 		console.log(`Exporting model ${this.activeModelIdx} as GLB`);
 		this.viewer.exportCurrentModel(ExportFormat.GLB);
+	}
+
+	/**
+	 * Export the current view as a high-resolution PNG image
+	 */
+	private exportAsPng(): void {
+		if (!this.viewer) return;
+
+		console.log(`Exporting screenshot of model ${this.activeModelIdx}`);
+		this.viewer.exportAsPng();
 	}
 }

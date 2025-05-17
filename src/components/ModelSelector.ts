@@ -27,6 +27,10 @@ export class ModelSelector {
 		this.renderer.toneMappingExposure = 1.2;
 		this.renderer.setScissorTest(true);
 
+		// Enable shadows for better visuals
+		this.renderer.shadowMap.enabled = true;
+		this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
 		// Add renderer to the page with proper z-index to be visible
 		const rendererElement = document.createElement("div");
 		rendererElement.id = "preview-renderer-container";
@@ -134,6 +138,9 @@ export class ModelSelector {
 		// 2. Main directional light for shadows and definition
 		const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
 		mainLight.position.set(1, 2, 2);
+		mainLight.castShadow = true;
+		mainLight.shadow.mapSize.width = 512;
+		mainLight.shadow.mapSize.height = 512;
 		scene.add(mainLight);
 
 		// 3. Fill light from the opposite side to reduce harsh shadows
@@ -145,6 +152,18 @@ export class ModelSelector {
 		const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
 		rimLight.position.set(0, 1, -2);
 		scene.add(rimLight);
+
+		// 5. Add a ground plane to receive shadows
+		const groundGeometry = new THREE.PlaneGeometry(10, 10);
+		const groundMaterial = new THREE.ShadowMaterial({
+			opacity: 0.2,
+			transparent: true,
+		});
+		const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
+		groundPlane.rotation.x = -Math.PI / 2;
+		groundPlane.position.y = -1;
+		groundPlane.receiveShadow = true;
+		scene.add(groundPlane);
 
 		// Initialize rect
 		scene.userData.rect = {
