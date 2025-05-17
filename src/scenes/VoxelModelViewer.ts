@@ -197,17 +197,40 @@ export class VoxelModelViewer {
 		this.renderer.shadowMap.enabled = true;
 		this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-		// Use standard color space for accurate colors
+		// Use standard color space
 		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-		// Disable tone mapping for accurate color reproduction
-		this.renderer.toneMapping = THREE.NoToneMapping;
+		// Use subtle tone mapping for more stylized look
+		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+		this.renderer.toneMappingExposure = 0.9;
 	}
 
 	private setupScene(): void {
 		this.scene = new THREE.Scene();
-		// White background for better color accuracy perception
-		this.scene.background = new THREE.Color(0xffffff);
+
+		// Set initial background color based on theme
+		this.updateBackgroundForTheme();
+
+		// Listen for theme changes
+		window.addEventListener("theme-changed", ((event: CustomEvent) => {
+			this.updateBackgroundForTheme(event.detail?.isDark);
+		}) as EventListener);
+	}
+
+	private updateBackgroundForTheme(isDark?: boolean): void {
+		if (!this.scene) return;
+
+		// If isDark is not provided, detect from the DOM
+		if (isDark === undefined) {
+			isDark = document.documentElement.classList.contains("dark-theme");
+		}
+
+		// Set the background color based on the theme
+		if (isDark) {
+			this.scene.background = new THREE.Color(0x000000);
+		} else {
+			this.scene.background = new THREE.Color(0xffffff);
+		}
 	}
 
 	private setupCamera(): void {
@@ -238,16 +261,16 @@ export class VoxelModelViewer {
 	private setupLights(): void {
 		if (!this.scene) return;
 
-		// Bright ambient light for even illumination - important for accurate colors
-		const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+		// Subtle ambient light
+		const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 		this.scene.add(ambientLight);
 
 		// Create a group to hold the lights
 		this.lightHolder = new THREE.Group();
 
-		// Main directional light - brighter than spot for better visibility
-		const topLight = new THREE.DirectionalLight(0xffffff, 1.0);
-		topLight.position.set(0, 15, 5);
+		// Main light - directional for more defined shadows
+		const topLight = new THREE.DirectionalLight(0xffffff, 1.2);
+		topLight.position.set(5, 10, 5);
 		topLight.castShadow = true;
 		topLight.shadow.camera.near = 10;
 		topLight.shadow.camera.far = 30;
@@ -255,22 +278,23 @@ export class VoxelModelViewer {
 		topLight.shadow.bias = -0.0001;
 		this.lightHolder.add(topLight);
 
-		// Side and fill lights for balanced illumination
-		const sideLight = new THREE.DirectionalLight(0xffffff, 0.8);
-		sideLight.position.set(10, 5, 5);
+		// Subtle fill light from the side
+		const sideLight = new THREE.DirectionalLight(0xffffff, 0.5);
+		sideLight.position.set(-10, 5, -5);
 		this.lightHolder.add(sideLight);
 
-		const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
-		backLight.position.set(-5, 3, -10);
+		// Cool blue backlight for depth and style
+		const backLight = new THREE.DirectionalLight(0x3b82f6, 0.2);
+		backLight.position.set(0, 3, -10);
 		this.lightHolder.add(backLight);
 
 		// Add light holder to scene
 		this.scene.add(this.lightHolder);
 
-		// Light ground shadow
+		// Ground shadow - very subtle
 		const planeGeometry = new THREE.PlaneGeometry(35, 35);
 		const shadowPlaneMaterial = new THREE.ShadowMaterial({
-			opacity: 0.08, // Very light shadow to not detract from colors
+			opacity: 0.05, // Very subtle shadow
 		});
 		const shadowPlaneMesh = new THREE.Mesh(
 			planeGeometry,
@@ -283,20 +307,23 @@ export class VoxelModelViewer {
 	}
 
 	private setupGeometries(): void {
-		// Create voxel geometry
+		// Create voxel geometry with slight roundness
 		this.voxelGeometry = new RoundedBoxGeometry(
 			this.params.boxSize,
 			this.params.boxSize,
 			this.params.boxSize,
-			2,
-			this.params.boxRoundness
+			3, // More segments for smoother corners
+			this.params.boxRoundness * 1.2 // Slightly more roundness
 		);
 
-		// Use MeshStandardMaterial for physically accurate color representation
-		this.voxelMaterial = new THREE.MeshStandardMaterial({
-			roughness: 0.2, // Lower roughness for more vibrant color
-			metalness: 0.0, // Non-metallic for accurate diffuse colors
-			flatShading: false, // Smooth shading
+		// Use MeshPhysicalMaterial for more refined look
+		this.voxelMaterial = new THREE.MeshPhysicalMaterial({
+			roughness: 0.3,
+			metalness: 0.1,
+			reflectivity: 0.5,
+			clearcoat: 0.2,
+			clearcoatRoughness: 0.3,
+			flatShading: false,
 		});
 	}
 

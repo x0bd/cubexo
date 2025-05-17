@@ -11,13 +11,11 @@ export class ModelSelector {
 	private modelSelectedCallback:
 		| ((oldIndex: number, newIndex: number) => void)
 		| null = null;
-	private timeOut: number | null = null;
-	private isHeldDown = false;
 
 	constructor() {
 		this.selectorElement = document.getElementById("selector");
 
-		// Create a shared renderer for the preview thumbnails
+		// Create a renderer for the preview thumbnails
 		this.renderer = new THREE.WebGLRenderer({
 			antialias: true,
 			alpha: true,
@@ -25,98 +23,96 @@ export class ModelSelector {
 		this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		this.renderer.setScissorTest(true);
 
-		// Append the renderer to the document body
-		document.body.appendChild(this.renderer.domElement);
-
-		// Style the renderer canvas
-		this.renderer.domElement.style.position = "fixed";
-		this.renderer.domElement.style.top = "0";
-		this.renderer.domElement.style.left = "0";
-		this.renderer.domElement.style.width = "100%";
-		this.renderer.domElement.style.height = "100%";
-		this.renderer.domElement.style.zIndex = "1";
-		this.renderer.domElement.style.pointerEvents = "none";
-
-		// Setup global mouse events
-		this.setupGlobalMouseEvents();
+		// Add renderer to the page with proper z-index to be visible
+		const rendererElement = document.createElement("div");
+		rendererElement.id = "preview-renderer-container";
+		rendererElement.style.position = "absolute";
+		rendererElement.style.top = "0";
+		rendererElement.style.left = "0";
+		rendererElement.style.width = "100%";
+		rendererElement.style.height = "100%";
+		rendererElement.style.zIndex = "5";
+		rendererElement.style.pointerEvents = "none";
+		document.body.appendChild(rendererElement);
+		rendererElement.appendChild(this.renderer.domElement);
 	}
 
 	public init(callback: (oldIndex: number, newIndex: number) => void): void {
 		this.modelSelectedCallback = callback;
-		this.updateActivePreview();
+		this.updateSceneSize();
 		this.startRenderingPreviews();
 
-		// Log for debugging
-		console.log(
-			"ModelSelector initialized with",
-			this.previewScenes.length,
-			"scenes"
-		);
+		// Add click handlers to window for cycling through models
+		window.addEventListener("click", (e) => {
+			if (!(e.target as Element).closest(".model-prev")) {
+				const oldIndex = this.activeModelIdx;
+
+				// Move to the next model in sequence
+				if (this.previewScenes[this.activeModelIdx + 1]) {
+					this.activeModelIdx++;
+				} else {
+					this.activeModelIdx = 0;
+				}
+
+				this.updateActivePreview();
+
+				if (this.modelSelectedCallback) {
+					this.modelSelectedCallback(oldIndex, this.activeModelIdx);
+				}
+			}
+		});
 	}
 
 	public addModelPreview(modelData: ModelData, modelIdx: number): void {
-		// Find the scene for this model index
 		const scene = this.previewScenes.find(
 			(scene) => scene.userData.modelIdx === modelIdx
 		);
 
 		if (scene) {
-			// Log for debugging
-			console.log(`Adding model preview for index ${modelIdx}`);
-
-			// Add the model to the preview scene
 			this.addModelToPreview(modelIdx, modelData.model);
-		} else {
-			console.error(`No scene found for model index ${modelIdx}`);
 		}
 	}
 
 	public createPreviewScene(modelIdx: number): THREE.Scene {
-		// Log for debugging
-		console.log(`Creating preview scene for model ${modelIdx}`);
-
 		const scene = new THREE.Scene();
 
-		// Set background color based on index
+		// Set background color
 		scene.background = new THREE.Color().setHSL(modelIdx / 6, 0.5, 0.7);
 
-		// Create and set up preview element
+		// Create preview element
 		const element = document.createElement("div");
 		element.className = "model-prev";
 		element.style.width = `${this.previewWidth}px`;
 		element.style.height = `${this.previewWidth}px`;
-
-		// Store the model index as a data attribute for easy access
 		element.dataset.modelIdx = modelIdx.toString();
 
-		// Ensure the element is clickable
-		element.style.cursor = "pointer";
-		element.style.pointerEvents = "auto";
+		// Add click handler
+		element.addEventListener("click", (e) => {
+			const oldIndex = this.activeModelIdx;
+			this.activeModelIdx = modelIdx;
+			this.updateActivePreview();
 
-		// Set proper z-index to ensure clickability
-		element.style.position = "relative";
-		element.style.zIndex = "100";
+			if (this.modelSelectedCallback) {
+				this.modelSelectedCallback(oldIndex, this.activeModelIdx);
+			}
+			e.stopPropagation();
+		});
 
-		// Add click handler directly to this element
-		this.addClickHandlerToElement(element);
-
-		// Store element and index in scene userData
+		// Store data
 		scene.userData.element = element;
 		scene.userData.modelIdx = modelIdx;
 
-		// Add element to selector container
+		// Add to selector
 		if (this.selectorElement) {
 			this.selectorElement.appendChild(element);
-		} else {
-			console.error("Selector element not found");
 		}
 
-		// Set up camera
+		// Setup camera
 		const camera = new THREE.PerspectiveCamera(50, 1, 1, 100);
 		camera.position.set(0, 1, 2).multiplyScalar(1.2);
 		scene.userData.camera = camera;
 
-		// Set up orbit controls
+		// Setup controls
 		const orbit = new OrbitControls(camera, element);
 		orbit.minDistance = 2;
 		orbit.maxDistance = 5;
@@ -125,7 +121,7 @@ export class ModelSelector {
 		orbit.enableDamping = true;
 		scene.userData.orbit = orbit;
 
-		// Add lighting
+		// Add lights
 		const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
 		scene.add(ambientLight);
 
@@ -133,7 +129,7 @@ export class ModelSelector {
 		sideLight.position.set(2, 0, 5);
 		scene.add(sideLight);
 
-		// Initialize rect data structure
+		// Initialize rect
 		scene.userData.rect = {
 			width: this.previewWidth,
 			height: this.previewWidth,
@@ -145,65 +141,14 @@ export class ModelSelector {
 		return scene;
 	}
 
-	private addClickHandlerToElement(element: HTMLElement): void {
-		element.addEventListener("mousedown", () => {
-			// Clear any existing timeout
-			if (this.timeOut !== null) {
-				window.clearTimeout(this.timeOut);
-			}
-
-			// Start a new timeout to detect if this is a hold
-			this.isHeldDown = false;
-			this.timeOut = window.setTimeout(() => {
-				this.isHeldDown = true;
-			}, 200);
-		});
-
-		element.addEventListener("mouseup", (e) => {
-			// Clear the timeout
-			if (this.timeOut !== null) {
-				window.clearTimeout(this.timeOut);
-			}
-
-			// If this wasn't a hold, treat it as a click
-			if (!this.isHeldDown) {
-				const oldIndex = this.activeModelIdx;
-				const modelIdx = parseInt(element.dataset.modelIdx || "0");
-
-				console.log(`Preview clicked: ${modelIdx}, old: ${oldIndex}`);
-
-				// Update active model index
-				this.activeModelIdx = modelIdx;
-
-				// Update the UI
-				this.updateActivePreview();
-
-				// Call the callback
-				if (this.modelSelectedCallback) {
-					this.modelSelectedCallback(oldIndex, modelIdx);
-				}
-			}
-
-			// Reset state
-			this.isHeldDown = false;
-
-			// Prevent event from bubbling to window
-			e.stopPropagation();
-		});
-	}
-
 	public addModelToPreview(modelIdx: number, model: THREE.Group): void {
-		// Find the scene for this model
 		const scene = this.previewScenes.find(
 			(scene) => scene.userData.modelIdx === modelIdx
 		);
 
-		if (!scene) {
-			console.error(`No preview scene found for model index ${modelIdx}`);
-			return;
-		}
+		if (!scene) return;
 
-		// First remove any existing models
+		// Remove any existing models
 		scene.children.forEach((child) => {
 			if (
 				child instanceof THREE.Group &&
@@ -213,81 +158,23 @@ export class ModelSelector {
 			}
 		});
 
-		// Clone the model for the preview
+		// Clone the model
 		const clonedModel = model.clone();
 
-		// Calculate bounding box and scale
+		// Scale and center
 		const box = new THREE.Box3().setFromObject(clonedModel);
 		const size = box.getSize(new THREE.Vector3());
-		const scaleFactor = 2 / size.length(); // 2 is the normalized size for previews
+		const scaleFactor = 2 / size.length();
 
-		// Center and scale the model
 		const center = box
 			.getCenter(new THREE.Vector3())
 			.multiplyScalar(-scaleFactor);
 		clonedModel.position.copy(center);
 		clonedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
-		// Add the model to the scene
+		// Add to scene
 		scene.add(clonedModel);
-
-		// Update scene size
 		this.updateSceneSize();
-
-		// Log for debugging
-		console.log(`Model added to preview ${modelIdx}`);
-	}
-
-	private setupGlobalMouseEvents(): void {
-		// Window-level mouse events for detecting drag vs click
-		window.addEventListener("mousedown", () => {
-			// Clear any existing timeout
-			if (this.timeOut !== null) {
-				window.clearTimeout(this.timeOut);
-			}
-
-			// Start a new timeout to detect if this is a hold
-			this.isHeldDown = false;
-			this.timeOut = window.setTimeout(() => {
-				this.isHeldDown = true;
-			}, 200);
-		});
-
-		window.addEventListener("mouseup", (e) => {
-			// Clear the timeout
-			if (this.timeOut !== null) {
-				window.clearTimeout(this.timeOut);
-			}
-
-			// If this wasn't a hold, and it's not on a preview, cycle to next model
-			if (!this.isHeldDown) {
-				// Check if the click was outside a preview element
-				if (!(e.target as Element).closest(".model-prev")) {
-					const oldIndex = this.activeModelIdx;
-
-					// Move to the next model in sequence
-					if (this.previewScenes[this.activeModelIdx + 1]) {
-						this.activeModelIdx++;
-					} else {
-						this.activeModelIdx = 0;
-					}
-
-					// Update the UI
-					this.updateActivePreview();
-
-					// Call the callback
-					if (this.modelSelectedCallback) {
-						this.modelSelectedCallback(
-							oldIndex,
-							this.activeModelIdx
-						);
-					}
-				}
-			}
-
-			// Reset state
-			this.isHeldDown = false;
-		});
 	}
 
 	private updateActivePreview(): void {
@@ -305,22 +192,23 @@ export class ModelSelector {
 	private updateSceneSize(): void {
 		if (!this.selectorElement) return;
 
-		// Set renderer size to match window
+		// Set renderer size
 		this.renderer.setSize(window.innerWidth, window.innerHeight);
 
 		this.previewScenes.forEach((scene) => {
 			const element = scene.userData.element as HTMLElement;
 			if (!element) return;
 
-			// Calculate a good width based on available space and number of models
+			// Calculate width
 			const width = Math.min(
 				90,
-				(window.innerHeight * 0.8) / this.previewScenes.length
+				(window.innerHeight * 0.8) /
+					Math.max(1, this.previewScenes.length)
 			);
 			element.style.width = `${width}px`;
 			element.style.height = `${width}px`;
 
-			// Update rectangles for rendering
+			// Update rect
 			const rect = element.getBoundingClientRect();
 			scene.userData.rect = {
 				width: rect.width,
@@ -329,7 +217,7 @@ export class ModelSelector {
 				bottom: window.innerHeight - rect.bottom,
 			};
 
-			// Update camera aspect ratio
+			// Update camera
 			const camera = scene.userData.camera as THREE.PerspectiveCamera;
 			if (camera) {
 				camera.aspect = rect.width / rect.height;
@@ -339,35 +227,25 @@ export class ModelSelector {
 	}
 
 	private startRenderingPreviews(): void {
-		// Initially update the scene sizes
-		this.updateSceneSize();
-
-		// Handle window resize
+		// Listen for resize
 		window.addEventListener("resize", () => this.updateSceneSize());
 
-		// Animation loop for rendering previews
+		// Animation loop
 		const animate = () => {
 			requestAnimationFrame(animate);
 
 			// Skip if no previews
-			if (this.previewScenes.length === 0) {
-				return;
-			}
+			if (this.previewScenes.length === 0) return;
 
-			// Update and render each preview scene
+			// Render each preview
 			this.previewScenes.forEach((scene) => {
-				// Skip if scene is not properly set up
-				if (!scene.userData.rect || !scene.userData.camera) {
-					return;
-				}
+				if (!scene.userData.rect || !scene.userData.camera) return;
 
-				// Update orbit controls
+				// Update controls
 				const orbit = scene.userData.orbit as OrbitControls;
-				if (orbit) {
-					orbit.update();
-				}
+				if (orbit) orbit.update();
 
-				// Set viewport and scissor for this preview
+				// Set viewport
 				const rect = scene.userData.rect;
 				this.renderer.setViewport(
 					rect.left,
@@ -382,29 +260,20 @@ export class ModelSelector {
 					rect.height
 				);
 
-				// Render this preview
+				// Render
 				const camera = scene.userData.camera as THREE.Camera;
 				this.renderer.render(scene, camera);
 			});
 		};
 
-		// Start the animation loop
 		animate();
-
-		// Log for debugging
-		console.log("Preview rendering started");
 	}
 
-	// Helper method to get the active model index
 	public getActiveModelIndex(): number {
 		return this.activeModelIdx;
 	}
 
-	// Method to set active model index from outside
 	public setActiveModelIndex(index: number): void {
-		// Log for debugging
-		console.log(`Setting active model index to ${index}`);
-
 		this.activeModelIdx = index;
 		this.updateActivePreview();
 	}
