@@ -198,12 +198,12 @@ export class VoxelModelViewer {
 		this.renderer.shadowMap.enabled = true;
 		this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-		// Use standard color space
+		// Use standard color space for accurate colors
 		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-		// Use subtle tone mapping for more stylized look
+		// Use high-quality tone mapping for more realistic lighting
 		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-		this.renderer.toneMappingExposure = 0.9;
+		this.renderer.toneMappingExposure = 1.0;
 	}
 
 	private setupScene(): void {
@@ -226,7 +226,7 @@ export class VoxelModelViewer {
 			isDark = document.documentElement.classList.contains("dark-theme");
 		}
 
-		// Set the background color based on the theme
+		// Pure black/white for Vercel style
 		if (isDark) {
 			this.scene.background = new THREE.Color(0x000000);
 		} else {
@@ -236,7 +236,7 @@ export class VoxelModelViewer {
 
 	private setupCamera(): void {
 		this.camera = new THREE.PerspectiveCamera(
-			45,
+			35, // Narrower field of view for a cleaner look
 			window.innerWidth / window.innerHeight,
 			0.1,
 			1000
@@ -250,52 +250,51 @@ export class VoxelModelViewer {
 
 		this.controls = new OrbitControls(this.camera, this.canvasElement);
 		this.controls.enableDamping = true;
+		this.controls.dampingFactor = 0.05;
 		this.controls.enablePan = false;
-		this.controls.minDistance = 10;
-		this.controls.maxDistance = 30;
-		this.controls.minPolarAngle = 0.35 * Math.PI;
-		this.controls.maxPolarAngle = 0.65 * Math.PI;
+		this.controls.minDistance = 15;
+		this.controls.maxDistance = 25;
+		this.controls.minPolarAngle = 0.3;
+		this.controls.maxPolarAngle = Math.PI * 0.6;
 		this.controls.autoRotate = true;
-		this.controls.autoRotateSpeed = 1;
+		this.controls.autoRotateSpeed = 0.5; // Slower rotation for a more premium feel
 	}
 
 	private setupLights(): void {
 		if (!this.scene) return;
 
-		// Subtle ambient light
-		const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+		// Pure, minimal lighting - Vercel style
+		const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 		this.scene.add(ambientLight);
 
 		// Create a group to hold the lights
 		this.lightHolder = new THREE.Group();
 
-		// Main light - directional for more defined shadows
-		const topLight = new THREE.DirectionalLight(0xffffff, 1.2);
-		topLight.position.set(5, 10, 5);
-		topLight.castShadow = true;
-		topLight.shadow.camera.near = 10;
-		topLight.shadow.camera.far = 30;
-		topLight.shadow.mapSize = new THREE.Vector2(1024, 1024);
-		topLight.shadow.bias = -0.0001;
-		this.lightHolder.add(topLight);
+		// Clean directional light
+		const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
+		mainLight.position.set(10, 15, 10);
+		mainLight.castShadow = true;
+		mainLight.shadow.mapSize = new THREE.Vector2(1024, 1024);
+		mainLight.shadow.bias = -0.0001;
+		this.lightHolder.add(mainLight);
 
-		// Subtle fill light from the side
-		const sideLight = new THREE.DirectionalLight(0xffffff, 0.5);
-		sideLight.position.set(-10, 5, -5);
-		this.lightHolder.add(sideLight);
-
-		// Cool blue backlight for depth and style
-		const backLight = new THREE.DirectionalLight(0x3b82f6, 0.2);
-		backLight.position.set(0, 3, -10);
-		this.lightHolder.add(backLight);
+		// Subtle fill light
+		const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+		fillLight.position.set(-10, 5, -5);
+		this.lightHolder.add(fillLight);
 
 		// Add light holder to scene
 		this.scene.add(this.lightHolder);
 
-		// Ground shadow - very subtle
-		const planeGeometry = new THREE.PlaneGeometry(35, 35);
+		// Determine if dark mode is active
+		const isDark =
+			document.documentElement.classList.contains("dark-theme");
+
+		// Minimal ground shadow
+		const planeGeometry = new THREE.PlaneGeometry(40, 40);
 		const shadowPlaneMaterial = new THREE.ShadowMaterial({
-			opacity: 0.05, // Very subtle shadow
+			opacity: isDark ? 0.08 : 0.12, // Subtle shadow
+			transparent: true,
 		});
 		const shadowPlaneMesh = new THREE.Mesh(
 			planeGeometry,
@@ -308,22 +307,19 @@ export class VoxelModelViewer {
 	}
 
 	private setupGeometries(): void {
-		// Create voxel geometry with slight roundness
+		// Clean voxel geometry
 		this.voxelGeometry = new RoundedBoxGeometry(
 			this.params.boxSize,
 			this.params.boxSize,
 			this.params.boxSize,
-			3, // More segments for smoother corners
-			this.params.boxRoundness * 1.2 // Slightly more roundness
+			3, // Segments
+			this.params.boxRoundness // Subtle roundness
 		);
 
-		// Use MeshPhysicalMaterial for more refined look
-		this.voxelMaterial = new THREE.MeshPhysicalMaterial({
-			roughness: 0.3,
+		// Clean material
+		this.voxelMaterial = new THREE.MeshStandardMaterial({
+			roughness: 0.4,
 			metalness: 0.1,
-			reflectivity: 0.5,
-			clearcoat: 0.2,
-			clearcoatRoughness: 0.3,
 			flatShading: false,
 		});
 	}

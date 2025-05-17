@@ -4,9 +4,11 @@
 export class ThemeManager {
 	private storageKey = "theme-preference";
 	private toggleButton: HTMLElement | null;
+	private mediaQuery: MediaQueryList;
 
 	constructor() {
 		this.toggleButton = document.getElementById("theme-toggle");
+		this.mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 	}
 
 	/**
@@ -24,7 +26,7 @@ export class ThemeManager {
 	 * Initialize theme based on storage or system preference
 	 */
 	private initializeTheme(): void {
-		// Get saved preference
+		// Check for saved user preference
 		const savedTheme = localStorage.getItem(this.storageKey);
 
 		if (savedTheme === "dark") {
@@ -32,15 +34,11 @@ export class ThemeManager {
 		} else if (savedTheme === "light") {
 			this.enableLightTheme();
 		} else {
-			// No saved preference, check system
-			const prefersDark =
-				window.matchMedia &&
-				window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-			if (prefersDark) {
-				this.enableDarkTheme();
+			// No saved preference, use system preference
+			if (this.mediaQuery.matches) {
+				this.enableDarkTheme(false); // Don't save when using system preference
 			} else {
-				this.enableLightTheme();
+				this.enableLightTheme(false); // Don't save when using system preference
 			}
 		}
 	}
@@ -63,14 +61,13 @@ export class ThemeManager {
 		}
 
 		// System preference change
-		const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-		mediaQuery.addEventListener("change", (e) => {
+		this.mediaQuery.addEventListener("change", (e) => {
 			// Only apply system preference if no saved preference exists
 			if (!localStorage.getItem(this.storageKey)) {
 				if (e.matches) {
-					this.enableDarkTheme(false); // Don't save when system changes
+					this.enableDarkTheme(false);
 				} else {
-					this.enableLightTheme(false); // Don't save when system changes
+					this.enableLightTheme(false);
 				}
 			}
 		});
@@ -87,6 +84,9 @@ export class ThemeManager {
 			localStorage.setItem(this.storageKey, "dark");
 		}
 
+		// Update text contrast for UI elements
+		this.updateUIForDarkTheme();
+
 		// Dispatch event for other components to react
 		this.dispatchThemeChangeEvent(true);
 	}
@@ -102,8 +102,35 @@ export class ThemeManager {
 			localStorage.setItem(this.storageKey, "light");
 		}
 
+		// Update text contrast for UI elements
+		this.updateUIForLightTheme();
+
 		// Dispatch event for other components to react
 		this.dispatchThemeChangeEvent(false);
+	}
+
+	/**
+	 * Update UI elements specifically for dark theme
+	 * This ensures better text visibility
+	 */
+	private updateUIForDarkTheme(): void {
+		// Any specific dark mode adjustments can go here
+		const loader = document.getElementById("loader");
+		if (loader) {
+			loader.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.25)";
+		}
+	}
+
+	/**
+	 * Update UI elements specifically for light theme
+	 * This ensures better text visibility
+	 */
+	private updateUIForLightTheme(): void {
+		// Any specific light mode adjustments can go here
+		const loader = document.getElementById("loader");
+		if (loader) {
+			loader.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
+		}
 	}
 
 	/**
