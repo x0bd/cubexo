@@ -4,6 +4,7 @@ import { ModelSelector } from "./components/ModelSelector";
 import { Voxelizer } from "./models/Voxelizer";
 import * as THREE from "three";
 import gsap from "gsap";
+import { ExportFormat } from "./utils/ModelExporter";
 
 export class App {
 	private viewer: VoxelModelViewer;
@@ -26,6 +27,9 @@ export class App {
 		this.modelLoader = new ModelLoader();
 		this.voxelizer = new Voxelizer();
 		this.modelSelector = new ModelSelector();
+
+		// Setup export button
+		this.setupExportButton();
 	}
 
 	public async init(): Promise<void> {
@@ -149,5 +153,29 @@ export class App {
 				}
 			);
 		});
+	}
+
+	/**
+	 * Setup the export button functionality
+	 */
+	private setupExportButton(): void {
+		const exportButton = document.getElementById("export-model");
+		if (!exportButton) return;
+
+		// Simple OBJ export
+		exportButton.addEventListener("click", () => {
+			console.log("Exporting model as OBJ");
+			this.exportCurrentModel();
+		});
+	}
+
+	/**
+	 * Export the current model as GLB
+	 */
+	private exportCurrentModel(): void {
+		if (!this.viewer) return;
+
+		console.log(`Exporting model ${this.activeModelIdx} as GLB`);
+		this.viewer.exportCurrentModel(ExportFormat.GLB);
 	}
 }

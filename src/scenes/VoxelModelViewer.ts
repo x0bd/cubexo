@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import gsap from "gsap";
 import type { Voxel, AppParameters } from "../types/types";
+import { ModelExporter, ExportFormat } from "../utils/ModelExporter";
 
 export class VoxelModelViewer {
 	private renderer: THREE.WebGLRenderer | null = null;
@@ -422,5 +423,69 @@ export class VoxelModelViewer {
 
 		// Update renderer
 		this.renderer.setSize(width, height);
+	}
+
+	/**
+	 * Export the currently visible voxel model
+	 * @param format The format to export as
+	 */
+	public exportCurrentModel(format: ExportFormat = ExportFormat.OBJ): void {
+		if (!this.instancedMesh || !this.scene) {
+			console.error("Cannot export: no model loaded");
+			return;
+		}
+
+		// Get the current model's voxels (use only the active ones)
+		const activeVoxels = this.voxelsPerModel[this.activeModelIndex] || [];
+		if (activeVoxels.length === 0) {
+			console.error("Cannot export: no active voxels");
+			return;
+		}
+
+		// Convert the instanced mesh to regular meshes
+		const exportGroup = ModelExporter.convertInstancedMeshToRegular(
+			this.instancedMesh,
+			activeVoxels.slice(0, this.instancedMesh.count)
+		);
+
+		// Get the model name for the filename
+		const modelLoader = document.querySelector("#selector")?.childNodes[
+			this.activeModelIndex
+		] as HTMLElement;
+		const modelName =
+			modelLoader?.getAttribute("data-model-name") ||
+			`model-${this.activeModelIndex}`;
+
+		// Create a sanitized filename
+		const filename = `cubexo-${modelName
+			.toLowerCase()
+			.replace(/[^a-z0-9]/g, "-")}`;
+
+		// Show export notification
+		this.showExportNotification();
+
+		// Export the model
+		ModelExporter.exportModel(exportGroup, format, filename);
+	}
+
+	/**
+	 * Display a temporary notification that the model is being exported
+	 */
+	private showExportNotification(): void {
+		// Create notification element
+		const notification = document.createElement("div");
+		notification.className = "export-notification";
+		notification.textContent = "Exporting GLB...";
+
+		// Add to DOM
+		document.body.appendChild(notification);
+
+		// Remove after delay
+		setTimeout(() => {
+			notification.classList.add("fade-out");
+			setTimeout(() => {
+				notification.remove();
+			}, 500);
+		}, 2000);
 	}
 }

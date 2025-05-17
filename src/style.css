@@ -231,6 +231,53 @@ canvas#webgl {
 	}
 }
 
+/* Button container */
+.button-container {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	display: flex;
+	gap: 10px;
+	z-index: 200;
+	pointer-events: auto;
+}
+
+/* Export button */
+#export-model {
+	position: fixed;
+	bottom: 20px;
+	right: 20px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	background-color: var(--color-accent);
+	color: white;
+	border: none;
+	padding: 10px 15px;
+	border-radius: var(--radius-sm);
+	font-family: var(--font-sans);
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	z-index: 1000;
+	box-shadow: var(--shadow-md);
+	transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+#export-model:hover {
+	background-color: #0060df;
+	transform: translateY(-2px);
+}
+
+#export-model:active {
+	transform: translateY(0);
+}
+
+#export-model svg {
+	stroke: white;
+}
+
 /* Theme switch styles */
 #theme-toggle {
 	position: absolute;
@@ -274,4 +321,95 @@ canvas#webgl {
 
 .dark-theme #sun-icon {
 	display: block;
+}
+
+/* Export notification */
+.export-notification {
+	position: fixed;
+	bottom: 20px;
+	left: 50%;
+	transform: translateX(-50%);
+	background-color: var(--color-accent);
+	color: white;
+	padding: 10px 15px;
+	border-radius: var(--radius-md);
+	font-size: 14px;
+	font-weight: 500;
+	box-shadow: var(--shadow-md);
+	z-index: 1000;
+	animation: fade-in 0.3s ease;
+}
+
+.export-notification.fade-out {
+	animation: fade-out 0.5s ease forwards;
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, 20px);
+	}
+	to {
+		opacity: 1;
+		transform: translate(-50%, 0);
+	}
+}
+
+@keyframes fade-out {
+	from {
+		opacity: 1;
+		transform: translate(-50%, 0);
+	}
+	to {
+		opacity: 0;
+		transform: translate(-50%, 20px);
+	}
+}
+
+/* Dropdown styles */
+.dropdown {
+	position: relative;
+	display: inline-block;
+}
+
+.dropdown-content {
+	display: none;
+	position: absolute;
+	top: 100%;
+	right: 0;
+	background-color: var(--color-bg);
+	min-width: 160px;
+	box-shadow: var(--shadow-md);
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--color-border);
+	z-index: 300;
+	margin-top: 5px;
+	overflow: hidden;
+}
+
+.dropdown:hover .dropdown-content,
+.dropdown:focus-within .dropdown-content {
+	display: block;
+}
+
+.dropdown-content button {
+	width: 100%;
+	text-align: left;
+	padding: 10px 15px;
+	border: none;
+	background: none;
+	color: var(--color-text);
+	font-family: var(--font-sans);
+	font-size: 14px;
+	cursor: pointer;
+	transition: background-color 0.2s ease;
+}
+
+.dropdown-content button:hover {
+	background-color: var(--color-accent-subtle);
+}
+
+/* Dark theme adjustments */
+.dark-theme .dropdown-content button:hover {
+	background-color: rgba(255, 255, 255, 0.1);
 }
