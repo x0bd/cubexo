@@ -37,9 +37,6 @@ export class App {
 		this.setupExportButton();
 		this.setupPngExportButton();
 		this.setupModelUploader();
-
-		// Listen for model cycle clicks
-		this.setupModelCycling();
 	}
 
 	public async init(): Promise<void> {
@@ -210,81 +207,6 @@ export class App {
 
 		console.log(`Exporting screenshot of model ${this.activeModelIdx}`);
 		this.viewer.exportAsPng();
-	}
-
-	/**
-	 * Listen for model cycle clicks
-	 */
-	private setupModelCycling(): void {
-		// Listen for the custom model-cycle-click event from the viewer
-		window.addEventListener("model-cycle-click", () => {
-			// Find next model index
-			const currentIdx = this.activeModelIdx;
-			const modelCount = this.modelLoader.getURLs().length;
-			const nextIdx = (currentIdx + 1) % modelCount;
-
-			// Cycle to next model
-			console.log(`Cycling to next model: ${currentIdx} → ${nextIdx}`);
-			this.modelSelector.setActiveModelIndex(nextIdx);
-			this.viewer.animateToModel(currentIdx, nextIdx);
-			this.activeModelIdx = nextIdx;
-
-			// Show click hint on first user click
-			this.showClickHint();
-		});
-	}
-
-	/**
-	 * Show hint about clicking to cycle through models
-	 */
-	private showClickHint(): void {
-		// Check if we've shown the hint before
-		if (localStorage.getItem("cycle-hint-shown")) return;
-
-		// Create hint element
-		const hint = document.createElement("div");
-		hint.className = "cycle-hint";
-		hint.innerHTML = `
-			<div class="hint-content">
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<polyline points="15 10 20 15 15 20"></polyline>
-					<path d="M4 4v7a4 4 0 0 0 4 4h12"></path>
-				</svg>
-				<span>Click anywhere to cycle models</span>
-				<button class="hint-close">
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<line x1="18" y1="6" x2="6" y2="18"></line>
-						<line x1="6" y1="6" x2="18" y2="18"></line>
-					</svg>
-				</button>
-			</div>
-		`;
-
-		// Add to DOM
-		document.body.appendChild(hint);
-
-		// Track that we've shown the hint
-		localStorage.setItem("cycle-hint-shown", "true");
-
-		// Add close button functionality
-		const closeBtn = hint.querySelector(".hint-close");
-		closeBtn?.addEventListener("click", (e) => {
-			e.stopPropagation();
-			hint.classList.add("hint-fade-out");
-			hint.addEventListener("animationend", () => {
-				hint.remove();
-			});
-		});
-
-		// Auto-close after 5 seconds
-		setTimeout(() => {
-			if (document.body.contains(hint)) {
-				hint.classList.add("hint-fade-out");
-				hint.addEventListener("animationend", () => {
-					hint.remove();
-				});
-			}
-		}, 5000);
 	}
 
 	/**

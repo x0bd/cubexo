@@ -49,26 +49,6 @@ export class ModelSelector {
 		this.modelSelectedCallback = callback;
 		this.updateSceneSize();
 		this.startRenderingPreviews();
-
-		// Add click handlers to window for cycling through models
-		window.addEventListener("click", (e) => {
-			if (!(e.target as Element).closest(".model-prev")) {
-				const oldIndex = this.activeModelIdx;
-
-				// Move to the next model in sequence
-				if (this.previewScenes[this.activeModelIdx + 1]) {
-					this.activeModelIdx++;
-				} else {
-					this.activeModelIdx = 0;
-				}
-
-				this.updateActivePreview();
-
-				if (this.modelSelectedCallback) {
-					this.modelSelectedCallback(oldIndex, this.activeModelIdx);
-				}
-			}
-		});
 	}
 
 	public addModelPreview(modelData: ModelData, modelIdx: number): void {
