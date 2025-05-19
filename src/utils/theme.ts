@@ -69,6 +69,7 @@ export class ThemeManager {
 	 */
 	private setTheme(dark: boolean): void {
 		if (dark) {
+			document.documentElement.classList.remove("light");
 			document.documentElement.classList.add("dark");
 			localStorage.setItem(ThemeManager.STORAGE_KEY, "dark");
 			document.head
@@ -76,6 +77,7 @@ export class ThemeManager {
 				?.setAttribute("content", "dark");
 		} else {
 			document.documentElement.classList.remove("dark");
+			document.documentElement.classList.add("light");
 			localStorage.setItem(ThemeManager.STORAGE_KEY, "light");
 			document.head
 				.querySelector('meta[name="color-scheme"]')
@@ -88,7 +90,9 @@ export class ThemeManager {
 		}
 
 		// Dispatch custom event for other components
-		const event = new CustomEvent("theme-changed", { detail: { dark } });
+		const event = new CustomEvent("theme-changed", {
+			detail: { isDark: dark },
+		});
 		window.dispatchEvent(event);
 	}
 }

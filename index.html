@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="light">
 	<head>
 		<meta charset="UTF-8" />
 		<link rel="icon" type="image/svg+xml" href="/vite.svg" />
@@ -22,7 +22,9 @@
 			href="https://vercel.com/font/geist-mono/style.css"
 		/>
 	</head>
-	<body class="bg-black overflow-hidden m-0 p-0 font-mono text-white">
+	<body
+		class="bg-black dark:bg-black overflow-hidden m-0 p-0 font-mono text-white"
+	>
 		<canvas
 			id="webgl"
 			class="fixed top-0 left-0 w-full h-full z-0"
@@ -177,7 +179,7 @@
 
 				<label
 					id="upload-model-btn"
-					class="flex items-center gap-1.5 justify-center py-2 px-3 rounded bg-white/10 border border-white/20 text-white hover:bg-white/20 cursor-pointer transition-all"
+					class="h-9 px-3 rounded flex items-center gap-1.5 bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:translate-y-[-2px] hover:shadow-lg active:translate-y-0 active:shadow-md transition-all cursor-pointer"
 					aria-label="Upload your own model"
 				>
 					<input
@@ -203,7 +205,7 @@
 						<polyline points="17 8 12 3 7 8"></polyline>
 						<line x1="12" y1="3" x2="12" y2="15"></line>
 					</svg>
-					<span class="text-sm relative top-[1px]">Upload GLB</span>
+					<span class="relative top-[1px]">Upload GLB</span>
 				</label>
 			</div>
 		</div>

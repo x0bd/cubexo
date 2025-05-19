@@ -225,7 +225,7 @@ export class VoxelModelViewer {
 
 		// If isDark is not provided, detect from the DOM
 		if (isDark === undefined) {
-			isDark = document.documentElement.classList.contains("dark-theme");
+			isDark = document.documentElement.classList.contains("dark");
 		}
 
 		// Pure black/white for Vercel style
@@ -289,8 +289,7 @@ export class VoxelModelViewer {
 		this.scene.add(this.lightHolder);
 
 		// Determine if dark mode is active
-		const isDark =
-			document.documentElement.classList.contains("dark-theme");
+		const isDark = document.documentElement.classList.contains("dark");
 
 		// Minimal ground shadow with reduced opacity for better contrast
 		const planeGeometry = new THREE.PlaneGeometry(40, 40);

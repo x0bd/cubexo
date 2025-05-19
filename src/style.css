@@ -31,7 +31,7 @@
 }
 
 /* Dark theme */
-.dark-theme {
+.dark {
 	--color-fg: var(--color-fg-dark);
 	--color-bg: var(--color-bg-dark);
 	--color-border: var(--color-border-dark);
@@ -233,12 +233,12 @@ canvas#webgl {
 	transform: scale(0.8);
 }
 
-.dark-theme #moon-icon {
+.dark #moon-icon {
 	opacity: 0;
 	transform: scale(0.8);
 }
 
-.dark-theme #sun-icon {
+.dark #sun-icon {
 	opacity: 1;
 	transform: scale(1);
 }
