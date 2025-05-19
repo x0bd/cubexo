@@ -21,8 +21,11 @@
 			rel="stylesheet"
 			href="https://vercel.com/font/geist-mono/style.css"
 		/>
+		<link rel="stylesheet" href="src/style.css" />
 	</head>
-	<body class="overflow-hidden m-0 p-0 font-mono">
+	<body
+		class="bg-white dark:bg-black text-black dark:text-white overflow-hidden m-0 p-0 font-mono"
+	>
 		<canvas
 			id="webgl"
 			class="fixed top-0 left-0 w-full h-full z-0"
@@ -32,14 +35,19 @@
 			id="ui-container"
 			class="w-full h-full fixed top-0 left-0 z-10 pointer-events-none"
 		>
-			<header id="header" class="p-6">
+			<header
+				id="header"
+				class="absolute top-0 left-0 w-full p-6 md:p-10 flex flex-col items-start"
+			>
 				<h1 class="text-4xl font-bold mb-1">CubeXO</h1>
 				<div class="text-sm opacity-70">Voxel Explorer</div>
-				<div class="button-container absolute top-6 right-6">
+				<div
+					class="absolute top-6 md:top-10 right-6 md:right-10 flex gap-3"
+				>
 					<button
 						id="theme-toggle"
 						aria-label="Toggle theme"
-						class="fixed w-10 h-10 rounded-full z-20 flex items-center justify-center transition-colors !bg-black/5 !text-black !border !border-black/10 hover:!bg-black/10 dark:!bg-white/10 dark:!text-white dark:!border-white/10 dark:hover:!bg-white/20"
+						class="fixed w-10 h-10 rounded-full z-20 flex items-center justify-center transition-all duration-200 bg-gray-50 text-gray-900 border border-gray-200 hover:bg-gray-100 hover:scale-105 active:scale-95 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-800 dark:hover:bg-gray-800"
 					>
 						<svg
 							id="moon-icon"
@@ -107,20 +115,20 @@
 
 			<div
 				id="selector"
-				class="fixed bottom-6 left-1/2 -translate-x-1/2 flex gap-4 p-4 overflow-x-auto max-w-full z-10 justify-center pointer-events-auto"
+				class="fixed bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 flex gap-4 p-4 overflow-x-auto max-w-full z-10 justify-center pointer-events-auto"
 			></div>
 			<div
 				id="loader"
-				class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 !text-white/80 z-50"
+				class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-black text-black dark:text-white px-4 py-3 rounded shadow-sm border border-gray-200 dark:border-gray-800 z-50"
 			>
 				Loading models...
 			</div>
 
 			<div
-				class="export-buttons fixed bottom-6 right-6 flex flex-col items-end gap-3 z-20 pointer-events-auto"
+				class="export-buttons fixed bottom-4 md:bottom-6 right-4 md:right-6 flex flex-col items-end gap-3 z-20 pointer-events-auto"
 			>
 				<div
-					class="export-hint !px-3 !py-2 rounded text-xs !bg-black/5 !text-black/70 !border !border-black/10 dark:!bg-white/10 dark:!text-white/70 dark:!border-white/10"
+					class="export-hint px-3 py-2 rounded text-xs bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-800 max-w-[240px] text-right"
 				>
 					Position model by dragging, then export a zoomed-in
 					high-resolution image or 3D model
@@ -129,7 +137,7 @@
 					<button
 						id="export-png"
 						aria-label="Export as PNG"
-						class="h-9 !px-3 rounded flex items-center gap-1.5 hover:translate-y-[-2px] hover:shadow-lg active:translate-y-0 active:shadow-md transition-all !bg-black !text-white dark:!bg-white dark:!text-black"
+						class="h-9 px-3 rounded flex items-center gap-1.5 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm transition-all bg-black text-white dark:bg-white dark:text-black"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -152,7 +160,7 @@
 					<button
 						id="export-model"
 						aria-label="Export model as GLB"
-						class="h-9 !px-3 rounded flex items-center gap-1.5 hover:translate-y-[-2px] hover:shadow-lg active:translate-y-0 active:shadow-md transition-all !bg-black !text-white dark:!bg-white dark:!text-black"
+						class="h-9 px-3 rounded flex items-center gap-1.5 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm transition-all bg-black text-white dark:bg-white dark:text-black"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -177,7 +185,7 @@
 
 				<label
 					id="upload-model-btn"
-					class="h-9 !px-3 rounded flex items-center gap-1.5 hover:translate-y-[-2px] hover:shadow-lg active:translate-y-0 active:shadow-md transition-all cursor-pointer !bg-black/5 !text-black !border !border-black/10 hover:!bg-black/10 dark:!bg-white/10 dark:!text-white dark:!border-white/10 dark:hover:!bg-white/20"
+					class="h-9 px-3 rounded flex items-center gap-1.5 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm transition-all cursor-pointer bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
 					aria-label="Upload your own model"
 				>
 					<input
