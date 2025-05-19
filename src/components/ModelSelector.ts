@@ -5,7 +5,7 @@ import type { ModelData } from "../types/types";
 export class ModelSelector {
 	private selectorElement: HTMLElement | null;
 	private previewScenes: THREE.Scene[] = [];
-	private previewWidth = 80; // Width in pixels
+	private previewWidth = 100; // Width in pixels
 	private activeModelIdx = 0;
 	private renderer: THREE.WebGLRenderer;
 	private modelSelectedCallback:
@@ -81,13 +81,18 @@ export class ModelSelector {
 		element.dataset.modelIdx = modelIdx.toString();
 		element.dataset.modelName = `model-${modelIdx}`;
 
+		// Make sure the element is clickable with proper pointer events
+		element.style.pointerEvents = "auto";
+
 		// Add click handler
 		element.addEventListener("click", (e) => {
 			const oldIndex = this.activeModelIdx;
 			this.activeModelIdx = modelIdx;
 			this.updateActivePreview();
 
+			// Ensure the callback is called to switch models
 			if (this.modelSelectedCallback) {
+				console.log(`Model preview clicked: ${oldIndex} → ${modelIdx}`);
 				this.modelSelectedCallback(oldIndex, this.activeModelIdx);
 			}
 			e.stopPropagation();
