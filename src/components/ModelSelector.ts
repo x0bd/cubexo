@@ -75,9 +75,8 @@ export class ModelSelector {
 
 		// Create preview element
 		const element = document.createElement("div");
-		element.className = "model-prev";
-		element.style.width = `${this.previewWidth}px`;
-		element.style.height = `${this.previewWidth}px`;
+		element.className =
+			"model-prev relative w-[100px] h-[100px] rounded-xl border-2 border-black/20 mx-1.5 cursor-pointer shadow-md overflow-hidden transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-lg";
 		element.dataset.modelIdx = modelIdx.toString();
 		element.dataset.modelName = `model-${modelIdx}`;
 
@@ -257,13 +256,18 @@ export class ModelSelector {
 	}
 
 	private updateActivePreview(): void {
-		const previews = document.querySelectorAll(".model-prev");
+		const previews = document.querySelectorAll(
+			".model-prev"
+		) as NodeListOf<HTMLElement>;
+
 		previews.forEach((el) => {
 			const idx = parseInt(el.getAttribute("data-model-idx") || "-1");
 			if (idx !== this.activeModelIdx) {
-				el.classList.remove("active");
+				el.classList.remove("border-white", "scale-110", "shadow-lg");
+				el.classList.add("border-black/20");
 			} else {
-				el.classList.add("active");
+				el.classList.remove("border-black/20");
+				el.classList.add("border-white", "scale-110", "shadow-lg");
 			}
 		});
 	}

@@ -2,144 +2,93 @@
  * Class to manage theme switching functionality
  */
 export class ThemeManager {
-	private storageKey = "theme-preference";
-	private toggleButton: HTMLElement | null;
-	private mediaQuery: MediaQueryList;
+	private static readonly STORAGE_KEY = "theme-preference";
+	private onThemeChangeCallback: ((isDark: boolean) => void) | null = null;
 
 	constructor() {
-		this.toggleButton = document.getElementById("theme-toggle");
-		this.mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+		// Nothing to do here
 	}
 
 	/**
-	 * Initialize the theme manager
+	 * Initialize theme based on saved preference or system settings
+	 * @param onThemeChange Optional callback when theme changes
 	 */
-	public init(): void {
-		// Set initial theme
+	public init(onThemeChange?: (isDark: boolean) => void): void {
+		if (onThemeChange) {
+			this.onThemeChangeCallback = onThemeChange;
+		}
+
+		// Set up the button
+		const themeToggle = document.getElementById("theme-toggle");
+		if (themeToggle) {
+			themeToggle.addEventListener("click", () => this.toggleTheme());
+		}
+
+		// Initialize based on saved preference or system setting
 		this.initializeTheme();
 
-		// Set up event listeners
-		this.setupEventListeners();
+		// Listen for system preference changes
+		const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+		mediaQuery.addEventListener("change", (e) => {
+			// Only update if the user hasn't set a preference
+			if (!localStorage.getItem(ThemeManager.STORAGE_KEY)) {
+				this.setTheme(e.matches);
+			}
+		});
 	}
 
 	/**
-	 * Initialize theme based on storage or system preference
+	 * Initialize theme based on saved preference or system settings
 	 */
 	private initializeTheme(): void {
-		// Check for saved user preference
-		const savedTheme = localStorage.getItem(this.storageKey);
+		// Check local storage first
+		const storedTheme = localStorage.getItem(ThemeManager.STORAGE_KEY);
+		if (storedTheme === "dark" || storedTheme === "light") {
+			this.setTheme(storedTheme === "dark");
+			return;
+		}
 
-		if (savedTheme === "dark") {
-			this.enableDarkTheme();
-		} else if (savedTheme === "light") {
-			this.enableLightTheme();
+		// Fall back to system preference
+		const prefersDark = window.matchMedia(
+			"(prefers-color-scheme: dark)"
+		).matches;
+		this.setTheme(prefersDark);
+	}
+
+	/**
+	 * Toggle between light and dark themes
+	 */
+	public toggleTheme(): void {
+		const isDark = document.documentElement.classList.contains("dark");
+		this.setTheme(!isDark);
+	}
+
+	/**
+	 * Set the theme (dark or light)
+	 * @param dark Whether to enable dark theme
+	 */
+	private setTheme(dark: boolean): void {
+		if (dark) {
+			document.documentElement.classList.add("dark");
+			localStorage.setItem(ThemeManager.STORAGE_KEY, "dark");
+			document.head
+				.querySelector('meta[name="color-scheme"]')
+				?.setAttribute("content", "dark");
 		} else {
-			// No saved preference, use system preference
-			if (this.mediaQuery.matches) {
-				this.enableDarkTheme(false); // Don't save when using system preference
-			} else {
-				this.enableLightTheme(false); // Don't save when using system preference
-			}
-		}
-	}
-
-	/**
-	 * Set up event listeners for theme toggle and system preference changes
-	 */
-	private setupEventListeners(): void {
-		// Toggle button click
-		if (this.toggleButton) {
-			this.toggleButton.addEventListener("click", () => {
-				const isDark =
-					document.documentElement.classList.contains("dark-theme");
-				if (isDark) {
-					this.enableLightTheme();
-				} else {
-					this.enableDarkTheme();
-				}
-			});
+			document.documentElement.classList.remove("dark");
+			localStorage.setItem(ThemeManager.STORAGE_KEY, "light");
+			document.head
+				.querySelector('meta[name="color-scheme"]')
+				?.setAttribute("content", "light");
 		}
 
-		// System preference change
-		this.mediaQuery.addEventListener("change", (e) => {
-			// Only apply system preference if no saved preference exists
-			if (!localStorage.getItem(this.storageKey)) {
-				if (e.matches) {
-					this.enableDarkTheme(false);
-				} else {
-					this.enableLightTheme(false);
-				}
-			}
-		});
-	}
-
-	/**
-	 * Enable dark theme
-	 */
-	private enableDarkTheme(save: boolean = true): void {
-		document.documentElement.classList.add("dark-theme");
-		document.documentElement.setAttribute("color-scheme", "dark");
-
-		if (save) {
-			localStorage.setItem(this.storageKey, "dark");
+		// Call the callback if provided
+		if (this.onThemeChangeCallback) {
+			this.onThemeChangeCallback(dark);
 		}
 
-		// Update text contrast for UI elements
-		this.updateUIForDarkTheme();
-
-		// Dispatch event for other components to react
-		this.dispatchThemeChangeEvent(true);
-	}
-
-	/**
-	 * Enable light theme
-	 */
-	private enableLightTheme(save: boolean = true): void {
-		document.documentElement.classList.remove("dark-theme");
-		document.documentElement.setAttribute("color-scheme", "light");
-
-		if (save) {
-			localStorage.setItem(this.storageKey, "light");
-		}
-
-		// Update text contrast for UI elements
-		this.updateUIForLightTheme();
-
-		// Dispatch event for other components to react
-		this.dispatchThemeChangeEvent(false);
-	}
-
-	/**
-	 * Update UI elements specifically for dark theme
-	 * This ensures better text visibility
-	 */
-	private updateUIForDarkTheme(): void {
-		// Any specific dark mode adjustments can go here
-		const loader = document.getElementById("loader");
-		if (loader) {
-			loader.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.25)";
-		}
-	}
-
-	/**
-	 * Update UI elements specifically for light theme
-	 * This ensures better text visibility
-	 */
-	private updateUIForLightTheme(): void {
-		// Any specific light mode adjustments can go here
-		const loader = document.getElementById("loader");
-		if (loader) {
-			loader.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
-		}
-	}
-
-	/**
-	 * Dispatch a custom event when the theme changes
-	 */
-	private dispatchThemeChangeEvent(isDark: boolean): void {
-		const event = new CustomEvent("theme-changed", {
-			detail: { isDark },
-		});
+		// Dispatch custom event for other components
+		const event = new CustomEvent("theme-changed", { detail: { dark } });
 		window.dispatchEvent(event);
 	}
 }
