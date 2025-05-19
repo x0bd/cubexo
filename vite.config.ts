@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import tailwindcss from "@tailwindcss/vite";
+
 export default defineConfig({
-	plugins: [tailwindcss()],
+	// No plugin needed as PostCSS will be automatically picked up
 });
