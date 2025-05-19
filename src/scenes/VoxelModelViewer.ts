@@ -4,7 +4,6 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import gsap from "gsap";
 import type { Voxel, AppParameters } from "../types/types";
 import { ModelExporter, ExportFormat } from "../utils/ModelExporter";
-import { NotificationManager } from "../utils/NotificationManager";
 
 export class VoxelModelViewer {
 	private renderer: THREE.WebGLRenderer | null = null;
@@ -225,7 +224,7 @@ export class VoxelModelViewer {
 
 		// If isDark is not provided, detect from the DOM
 		if (isDark === undefined) {
-			isDark = document.documentElement.classList.contains("dark");
+			isDark = document.documentElement.classList.contains("dark-theme");
 		}
 
 		// Pure black/white for Vercel style
@@ -289,7 +288,8 @@ export class VoxelModelViewer {
 		this.scene.add(this.lightHolder);
 
 		// Determine if dark mode is active
-		const isDark = document.documentElement.classList.contains("dark");
+		const isDark =
+			document.documentElement.classList.contains("dark-theme");
 
 		// Minimal ground shadow with reduced opacity for better contrast
 		const planeGeometry = new THREE.PlaneGeometry(40, 40);
@@ -621,6 +621,61 @@ export class VoxelModelViewer {
 	 * Display a clean, minimal notification when exporting
 	 */
 	private showExportNotification(message: string = "Model exported"): void {
-		NotificationManager.showNotification(message, "success");
+		// Remove any existing notifications
+		const existingNotification = document.querySelector(
+			".export-notification"
+		);
+		if (existingNotification) {
+			existingNotification.remove();
+		}
+
+		// Create notification element
+		const notification = document.createElement("div");
+		notification.className = "export-notification";
+
+		// Add checkmark icon for success
+		const checkIcon = document.createElementNS(
+			"http://www.w3.org/2000/svg",
+			"svg"
+		);
+		checkIcon.setAttribute("width", "16");
+		checkIcon.setAttribute("height", "16");
+		checkIcon.setAttribute("viewBox", "0 0 24 24");
+		checkIcon.setAttribute("fill", "none");
+		checkIcon.setAttribute("stroke", "currentColor");
+		checkIcon.setAttribute("stroke-width", "2");
+		checkIcon.setAttribute("stroke-linecap", "round");
+		checkIcon.setAttribute("stroke-linejoin", "round");
+
+		const path = document.createElementNS(
+			"http://www.w3.org/2000/svg",
+			"path"
+		);
+		path.setAttribute("d", "M20 6L9 17l-5-5");
+		checkIcon.appendChild(path);
+
+		// Text content
+		const textSpan = document.createElement("span");
+		textSpan.textContent = message;
+
+		// Append elements
+		notification.appendChild(checkIcon);
+		notification.appendChild(textSpan);
+
+		// Style the container for horizontal layout
+		notification.style.display = "flex";
+		notification.style.alignItems = "center";
+		notification.style.gap = "6px";
+
+		// Add to DOM
+		document.body.appendChild(notification);
+
+		// Remove after delay with fade-out animation
+		setTimeout(() => {
+			notification.classList.add("fade-out");
+			notification.addEventListener("animationend", () => {
+				notification.remove();
+			});
+		}, 2000);
 	}
 }

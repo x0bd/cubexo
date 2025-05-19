@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" class="light">
+<html lang="en">
 	<head>
 		<meta charset="UTF-8" />
 		<link rel="icon" type="image/svg+xml" href="/vite.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<meta name="color-scheme" content="light dark" />
 		<title>CubeXO</title>
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,34 +20,15 @@
 			rel="stylesheet"
 			href="https://vercel.com/font/geist-mono/style.css"
 		/>
-		<link rel="stylesheet" href="src/style.css" />
 	</head>
-	<body
-		class="bg-white dark:bg-black text-black dark:text-white overflow-hidden m-0 p-0 font-mono"
-	>
-		<canvas
-			id="webgl"
-			class="fixed top-0 left-0 w-full h-full z-0"
-		></canvas>
-
-		<div
-			id="ui-container"
-			class="w-full h-full fixed top-0 left-0 z-10 pointer-events-none"
-		>
-			<header
-				id="header"
-				class="absolute top-0 left-0 w-full p-6 md:p-10 flex flex-col items-start"
-			>
-				<h1 class="text-4xl font-bold mb-1">CubeXO</h1>
-				<div class="text-sm opacity-70">Voxel Explorer</div>
-				<div
-					class="absolute top-6 md:top-10 right-6 md:right-10 flex gap-3"
-				>
-					<button
-						id="theme-toggle"
-						aria-label="Toggle theme"
-						class="fixed w-10 h-10 rounded-full z-20 flex items-center justify-center transition-all duration-200 bg-gray-50 text-gray-900 border border-gray-200 hover:bg-gray-100 hover:scale-105 active:scale-95 dark:bg-gray-900 dark:text-gray-100 dark:border-gray-800 dark:hover:bg-gray-800"
-					>
+	<body>
+		<canvas id="webgl"></canvas>
+		<div id="ui-container">
+			<header id="header">
+				<h1>CubeXO</h1>
+				<div class="subtitle">Voxel Explorer</div>
+				<div class="button-container">
+					<button id="theme-toggle" aria-label="Toggle theme">
 						<svg
 							id="moon-icon"
 							xmlns="http://www.w3.org/2000/svg"
@@ -60,7 +40,6 @@
 							stroke-width="2"
 							stroke-linecap="round"
 							stroke-linejoin="round"
-							class="hidden dark:block"
 						>
 							<path
 								d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
@@ -77,7 +56,6 @@
 							stroke-width="2"
 							stroke-linecap="round"
 							stroke-linejoin="round"
-							class="block dark:hidden"
 						>
 							<circle cx="12" cy="12" r="5"></circle>
 							<line x1="12" y1="1" x2="12" y2="3"></line>
@@ -112,41 +90,24 @@
 					</button>
 				</div>
 			</header>
+			<div id="selector"></div>
+			<div id="loader">Loading models...</div>
 
-			<div
-				id="selector"
-				class="fixed bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 flex gap-4 p-4 overflow-x-auto max-w-full z-10 justify-center pointer-events-auto"
-			></div>
-			<div
-				id="loader"
-				class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-black text-black dark:text-white px-4 py-3 rounded shadow-sm border border-gray-200 dark:border-gray-800 z-50"
-			>
-				Loading models...
-			</div>
-
-			<div
-				class="export-buttons fixed bottom-4 md:bottom-6 right-4 md:right-6 flex flex-col items-end gap-3 z-20 pointer-events-auto"
-			>
-				<div
-					class="export-hint px-3 py-2 rounded text-xs bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-800 max-w-[240px] text-right"
-				>
+			<div class="export-buttons">
+				<div class="export-hint">
 					Position model by dragging, then export a zoomed-in
 					high-resolution image or 3D model
 				</div>
-				<div class="flex gap-3">
-					<button
-						id="export-png"
-						aria-label="Export as PNG"
-						class="h-9 px-3 rounded flex items-center gap-1.5 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm transition-all bg-black text-white dark:bg-white dark:text-black"
-					>
+				<div class="button-row">
+					<button id="export-png" aria-label="Export as PNG">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
-							width="16"
-							height="16"
+							width="20"
+							height="20"
 							viewBox="0 0 24 24"
 							fill="none"
 							stroke="currentColor"
-							stroke-width="1.75"
+							stroke-width="2"
 							stroke-linecap="round"
 							stroke-linejoin="round"
 						>
@@ -155,21 +116,17 @@
 							></path>
 							<circle cx="12" cy="13" r="4"></circle>
 						</svg>
-						<span class="relative top-[1px]">PNG</span>
+						<span>PNG</span>
 					</button>
-					<button
-						id="export-model"
-						aria-label="Export model as GLB"
-						class="h-9 px-3 rounded flex items-center gap-1.5 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm transition-all bg-black text-white dark:bg-white dark:text-black"
-					>
+					<button id="export-model" aria-label="Export model as GLB">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
-							width="16"
-							height="16"
+							width="20"
+							height="20"
 							viewBox="0 0 24 24"
 							fill="none"
 							stroke="currentColor"
-							stroke-width="1.75"
+							stroke-width="2"
 							stroke-linecap="round"
 							stroke-linejoin="round"
 						>
@@ -179,29 +136,24 @@
 							<polyline points="7 10 12 15 17 10"></polyline>
 							<line x1="12" y1="15" x2="12" y2="3"></line>
 						</svg>
-						<span class="relative top-[1px]">GLB</span>
+						<span>GLB</span>
 					</button>
 				</div>
 
 				<label
 					id="upload-model-btn"
-					class="h-9 px-3 rounded flex items-center gap-1.5 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm transition-all cursor-pointer bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-300 dark:border-gray-800 dark:hover:bg-gray-800"
+					class="upload-btn"
 					aria-label="Upload your own model"
 				>
-					<input
-						type="file"
-						id="model-upload"
-						accept=".glb"
-						class="hidden"
-					/>
+					<input type="file" id="model-upload" accept=".glb" hidden />
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
-						width="16"
-						height="16"
+						width="20"
+						height="20"
 						viewBox="0 0 24 24"
 						fill="none"
 						stroke="currentColor"
-						stroke-width="1.75"
+						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
 					>
@@ -211,7 +163,7 @@
 						<polyline points="17 8 12 3 7 8"></polyline>
 						<line x1="12" y1="3" x2="12" y2="15"></line>
 					</svg>
-					<span class="relative top-[1px]">Upload GLB</span>
+					<span>Upload GLB</span>
 				</label>
 			</div>
 		</div>

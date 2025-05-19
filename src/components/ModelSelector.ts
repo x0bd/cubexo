@@ -75,8 +75,9 @@ export class ModelSelector {
 
 		// Create preview element
 		const element = document.createElement("div");
-		element.className =
-			"model-prev relative w-[100px] h-[100px] rounded-xl border-2 border-gray-200 mx-1.5 cursor-pointer shadow-md overflow-hidden transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-lg dark:border-gray-800";
+		element.className = "model-prev";
+		element.style.width = `${this.previewWidth}px`;
+		element.style.height = `${this.previewWidth}px`;
 		element.dataset.modelIdx = modelIdx.toString();
 		element.dataset.modelName = `model-${modelIdx}`;
 
@@ -125,30 +126,44 @@ export class ModelSelector {
 		const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
 		scene.add(ambientLight);
 
-		// 2. Main directional light with shadows
-		const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
-		mainLight.position.set(3, 5, 3);
+		// 2. Main directional light for shadows and definition
+		const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+		mainLight.position.set(1, 2, 2);
 		mainLight.castShadow = true;
 		mainLight.shadow.mapSize.width = 512;
 		mainLight.shadow.mapSize.height = 512;
 		scene.add(mainLight);
 
-		// 3. Rim light for better edge definition
-		const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
-		rimLight.position.set(-3, 2, -1);
+		// 3. Fill light from the opposite side to reduce harsh shadows
+		const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+		fillLight.position.set(-2, 0, -1);
+		scene.add(fillLight);
+
+		// 4. Rim light for better edge definition
+		const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+		rimLight.position.set(0, 1, -2);
 		scene.add(rimLight);
 
-		// 4. Ground plane to receive shadows
-		const groundPlane = new THREE.Mesh(
-			new THREE.PlaneGeometry(10, 10),
-			new THREE.ShadowMaterial({ opacity: 0.2 })
-		);
-		groundPlane.position.y = -1;
+		// 5. Add a ground plane to receive shadows
+		const groundGeometry = new THREE.PlaneGeometry(10, 10);
+		const groundMaterial = new THREE.ShadowMaterial({
+			opacity: 0.2,
+			transparent: true,
+		});
+		const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
 		groundPlane.rotation.x = -Math.PI / 2;
+		groundPlane.position.y = -1;
 		groundPlane.receiveShadow = true;
 		scene.add(groundPlane);
 
-		// Store the scene in our previewScenes array
+		// Initialize rect
+		scene.userData.rect = {
+			width: this.previewWidth,
+			height: this.previewWidth,
+			left: 0,
+			bottom: 0,
+		};
+
 		this.previewScenes.push(scene);
 		return scene;
 	}
@@ -242,29 +257,13 @@ export class ModelSelector {
 	}
 
 	private updateActivePreview(): void {
-		const previews = document.querySelectorAll(
-			".model-prev"
-		) as NodeListOf<HTMLElement>;
-
+		const previews = document.querySelectorAll(".model-prev");
 		previews.forEach((el) => {
 			const idx = parseInt(el.getAttribute("data-model-idx") || "-1");
 			if (idx !== this.activeModelIdx) {
-				el.classList.remove(
-					"border-black",
-					"border-white",
-					"scale-110",
-					"shadow-lg",
-					"dark:border-white"
-				);
-				el.classList.add("border-gray-200", "dark:border-gray-800");
+				el.classList.remove("active");
 			} else {
-				el.classList.remove("border-gray-200", "dark:border-gray-800");
-				el.classList.add(
-					"border-black",
-					"dark:border-white",
-					"scale-110",
-					"shadow-lg"
-				);
+				el.classList.add("active");
 			}
 		});
 	}

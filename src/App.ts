@@ -6,7 +6,6 @@ import * as THREE from "three";
 import gsap from "gsap";
 import { ExportFormat } from "./utils/ModelExporter";
 import { ModelUploader } from "./utils/ModelUploader";
-import { NotificationManager } from "./utils/NotificationManager";
 
 export class App {
 	private viewer: VoxelModelViewer;
@@ -327,9 +326,53 @@ export class App {
 	 * Show success notification after model upload
 	 */
 	private showUploadSuccess(modelName: string): void {
-		NotificationManager.showNotification(
-			`${modelName} uploaded and voxelized`,
-			"success"
+		// Create notification element
+		const notification = document.createElement("div");
+		notification.className = "export-notification";
+
+		// Add checkmark icon for success
+		const successIcon = document.createElementNS(
+			"http://www.w3.org/2000/svg",
+			"svg"
 		);
+		successIcon.setAttribute("width", "16");
+		successIcon.setAttribute("height", "16");
+		successIcon.setAttribute("viewBox", "0 0 24 24");
+		successIcon.setAttribute("fill", "none");
+		successIcon.setAttribute("stroke", "currentColor");
+		successIcon.setAttribute("stroke-width", "2");
+		successIcon.setAttribute("stroke-linecap", "round");
+		successIcon.setAttribute("stroke-linejoin", "round");
+
+		const path = document.createElementNS(
+			"http://www.w3.org/2000/svg",
+			"path"
+		);
+		path.setAttribute("d", "M20 6L9 17l-5-5");
+		successIcon.appendChild(path);
+
+		// Text content
+		const textSpan = document.createElement("span");
+		textSpan.textContent = `${modelName} uploaded and voxelized`;
+
+		// Append elements
+		notification.appendChild(successIcon);
+		notification.appendChild(textSpan);
+
+		// Style the container
+		notification.style.display = "flex";
+		notification.style.alignItems = "center";
+		notification.style.gap = "6px";
+
+		// Add to DOM
+		document.body.appendChild(notification);
+
+		// Remove after delay with fade-out animation
+		setTimeout(() => {
+			notification.classList.add("fade-out");
+			notification.addEventListener("animationend", () => {
+				notification.remove();
+			});
+		}, 3000);
 	}
 }

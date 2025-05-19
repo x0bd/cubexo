@@ -2,96 +2,143 @@
  * Class to manage theme switching functionality
  */
 export class ThemeManager {
-	private static readonly STORAGE_KEY = "theme-preference";
-	private onThemeChangeCallback: ((isDark: boolean) => void) | null = null;
+	private storageKey = "theme-preference";
+	private toggleButton: HTMLElement | null;
+	private mediaQuery: MediaQueryList;
 
 	constructor() {
-		// Nothing to do here
+		this.toggleButton = document.getElementById("theme-toggle");
+		this.mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 	}
 
 	/**
-	 * Initialize theme based on saved preference or system settings
-	 * @param onThemeChange Optional callback when theme changes
+	 * Initialize the theme manager
 	 */
-	public init(onThemeChange?: (isDark: boolean) => void): void {
-		if (onThemeChange) {
-			this.onThemeChangeCallback = onThemeChange;
-		}
-
-		// Set up the button
-		const themeToggle = document.getElementById("theme-toggle");
-		if (themeToggle) {
-			themeToggle.addEventListener("click", () => this.toggleTheme());
-		}
-
-		// Initialize based on saved preference or system setting
+	public init(): void {
+		// Set initial theme
 		this.initializeTheme();
 
-		// Listen for system preference changes
-		const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-		mediaQuery.addEventListener("change", (e) => {
-			// Only update if the user hasn't set a preference
-			if (!localStorage.getItem(ThemeManager.STORAGE_KEY)) {
-				this.setTheme(e.matches);
+		// Set up event listeners
+		this.setupEventListeners();
+	}
+
+	/**
+	 * Initialize theme based on storage or system preference
+	 */
+	private initializeTheme(): void {
+		// Check for saved user preference
+		const savedTheme = localStorage.getItem(this.storageKey);
+
+		if (savedTheme === "dark") {
+			this.enableDarkTheme();
+		} else if (savedTheme === "light") {
+			this.enableLightTheme();
+		} else {
+			// No saved preference, use system preference
+			if (this.mediaQuery.matches) {
+				this.enableDarkTheme(false); // Don't save when using system preference
+			} else {
+				this.enableLightTheme(false); // Don't save when using system preference
+			}
+		}
+	}
+
+	/**
+	 * Set up event listeners for theme toggle and system preference changes
+	 */
+	private setupEventListeners(): void {
+		// Toggle button click
+		if (this.toggleButton) {
+			this.toggleButton.addEventListener("click", () => {
+				const isDark =
+					document.documentElement.classList.contains("dark-theme");
+				if (isDark) {
+					this.enableLightTheme();
+				} else {
+					this.enableDarkTheme();
+				}
+			});
+		}
+
+		// System preference change
+		this.mediaQuery.addEventListener("change", (e) => {
+			// Only apply system preference if no saved preference exists
+			if (!localStorage.getItem(this.storageKey)) {
+				if (e.matches) {
+					this.enableDarkTheme(false);
+				} else {
+					this.enableLightTheme(false);
+				}
 			}
 		});
 	}
 
 	/**
-	 * Initialize theme based on saved preference or system settings
+	 * Enable dark theme
 	 */
-	private initializeTheme(): void {
-		// Check local storage first
-		const storedTheme = localStorage.getItem(ThemeManager.STORAGE_KEY);
-		if (storedTheme === "dark" || storedTheme === "light") {
-			this.setTheme(storedTheme === "dark");
-			return;
+	private enableDarkTheme(save: boolean = true): void {
+		document.documentElement.classList.add("dark-theme");
+		document.documentElement.setAttribute("color-scheme", "dark");
+
+		if (save) {
+			localStorage.setItem(this.storageKey, "dark");
 		}
 
-		// Fall back to system preference
-		const prefersDark = window.matchMedia(
-			"(prefers-color-scheme: dark)"
-		).matches;
-		this.setTheme(prefersDark);
+		// Update text contrast for UI elements
+		this.updateUIForDarkTheme();
+
+		// Dispatch event for other components to react
+		this.dispatchThemeChangeEvent(true);
 	}
 
 	/**
-	 * Toggle between light and dark themes
+	 * Enable light theme
 	 */
-	public toggleTheme(): void {
-		const isDark = document.documentElement.classList.contains("dark");
-		this.setTheme(!isDark);
+	private enableLightTheme(save: boolean = true): void {
+		document.documentElement.classList.remove("dark-theme");
+		document.documentElement.setAttribute("color-scheme", "light");
+
+		if (save) {
+			localStorage.setItem(this.storageKey, "light");
+		}
+
+		// Update text contrast for UI elements
+		this.updateUIForLightTheme();
+
+		// Dispatch event for other components to react
+		this.dispatchThemeChangeEvent(false);
 	}
 
 	/**
-	 * Set the theme (dark or light)
-	 * @param dark Whether to enable dark theme
+	 * Update UI elements specifically for dark theme
+	 * This ensures better text visibility
 	 */
-	private setTheme(dark: boolean): void {
-		if (dark) {
-			document.documentElement.classList.remove("light");
-			document.documentElement.classList.add("dark");
-			localStorage.setItem(ThemeManager.STORAGE_KEY, "dark");
-			document.head
-				.querySelector('meta[name="color-scheme"]')
-				?.setAttribute("content", "dark");
-		} else {
-			document.documentElement.classList.remove("dark");
-			document.documentElement.classList.add("light");
-			localStorage.setItem(ThemeManager.STORAGE_KEY, "light");
-			document.head
-				.querySelector('meta[name="color-scheme"]')
-				?.setAttribute("content", "light");
+	private updateUIForDarkTheme(): void {
+		// Any specific dark mode adjustments can go here
+		const loader = document.getElementById("loader");
+		if (loader) {
+			loader.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.25)";
 		}
+	}
 
-		// Call the callback if provided
-		if (this.onThemeChangeCallback) {
-			this.onThemeChangeCallback(dark);
+	/**
+	 * Update UI elements specifically for light theme
+	 * This ensures better text visibility
+	 */
+	private updateUIForLightTheme(): void {
+		// Any specific light mode adjustments can go here
+		const loader = document.getElementById("loader");
+		if (loader) {
+			loader.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
 		}
+	}
 
-		// Dispatch custom event for other components
+	/**
+	 * Dispatch a custom event when the theme changes
+	 */
+	private dispatchThemeChangeEvent(isDark: boolean): void {
 		const event = new CustomEvent("theme-changed", {
-			detail: { isDark: dark },
+			detail: { isDark },
 		});
 		window.dispatchEvent(event);
 	}
