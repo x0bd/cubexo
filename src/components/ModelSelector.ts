@@ -5,7 +5,7 @@ import type { ModelData } from "../types/types";
 export class ModelSelector {
 	private selectorElement: HTMLElement | null;
 	private previewScenes: THREE.Scene[] = [];
-	private previewWidth = 100; // Width in pixels
+	private previewWidth = 84; // Width in pixels - updated to match new design
 	private activeModelIdx = 0;
 	private renderer: THREE.WebGLRenderer;
 	private modelSelectedCallback:
@@ -61,6 +61,12 @@ export class ModelSelector {
 			const element = scene.userData.element as HTMLElement;
 			if (element) {
 				element.dataset.modelName = modelData.name;
+
+				// Add model label
+				const labelEl = element.querySelector(".model-label");
+				if (labelEl) {
+					labelEl.textContent = modelData.name;
+				}
 			}
 
 			this.addModelToScene(modelIdx, modelData.model, modelData.name);
@@ -70,8 +76,8 @@ export class ModelSelector {
 	public createPreviewScene(modelIdx: number): THREE.Scene {
 		const scene = new THREE.Scene();
 
-		// Use background color based on model index with better saturation and lightness
-		scene.background = new THREE.Color().setHSL(modelIdx / 6, 0.6, 0.8);
+		// Use subtle background color
+		scene.background = new THREE.Color(0xf0f0f0);
 
 		// Create preview element
 		const element = document.createElement("div");
@@ -80,6 +86,12 @@ export class ModelSelector {
 		element.style.height = `${this.previewWidth}px`;
 		element.dataset.modelIdx = modelIdx.toString();
 		element.dataset.modelName = `model-${modelIdx}`;
+
+		// Add label element
+		const labelEl = document.createElement("div");
+		labelEl.className = "model-label";
+		labelEl.textContent = `Model ${modelIdx + 1}`;
+		element.appendChild(labelEl);
 
 		// Make sure the element is clickable with proper pointer events
 		element.style.pointerEvents = "auto";
@@ -257,13 +269,15 @@ export class ModelSelector {
 	}
 
 	private updateActivePreview(): void {
-		const previews = document.querySelectorAll(".model-prev");
-		previews.forEach((el) => {
-			const idx = parseInt(el.getAttribute("data-model-idx") || "-1");
-			if (idx !== this.activeModelIdx) {
-				el.classList.remove("active");
-			} else {
-				el.classList.add("active");
+		// Update active class on preview elements
+		this.previewScenes.forEach((scene) => {
+			const element = scene.userData.element as HTMLElement;
+			if (element) {
+				if (scene.userData.modelIdx === this.activeModelIdx) {
+					element.classList.add("active");
+				} else {
+					element.classList.remove("active");
+				}
 			}
 		});
 	}

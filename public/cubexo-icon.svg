@@ -1,0 +1,25 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cube shape with subtle rounded corners -->
+  <rect x="6" y="6" width="20" height="20" rx="2" fill="black" />
+  
+  <!-- Inner X pattern - minimal, geometric -->
+  <path d="M12 12L20 20M20 12L12 20" stroke="white" stroke-width="2" stroke-linecap="round" />
+  
+  <!-- Subtle highlight on edge for dimension -->
+  <rect x="8" y="8" width="16" height="16" rx="1" stroke="white" stroke-opacity="0.15" stroke-width="1" fill="none" />
+  
+  <style>
+    @media (prefers-color-scheme: dark) {
+      rect:first-child {
+        fill: white;
+      }
+      path {
+        stroke: black;
+      }
+      rect:last-child {
+        stroke: black;
+        stroke-opacity: 0.15;
+      }
+    }
+  </style>
+</svg> 

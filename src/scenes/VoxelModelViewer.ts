@@ -618,64 +618,48 @@ export class VoxelModelViewer {
 	}
 
 	/**
-	 * Display a clean, minimal notification when exporting
+	 * Show export notification
 	 */
 	private showExportNotification(message: string = "Model exported"): void {
 		// Remove any existing notifications
-		const existingNotification = document.querySelector(
+		const existingNotifications = document.querySelectorAll(
 			".export-notification"
 		);
-		if (existingNotification) {
-			existingNotification.remove();
-		}
+		existingNotifications.forEach((notif) => {
+			if (notif.parentNode) {
+				notif.parentNode.removeChild(notif);
+			}
+		});
 
-		// Create notification element
+		// Create notification element with improved design
 		const notification = document.createElement("div");
 		notification.className = "export-notification";
 
-		// Add checkmark icon for success
-		const checkIcon = document.createElementNS(
-			"http://www.w3.org/2000/svg",
-			"svg"
-		);
-		checkIcon.setAttribute("width", "16");
-		checkIcon.setAttribute("height", "16");
-		checkIcon.setAttribute("viewBox", "0 0 24 24");
-		checkIcon.setAttribute("fill", "none");
-		checkIcon.setAttribute("stroke", "currentColor");
-		checkIcon.setAttribute("stroke-width", "2");
-		checkIcon.setAttribute("stroke-linecap", "round");
-		checkIcon.setAttribute("stroke-linejoin", "round");
+		// Success icon
+		const icon = document.createElement("div");
+		icon.innerHTML = `
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+				<polyline points="22 4 12 14.01 9 11.01"></polyline>
+			</svg>
+		`;
+		notification.appendChild(icon);
 
-		const path = document.createElementNS(
-			"http://www.w3.org/2000/svg",
-			"path"
-		);
-		path.setAttribute("d", "M20 6L9 17l-5-5");
-		checkIcon.appendChild(path);
+		// Message
+		const text = document.createElement("span");
+		text.textContent = message;
+		notification.appendChild(text);
 
-		// Text content
-		const textSpan = document.createElement("span");
-		textSpan.textContent = message;
-
-		// Append elements
-		notification.appendChild(checkIcon);
-		notification.appendChild(textSpan);
-
-		// Style the container for horizontal layout
-		notification.style.display = "flex";
-		notification.style.alignItems = "center";
-		notification.style.gap = "6px";
-
-		// Add to DOM
 		document.body.appendChild(notification);
 
-		// Remove after delay with fade-out animation
+		// Animate out after delay
 		setTimeout(() => {
 			notification.classList.add("fade-out");
-			notification.addEventListener("animationend", () => {
-				notification.remove();
-			});
-		}, 2000);
+			setTimeout(() => {
+				if (notification.parentNode) {
+					notification.parentNode.removeChild(notification);
+				}
+			}, 300);
+		}, 3000);
 	}
 }

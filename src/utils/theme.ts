@@ -1,58 +1,63 @@
 /**
- * Class to manage theme switching functionality
+ * Theme Manager - Handles dark/light mode preferences
+ * Inspired by minimalist design principles
  */
+
 export class ThemeManager {
-	private storageKey = "theme-preference";
-	private toggleButton: HTMLElement | null;
-	private mediaQuery: MediaQueryList;
+	private darkModeMediaQuery: MediaQueryList;
+	private themeToggleBtn: HTMLElement | null;
+	private darkThemeClass = "dark-theme";
+	private themeKey = "cubexo-theme-preference";
+	private initialTransition = "background-color 0.3s ease, color 0.3s ease";
 
 	constructor() {
-		this.toggleButton = document.getElementById("theme-toggle");
-		this.mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+		this.darkModeMediaQuery = window.matchMedia(
+			"(prefers-color-scheme: dark)"
+		);
+		this.themeToggleBtn = document.getElementById("theme-toggle");
 	}
 
-	/**
-	 * Initialize the theme manager
-	 */
 	public init(): void {
-		// Set initial theme
-		this.initializeTheme();
-
-		// Set up event listeners
+		this.loadThemePreference();
 		this.setupEventListeners();
+		this.disableTransitionsTemporarily();
 	}
 
-	/**
-	 * Initialize theme based on storage or system preference
-	 */
-	private initializeTheme(): void {
-		// Check for saved user preference
-		const savedTheme = localStorage.getItem(this.storageKey);
+	private disableTransitionsTemporarily(): void {
+		// Disable transitions during initial load to prevent flash
+		document.body.style.transition = "none";
+
+		// Force a reflow to ensure the transition is applied
+		document.body.offsetHeight;
+
+		// Re-enable transitions after a small delay
+		setTimeout(() => {
+			document.body.style.transition = this.initialTransition;
+		}, 50);
+	}
+
+	private loadThemePreference(): void {
+		const savedTheme = localStorage.getItem(this.themeKey);
 
 		if (savedTheme === "dark") {
-			this.enableDarkTheme();
+			this.enableDarkTheme(false);
 		} else if (savedTheme === "light") {
-			this.enableLightTheme();
+			this.enableLightTheme(false);
 		} else {
 			// No saved preference, use system preference
-			if (this.mediaQuery.matches) {
-				this.enableDarkTheme(false); // Don't save when using system preference
+			if (this.darkModeMediaQuery.matches) {
+				this.enableDarkTheme(false);
 			} else {
-				this.enableLightTheme(false); // Don't save when using system preference
+				this.enableLightTheme(false);
 			}
 		}
 	}
 
-	/**
-	 * Set up event listeners for theme toggle and system preference changes
-	 */
 	private setupEventListeners(): void {
-		// Toggle button click
-		if (this.toggleButton) {
-			this.toggleButton.addEventListener("click", () => {
-				const isDark =
-					document.documentElement.classList.contains("dark-theme");
-				if (isDark) {
+		// Toggle theme when button is clicked
+		if (this.themeToggleBtn) {
+			this.themeToggleBtn.addEventListener("click", () => {
+				if (document.body.classList.contains(this.darkThemeClass)) {
 					this.enableLightTheme();
 				} else {
 					this.enableDarkTheme();
@@ -60,10 +65,10 @@ export class ThemeManager {
 			});
 		}
 
-		// System preference change
-		this.mediaQuery.addEventListener("change", (e) => {
-			// Only apply system preference if no saved preference exists
-			if (!localStorage.getItem(this.storageKey)) {
+		// Listen for system theme changes
+		this.darkModeMediaQuery.addEventListener("change", (e) => {
+			// Only apply system preference if no manual preference is set
+			if (!localStorage.getItem(this.themeKey)) {
 				if (e.matches) {
 					this.enableDarkTheme(false);
 				} else {
@@ -73,73 +78,55 @@ export class ThemeManager {
 		});
 	}
 
-	/**
-	 * Enable dark theme
-	 */
-	private enableDarkTheme(save: boolean = true): void {
-		document.documentElement.classList.add("dark-theme");
-		document.documentElement.setAttribute("color-scheme", "dark");
-
-		if (save) {
-			localStorage.setItem(this.storageKey, "dark");
+	private enableDarkTheme(savePreference = true): void {
+		document.body.classList.add(this.darkThemeClass);
+		if (savePreference) {
+			localStorage.setItem(this.themeKey, "dark");
 		}
+		// Update meta theme color
+		this.updateMetaThemeColor("#000000");
 
-		// Update text contrast for UI elements
-		this.updateUIForDarkTheme();
-
-		// Dispatch event for other components to react
-		this.dispatchThemeChangeEvent(true);
+		// Dispatch event for other components that need to be aware of theme changes
+		window.dispatchEvent(
+			new CustomEvent("themechange", {
+				detail: { theme: "dark" },
+			})
+		);
 	}
 
-	/**
-	 * Enable light theme
-	 */
-	private enableLightTheme(save: boolean = true): void {
-		document.documentElement.classList.remove("dark-theme");
-		document.documentElement.setAttribute("color-scheme", "light");
-
-		if (save) {
-			localStorage.setItem(this.storageKey, "light");
+	private enableLightTheme(savePreference = true): void {
+		document.body.classList.remove(this.darkThemeClass);
+		if (savePreference) {
+			localStorage.setItem(this.themeKey, "light");
 		}
+		// Update meta theme color
+		this.updateMetaThemeColor("#ffffff");
 
-		// Update text contrast for UI elements
-		this.updateUIForLightTheme();
-
-		// Dispatch event for other components to react
-		this.dispatchThemeChangeEvent(false);
+		// Dispatch event for other components that need to be aware of theme changes
+		window.dispatchEvent(
+			new CustomEvent("themechange", {
+				detail: { theme: "light" },
+			})
+		);
 	}
 
-	/**
-	 * Update UI elements specifically for dark theme
-	 * This ensures better text visibility
-	 */
-	private updateUIForDarkTheme(): void {
-		// Any specific dark mode adjustments can go here
-		const loader = document.getElementById("loader");
-		if (loader) {
-			loader.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.25)";
+	private updateMetaThemeColor(color: string): void {
+		// Update theme-color meta tag for mobile browsers
+		let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+
+		if (!metaThemeColor) {
+			metaThemeColor = document.createElement("meta");
+			metaThemeColor.setAttribute("name", "theme-color");
+			document.head.appendChild(metaThemeColor);
 		}
+
+		metaThemeColor.setAttribute("content", color);
 	}
 
-	/**
-	 * Update UI elements specifically for light theme
-	 * This ensures better text visibility
-	 */
-	private updateUIForLightTheme(): void {
-		// Any specific light mode adjustments can go here
-		const loader = document.getElementById("loader");
-		if (loader) {
-			loader.style.boxShadow = "0 4px 6px rgba(0, 0, 0, 0.1)";
-		}
-	}
-
-	/**
-	 * Dispatch a custom event when the theme changes
-	 */
-	private dispatchThemeChangeEvent(isDark: boolean): void {
-		const event = new CustomEvent("theme-changed", {
-			detail: { isDark },
-		});
-		window.dispatchEvent(event);
+	// Public method to get current theme
+	public getCurrentTheme(): "dark" | "light" {
+		return document.body.classList.contains(this.darkThemeClass)
+			? "dark"
+			: "light";
 	}
 }

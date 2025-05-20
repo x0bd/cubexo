@@ -205,8 +205,9 @@ export class App {
 	private exportAsPng(): void {
 		if (!this.viewer) return;
 
-		console.log(`Exporting screenshot of model ${this.activeModelIdx}`);
+		console.log(`Exporting model ${this.activeModelIdx} as PNG`);
 		this.viewer.exportAsPng();
+		this.showExportNotification("Image exported");
 	}
 
 	/**
@@ -320,59 +321,85 @@ export class App {
 			// Reset input so same file can be uploaded again
 			uploadInput.value = "";
 		});
+
+		// When upload is successful
+		this.modelUploader.onModelUploaded = (
+			model: THREE.Group,
+			fileName: string
+		) => {
+			this.showUploadSuccess(fileName);
+		};
 	}
 
 	/**
-	 * Show success notification after model upload
+	 * Show a success notification when a model is uploaded
 	 */
 	private showUploadSuccess(modelName: string): void {
-		// Create notification element
+		// Create notification element with improved design
 		const notification = document.createElement("div");
 		notification.className = "export-notification";
 
-		// Add checkmark icon for success
-		const successIcon = document.createElementNS(
-			"http://www.w3.org/2000/svg",
-			"svg"
-		);
-		successIcon.setAttribute("width", "16");
-		successIcon.setAttribute("height", "16");
-		successIcon.setAttribute("viewBox", "0 0 24 24");
-		successIcon.setAttribute("fill", "none");
-		successIcon.setAttribute("stroke", "currentColor");
-		successIcon.setAttribute("stroke-width", "2");
-		successIcon.setAttribute("stroke-linecap", "round");
-		successIcon.setAttribute("stroke-linejoin", "round");
+		// Success icon
+		const icon = document.createElement("div");
+		icon.innerHTML = `
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+				<polyline points="22 4 12 14.01 9 11.01"></polyline>
+			</svg>
+		`;
+		notification.appendChild(icon);
 
-		const path = document.createElementNS(
-			"http://www.w3.org/2000/svg",
-			"path"
-		);
-		path.setAttribute("d", "M20 6L9 17l-5-5");
-		successIcon.appendChild(path);
+		// Message
+		const text = document.createElement("span");
+		text.textContent = `${modelName} uploaded successfully`;
+		notification.appendChild(text);
 
-		// Text content
-		const textSpan = document.createElement("span");
-		textSpan.textContent = `${modelName} uploaded and voxelized`;
-
-		// Append elements
-		notification.appendChild(successIcon);
-		notification.appendChild(textSpan);
-
-		// Style the container
-		notification.style.display = "flex";
-		notification.style.alignItems = "center";
-		notification.style.gap = "6px";
-
-		// Add to DOM
 		document.body.appendChild(notification);
 
-		// Remove after delay with fade-out animation
+		// Animate out after delay
 		setTimeout(() => {
 			notification.classList.add("fade-out");
-			notification.addEventListener("animationend", () => {
-				notification.remove();
-			});
+			setTimeout(() => {
+				if (notification.parentNode) {
+					notification.parentNode.removeChild(notification);
+				}
+			}, 300);
+		}, 3000);
+	}
+
+	/**
+	 * Show a success notification when a model is exported
+	 */
+	private showExportNotification(message: string): void {
+		// Create notification element with improved design
+		const notification = document.createElement("div");
+		notification.className = "export-notification";
+
+		// Success icon
+		const icon = document.createElement("div");
+		icon.innerHTML = `
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+				<polyline points="22 4 12 14.01 9 11.01"></polyline>
+			</svg>
+		`;
+		notification.appendChild(icon);
+
+		// Message
+		const text = document.createElement("span");
+		text.textContent = message;
+		notification.appendChild(text);
+
+		document.body.appendChild(notification);
+
+		// Animate out after delay
+		setTimeout(() => {
+			notification.classList.add("fade-out");
+			setTimeout(() => {
+				if (notification.parentNode) {
+					notification.parentNode.removeChild(notification);
+				}
+			}, 300);
 		}, 3000);
 	}
 }
