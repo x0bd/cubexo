@@ -622,37 +622,46 @@ export class VoxelModelViewer {
 	 */
 	private showExportNotification(message: string = "Model exported"): void {
 		// Remove any existing notifications
-		const existingNotifications = document.querySelectorAll(
-			".export-notification"
-		);
+		const existingNotifications =
+			document.querySelectorAll(".notification");
 		existingNotifications.forEach((notif) => {
 			if (notif.parentNode) {
 				notif.parentNode.removeChild(notif);
 			}
 		});
 
-		// Create notification element with improved design
-		const notification = document.createElement("div");
-		notification.className = "export-notification";
+		// Get notification template
+		const template = document.getElementById(
+			"notification-template"
+		) as HTMLTemplateElement;
+		if (!template) return;
 
-		// Success icon
-		const icon = document.createElement("div");
-		icon.innerHTML = `
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-				<polyline points="22 4 12 14.01 9 11.01"></polyline>
-			</svg>
-		`;
-		notification.appendChild(icon);
+		// Clone the template content
+		const notificationElement = template.content.cloneNode(
+			true
+		) as DocumentFragment;
+		const notificationTextElement =
+			notificationElement.querySelector(".notification-text");
 
-		// Message
-		const text = document.createElement("span");
-		text.textContent = message;
-		notification.appendChild(text);
+		// Set the notification message
+		if (notificationTextElement) {
+			notificationTextElement.textContent = message;
+		}
 
-		document.body.appendChild(notification);
+		// Add to DOM
+		document.body.appendChild(notificationElement);
 
-		// Animate out after delay
+		// Get the notification we just added
+		const notification = document.querySelector(
+			".notification:not(.fade-out)"
+		);
+
+		if (!notification) return;
+
+		// Add class to identify it
+		notification.classList.add("notification");
+
+		// Remove after delay
 		setTimeout(() => {
 			notification.classList.add("fade-out");
 			setTimeout(() => {

@@ -5,7 +5,7 @@ import type { ModelData } from "../types/types";
 export class ModelSelector {
 	private selectorElement: HTMLElement | null;
 	private previewScenes: THREE.Scene[] = [];
-	private previewWidth = 84; // Width in pixels - updated to match new design
+	private previewWidth = 84; // Width in pixels
 	private activeModelIdx = 0;
 	private renderer: THREE.WebGLRenderer;
 	private modelSelectedCallback:
@@ -79,24 +79,21 @@ export class ModelSelector {
 		// Use subtle background color
 		scene.background = new THREE.Color(0xf0f0f0);
 
-		// Create preview element
+		// Create preview element with Tailwind classes
 		const element = document.createElement("div");
-		element.className = "model-prev";
-		element.style.width = `${this.previewWidth}px`;
-		element.style.height = `${this.previewWidth}px`;
+		element.className =
+			"w-[84px] h-[84px] border border-black/10 dark:border-white/10 rounded-lg overflow-hidden cursor-pointer relative transition-all hover:-translate-y-1 hover:border-neutral-500";
 		element.dataset.modelIdx = modelIdx.toString();
-		element.dataset.modelName = `model-${modelIdx}`;
+		element.dataset.modelName = `Model ${modelIdx + 1}`;
 
 		// Add label element
 		const labelEl = document.createElement("div");
-		labelEl.className = "model-label";
+		labelEl.className =
+			"absolute bottom-0 left-0 right-0 p-1 text-[11px] font-medium text-center bg-neutral-50/80 dark:bg-neutral-900/80 backdrop-blur-md border-t border-black/5 dark:border-white/10";
 		labelEl.textContent = `Model ${modelIdx + 1}`;
 		element.appendChild(labelEl);
 
-		// Make sure the element is clickable with proper pointer events
-		element.style.pointerEvents = "auto";
-
-		// Add click handler
+		// Handle model selection
 		element.addEventListener("click", (e) => {
 			const oldIndex = this.activeModelIdx;
 			this.activeModelIdx = modelIdx;
@@ -133,12 +130,10 @@ export class ModelSelector {
 		orbit.enableDamping = true;
 		scene.userData.orbit = orbit;
 
-		// Improved lighting setup
-		// 1. Brighter ambient light for better overall illumination
+		// Setup lighting
 		const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
 		scene.add(ambientLight);
 
-		// 2. Main directional light for shadows and definition
 		const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
 		mainLight.position.set(1, 2, 2);
 		mainLight.castShadow = true;
@@ -146,17 +141,14 @@ export class ModelSelector {
 		mainLight.shadow.mapSize.height = 512;
 		scene.add(mainLight);
 
-		// 3. Fill light from the opposite side to reduce harsh shadows
 		const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
 		fillLight.position.set(-2, 0, -1);
 		scene.add(fillLight);
 
-		// 4. Rim light for better edge definition
 		const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
 		rimLight.position.set(0, 1, -2);
 		scene.add(rimLight);
 
-		// 5. Add a ground plane to receive shadows
 		const groundGeometry = new THREE.PlaneGeometry(10, 10);
 		const groundMaterial = new THREE.ShadowMaterial({
 			opacity: 0.2,
@@ -274,9 +266,9 @@ export class ModelSelector {
 			const element = scene.userData.element as HTMLElement;
 			if (element) {
 				if (scene.userData.modelIdx === this.activeModelIdx) {
-					element.classList.add("active");
+					element.classList.add("scale-105", "border-accent");
 				} else {
-					element.classList.remove("active");
+					element.classList.remove("scale-105", "border-accent");
 				}
 			}
 		});

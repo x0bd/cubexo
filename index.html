@@ -11,28 +11,64 @@
 			href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
 			rel="stylesheet"
 		/>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<script>
+			tailwind.config = {
+				theme: {
+					extend: {
+						colors: {
+							accent: "#0070f3",
+						},
+						fontFamily: {
+							sans: ["Inter", "system-ui", "sans-serif"],
+						},
+					},
+				},
+				darkMode: "class",
+			};
+		</script>
 	</head>
-	<body>
-		<h1 class="text-5xl font-bold text-red-600">BRO</h1>
+	<body
+		class="bg-white dark:bg-black text-black dark:text-white antialiased overflow-hidden"
+	>
 		<!-- Canvas for Three.js rendering -->
-		<canvas id="webgl"></canvas>
+		<canvas
+			id="webgl"
+			class="fixed top-0 left-0 w-full h-full z-0"
+		></canvas>
 
 		<!-- Main UI container -->
-		<div id="app">
+		<div
+			id="app"
+			class="fixed w-full h-full top-0 left-0 z-10 grid grid-rows-[auto_1fr_auto]"
+		>
 			<!-- Header -->
-			<header>
-				<div class="brand">
-					<h1>CubeXO</h1>
-					<div class="pill">Voxel Explorer</div>
+			<header
+				class="flex justify-between items-center p-8 w-full z-20 relative"
+			>
+				<div class="brand pointer-events-auto flex flex-col gap-1.5">
+					<h1 class="text-xl font-semibold tracking-tight">CubeXO</h1>
+					<div
+						class="text-xs font-medium text-accent bg-accent/5 dark:bg-accent/10 py-0.5 px-2 rounded-xl uppercase tracking-wider self-start"
+					>
+						Voxel Explorer
+					</div>
 				</div>
 
-				<div class="toolbar">
-					<button id="theme-toggle" aria-label="Toggle theme">
+				<div
+					class="toolbar flex gap-3 pointer-events-auto z-[210] relative"
+				>
+					<button
+						id="theme-toggle"
+						aria-label="Toggle theme"
+						class="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-black border border-black/10 dark:border-white/10 shadow-sm hover:shadow hover:-translate-y-0.5 transition-all relative cursor-pointer"
+					>
 						<svg
 							id="moon-icon"
 							viewBox="0 0 24 24"
 							width="16"
 							height="16"
+							class="absolute stroke-current stroke-2 opacity-0 dark:opacity-100 transform translate-y-2.5 rotate-45 dark:translate-y-0 dark:rotate-0 transition-all duration-300"
 						>
 							<path
 								d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
@@ -43,6 +79,7 @@
 							viewBox="0 0 24 24"
 							width="16"
 							height="16"
+							class="absolute stroke-current stroke-2 opacity-100 dark:opacity-0 transform dark:-translate-y-2.5 dark:-rotate-45 transition-all duration-300"
 						>
 							<circle cx="12" cy="12" r="5"></circle>
 							<line x1="12" y1="1" x2="12" y2="3"></line>
@@ -79,11 +116,22 @@
 			</header>
 
 			<!-- Model Selector -->
-			<div id="selector" class="model-selector"></div>
+			<div
+				id="selector"
+				class="fixed bottom-8 left-1/2 -translate-x-1/2 flex gap-4 p-3 rounded-xl bg-neutral-50/80 dark:bg-neutral-900/80 backdrop-blur-lg border border-black/5 dark:border-white/10 shadow-md z-10 pointer-events-auto"
+			></div>
 
 			<!-- Loading indicator -->
-			<div id="loader">
-				<svg class="spinner" viewBox="0 0 50 50" width="20" height="20">
+			<div
+				id="loader"
+				class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-black text-black dark:text-white py-4 px-5 rounded-lg font-medium text-sm flex gap-3 items-center shadow-md border border-black/10 dark:border-white/10 pointer-events-auto z-50"
+			>
+				<svg
+					class="spinner animate-spin"
+					viewBox="0 0 50 50"
+					width="20"
+					height="20"
+				>
 					<circle
 						cx="25"
 						cy="25"
@@ -91,20 +139,28 @@
 						fill="none"
 						stroke="currentColor"
 						stroke-width="4"
+						class="opacity-20"
 					></circle>
 				</svg>
 				<span>Loading models</span>
 			</div>
 
 			<!-- Model controls -->
-			<div class="control-panel">
-				<div class="control-group">
+			<div
+				class="control-panel fixed top-8 right-8 flex flex-col gap-4 items-end pointer-events-none z-[220]"
+			>
+				<div class="control-group flex gap-2 pointer-events-auto">
 					<button
 						id="export-png"
-						class="btn btn-secondary"
+						class="btn-secondary flex items-center gap-2 font-medium text-sm py-2.5 px-4 rounded-md transition-all bg-white dark:bg-black border border-black/10 dark:border-white/10 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
 						aria-label="Export as PNG"
 					>
-						<svg viewBox="0 0 24 24" width="16" height="16">
+						<svg
+							viewBox="0 0 24 24"
+							width="16"
+							height="16"
+							class="stroke-current stroke-2 fill-none"
+						>
 							<path
 								d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
 							></path>
@@ -115,10 +171,15 @@
 
 					<button
 						id="export-model"
-						class="btn btn-primary"
+						class="btn-primary flex items-center gap-2 font-medium text-sm py-2.5 px-4 rounded-md transition-all bg-accent border border-accent text-white hover:brightness-105 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
 						aria-label="Export model as GLB"
 					>
-						<svg viewBox="0 0 24 24" width="16" height="16">
+						<svg
+							viewBox="0 0 24 24"
+							width="16"
+							height="16"
+							class="stroke-current stroke-2 fill-none"
+						>
 							<path
 								d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
 							></path>
@@ -131,11 +192,16 @@
 
 				<label
 					id="upload-model-btn"
-					class="btn btn-outline"
+					class="btn-outline flex items-center gap-2 font-medium text-sm py-2.5 px-4 rounded-md transition-all bg-transparent border border-black/10 dark:border-white/10 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 cursor-pointer pointer-events-auto"
 					aria-label="Upload your own model"
 				>
 					<input type="file" id="model-upload" accept=".glb" hidden />
-					<svg viewBox="0 0 24 24" width="16" height="16">
+					<svg
+						viewBox="0 0 24 24"
+						width="16"
+						height="16"
+						class="stroke-current stroke-2 fill-none"
+					>
 						<path
 							d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
 						></path>
@@ -146,6 +212,24 @@
 				</label>
 			</div>
 		</div>
+
+		<!-- Notification template -->
+		<template id="notification-template">
+			<div
+				class="fixed bottom-8 right-8 bg-neutral-50/80 dark:bg-neutral-900/80 border border-black/5 dark:border-white/10 rounded-md py-3 px-4 flex items-center gap-3 shadow-md pointer-events-none z-50 animate-in fade-in slide-in-from-bottom-5 duration-200"
+			>
+				<svg
+					width="20"
+					height="20"
+					viewBox="0 0 24 24"
+					class="stroke-accent stroke-2 fill-none"
+				>
+					<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+					<polyline points="22 4 12 14.01 9 11.01"></polyline>
+				</svg>
+				<span class="notification-text"></span>
+			</div>
+		</template>
 
 		<script type="module" src="/src/main.ts"></script>
 	</body>
