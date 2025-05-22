@@ -97,17 +97,17 @@ export class ModelSelector {
 		const isDarkMode = document.documentElement.classList.contains("dark");
 		scene.background = new THREE.Color(isDarkMode ? 0x111111 : 0xf8f8f8);
 
-		// Create preview element with Tailwind classes
+		// Create preview element with Tailwind classes - smaller for panel layout
 		const element = document.createElement("div");
 		element.className =
-			"w-[84px] h-[84px] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden cursor-pointer relative transition-all duration-200 hover:-translate-y-1 hover:border-gray-400 dark:hover:border-gray-500";
+			"w-[64px] h-[64px] border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden cursor-pointer relative transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-400 dark:hover:border-gray-500";
 		element.dataset.modelIdx = modelIdx.toString();
 		element.dataset.modelName = `model-${modelIdx}`;
 
 		// Add label element with Tailwind classes
 		const labelEl = document.createElement("div");
 		labelEl.className =
-			"model-label absolute bottom-0 left-0 right-0 py-1 px-1.5 text-[11px] font-medium text-center bg-white/80 dark:bg-black/80 backdrop-blur-sm border-t border-gray-200 dark:border-gray-800";
+			"model-label absolute bottom-0 left-0 right-0 py-0.5 px-1 text-[10px] font-medium text-center bg-white/70 dark:bg-black/70 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700";
 		labelEl.textContent = `Model ${modelIdx + 1}`;
 		element.appendChild(labelEl);
 

@@ -19,90 +19,330 @@
 		<canvas id="webgl" class="fixed inset-0 w-full h-full z-0"></canvas>
 
 		<!-- Main UI container -->
-		<div
-			id="app"
-			class="fixed inset-0 z-10 pointer-events-none grid grid-rows-[auto_1fr_auto]"
-		>
-			<!-- Header -->
-			<header
-				class="flex justify-between items-center p-8 w-full z-20 relative pointer-events-none"
+		<div id="app" class="fixed inset-0 z-10 pointer-events-none">
+			<!-- Header panel -->
+			<div
+				class="panel fixed top-4 left-4 p-2 rounded-xl bg-white/90 dark:bg-black/90 backdrop-blur-md border border-gray-200 dark:border-gray-800 shadow-lg pointer-events-auto"
 			>
-				<div class="brand pointer-events-auto flex flex-col gap-1.5">
-					<h1
-						class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white"
-					>
-						CubeXO
-					</h1>
-					<div
-						class="pill text-xs font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full self-start uppercase tracking-wide"
-					>
-						Voxel Explorer
+				<div
+					class="panel-header flex items-center gap-3 px-3 py-1.5 mb-1 border-b border-gray-100 dark:border-gray-800/50"
+				>
+					<div class="flex flex-col">
+						<h1
+							class="text-base font-bold tracking-tight text-gray-900 dark:text-white"
+						>
+							CubeXO
+						</h1>
+						<div
+							class="text-[10px] font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide"
+						>
+							Voxel Explorer
+						</div>
+					</div>
+				</div>
+				<div class="panel-content">
+					<!-- Theme toggle -->
+					<div class="px-3 py-2">
+						<button
+							id="theme-toggle"
+							aria-label="Toggle theme"
+							class="w-full flex items-center justify-between py-1.5 px-2 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all relative cursor-pointer text-sm"
+						>
+							<span class="font-medium">Theme</span>
+							<div class="flex">
+								<svg
+									id="moon-icon"
+									viewBox="0 0 24 24"
+									width="16"
+									height="16"
+									class="stroke-current stroke-2 fill-none opacity-0 dark:opacity-100"
+								>
+									<path
+										d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+									></path>
+								</svg>
+								<svg
+									id="sun-icon"
+									viewBox="0 0 24 24"
+									width="16"
+									height="16"
+									class="ml-1 stroke-current stroke-2 fill-none opacity-100 dark:opacity-0"
+								>
+									<circle cx="12" cy="12" r="5"></circle>
+									<line x1="12" y1="1" x2="12" y2="3"></line>
+									<line
+										x1="12"
+										y1="21"
+										x2="12"
+										y2="23"
+									></line>
+									<line
+										x1="4.22"
+										y1="4.22"
+										x2="5.64"
+										y2="5.64"
+									></line>
+									<line
+										x1="18.36"
+										y1="18.36"
+										x2="19.78"
+										y2="19.78"
+									></line>
+									<line x1="1" y1="12" x2="3" y2="12"></line>
+									<line
+										x1="21"
+										y1="12"
+										x2="23"
+										y2="12"
+									></line>
+									<line
+										x1="4.22"
+										y1="19.78"
+										x2="5.64"
+										y2="18.36"
+									></line>
+									<line
+										x1="18.36"
+										y1="5.64"
+										x2="19.78"
+										y2="4.22"
+									></line>
+								</svg>
+							</div>
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- Model Previews Panel -->
+			<div
+				class="panel fixed top-4 right-4 w-[240px] p-2 rounded-xl bg-white/90 dark:bg-black/90 backdrop-blur-md border border-gray-200 dark:border-gray-800 shadow-lg pointer-events-auto"
+			>
+				<div
+					class="panel-header flex items-center justify-between px-3 py-1.5 mb-1 border-b border-gray-100 dark:border-gray-800/50"
+				>
+					<h2 class="text-sm font-semibold">Models</h2>
+					<div class="control-group flex gap-0.5">
+						<button
+							id="export-png"
+							aria-label="Export as PNG"
+							class="w-7 h-7 flex items-center justify-center rounded-l-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+						>
+							<svg
+								viewBox="0 0 24 24"
+								width="14"
+								height="14"
+								class="stroke-current stroke-2 stroke-round stroke-linejoin-round fill-none"
+							>
+								<path
+									d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+								></path>
+								<circle cx="12" cy="13" r="4"></circle>
+							</svg>
+						</button>
+						<button
+							id="export-model"
+							aria-label="Export model as GLB"
+							class="w-7 h-7 flex items-center justify-center rounded-r-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+						>
+							<svg
+								viewBox="0 0 24 24"
+								width="14"
+								height="14"
+								class="stroke-current stroke-2 stroke-round stroke-linejoin-round fill-none"
+							>
+								<path
+									d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+								></path>
+								<polyline points="7 10 12 15 17 10"></polyline>
+								<line x1="12" y1="15" x2="12" y2="3"></line>
+							</svg>
+						</button>
 					</div>
 				</div>
 
-				<div class="toolbar flex gap-3 pointer-events-auto">
-					<button
-						id="theme-toggle"
-						aria-label="Toggle theme"
-						class="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-black border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow hover:-translate-y-0.5 transition-all relative cursor-pointer"
-					>
-						<svg
-							id="moon-icon"
-							viewBox="0 0 24 24"
-							width="16"
-							height="16"
-							class="absolute stroke-current stroke-2 fill-none opacity-0 dark:opacity-100 transform translate-y-2.5 rotate-45 dark:translate-y-0 dark:rotate-0 transition-all duration-300"
-						>
-							<path
-								d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-							></path>
-						</svg>
-						<svg
-							id="sun-icon"
-							viewBox="0 0 24 24"
-							width="16"
-							height="16"
-							class="absolute stroke-current stroke-2 fill-none opacity-100 dark:opacity-0 transform dark:-translate-y-2.5 dark:-rotate-45 transition-all duration-300"
-						>
-							<circle cx="12" cy="12" r="5"></circle>
-							<line x1="12" y1="1" x2="12" y2="3"></line>
-							<line x1="12" y1="21" x2="12" y2="23"></line>
-							<line
-								x1="4.22"
-								y1="4.22"
-								x2="5.64"
-								y2="5.64"
-							></line>
-							<line
-								x1="18.36"
-								y1="18.36"
-								x2="19.78"
-								y2="19.78"
-							></line>
-							<line x1="1" y1="12" x2="3" y2="12"></line>
-							<line x1="21" y1="12" x2="23" y2="12"></line>
-							<line
-								x1="4.22"
-								y1="19.78"
-								x2="5.64"
-								y2="18.36"
-							></line>
-							<line
-								x1="18.36"
-								y1="5.64"
-								x2="19.78"
-								y2="4.22"
-							></line>
-						</svg>
-					</button>
-				</div>
-			</header>
+				<div class="panel-content">
+					<div
+						id="selector"
+						class="flex flex-wrap gap-2 p-2 max-h-[calc(100vh-150px)] overflow-y-auto pointer-events-auto"
+					></div>
 
-			<!-- Model Selector -->
+					<div
+						class="panel-footer mt-2 px-3 py-2 border-t border-gray-100 dark:border-gray-800/50"
+					>
+						<label
+							id="upload-model-btn"
+							class="w-full flex items-center justify-between py-1.5 px-3 rounded-md bg-blue-600 hover:bg-blue-500 text-white border border-blue-700 transition-all cursor-pointer"
+							aria-label="Upload your own model"
+						>
+							<span class="text-xs font-medium"
+								>Upload Model</span
+							>
+							<input
+								type="file"
+								id="model-upload"
+								accept=".glb"
+								hidden
+							/>
+							<svg
+								viewBox="0 0 24 24"
+								width="14"
+								height="14"
+								class="stroke-current stroke-2 stroke-round stroke-linejoin-round fill-none"
+							>
+								<path
+									d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+								></path>
+								<polyline points="17 8 12 3 7 8"></polyline>
+								<line x1="12" y1="3" x2="12" y2="15"></line>
+							</svg>
+						</label>
+					</div>
+				</div>
+			</div>
+
+			<!-- Tools Panel -->
 			<div
-				id="selector"
-				class="fixed bottom-8 left-1/2 -translate-x-1/2 flex gap-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-900 backdrop-blur-lg border border-gray-200 dark:border-gray-800 shadow-md z-20 pointer-events-auto"
-			></div>
+				class="panel fixed left-4 top-[20%] p-2 rounded-xl bg-white/90 dark:bg-black/90 backdrop-blur-md border border-gray-200 dark:border-gray-800 shadow-lg pointer-events-auto"
+			>
+				<div
+					class="panel-header flex items-center justify-between px-3 py-1.5 mb-1 border-b border-gray-100 dark:border-gray-800/50"
+				>
+					<h2 class="text-sm font-semibold">Tools</h2>
+				</div>
+
+				<div class="panel-content px-2 py-2">
+					<div class="grid grid-cols-3 gap-1">
+						<button
+							class="tool-btn w-9 h-9 flex items-center justify-center rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+						>
+							<svg
+								viewBox="0 0 24 24"
+								width="16"
+								height="16"
+								class="stroke-current stroke-2 fill-none"
+							>
+								<path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+								<path
+									d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"
+								></path>
+								<path d="M2 2l7.586 7.586"></path>
+								<circle cx="11" cy="11" r="2"></circle>
+							</svg>
+						</button>
+						<button
+							class="tool-btn w-9 h-9 flex items-center justify-center rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+						>
+							<svg
+								viewBox="0 0 24 24"
+								width="16"
+								height="16"
+								class="stroke-current stroke-2 fill-none"
+							>
+								<circle cx="12" cy="12" r="10"></circle>
+								<line x1="22" y1="12" x2="18" y2="12"></line>
+								<line x1="6" y1="12" x2="2" y2="12"></line>
+								<line x1="12" y1="6" x2="12" y2="2"></line>
+								<line x1="12" y1="22" x2="12" y2="18"></line>
+							</svg>
+						</button>
+						<button
+							class="tool-btn w-9 h-9 flex items-center justify-center rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+						>
+							<svg
+								viewBox="0 0 24 24"
+								width="16"
+								height="16"
+								class="stroke-current stroke-2 fill-none"
+							>
+								<path
+									d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"
+								></path>
+								<path d="M13 13l6 6"></path>
+							</svg>
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- Properties Panel -->
+			<div
+				class="panel fixed left-4 bottom-4 w-[220px] p-2 rounded-xl bg-white/90 dark:bg-black/90 backdrop-blur-md border border-gray-200 dark:border-gray-800 shadow-lg pointer-events-auto"
+			>
+				<div
+					class="panel-header flex items-center justify-between px-3 py-1.5 mb-1 border-b border-gray-100 dark:border-gray-800/50"
+				>
+					<h2 class="text-sm font-semibold">Properties</h2>
+				</div>
+
+				<div class="panel-content px-2 py-2">
+					<div class="property-group mb-3">
+						<div
+							class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5"
+						>
+							Resolution
+						</div>
+						<div class="flex items-center justify-between">
+							<input
+								type="range"
+								min="8"
+								max="32"
+								value="16"
+								class="w-full h-1.5 rounded-lg appearance-none cursor-pointer bg-gray-200 dark:bg-gray-700"
+							/>
+							<span class="text-xs ml-2 w-6 text-right">16</span>
+						</div>
+					</div>
+
+					<div class="property-group mb-3">
+						<div
+							class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5"
+						>
+							Color
+						</div>
+						<div class="grid grid-cols-6 gap-1">
+							<button
+								class="w-5 h-5 rounded-sm bg-blue-500 border border-gray-300 dark:border-gray-700"
+							></button>
+							<button
+								class="w-5 h-5 rounded-sm bg-green-500 border border-gray-300 dark:border-gray-700"
+							></button>
+							<button
+								class="w-5 h-5 rounded-sm bg-yellow-500 border border-gray-300 dark:border-gray-700"
+							></button>
+							<button
+								class="w-5 h-5 rounded-sm bg-red-500 border border-gray-300 dark:border-gray-700"
+							></button>
+							<button
+								class="w-5 h-5 rounded-sm bg-purple-500 border border-gray-300 dark:border-gray-700"
+							></button>
+							<button
+								class="w-5 h-5 rounded-sm bg-gray-500 border border-gray-300 dark:border-gray-700"
+							></button>
+						</div>
+					</div>
+
+					<div class="property-group">
+						<div
+							class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5"
+						>
+							Animation
+						</div>
+						<div class="flex items-center gap-2">
+							<button
+								class="flex-1 py-1 flex items-center justify-center rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-medium"
+							>
+								Play
+							</button>
+							<button
+								class="flex-1 py-1 flex items-center justify-center rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-medium"
+							>
+								Reset
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
 
 			<!-- Loading indicator -->
 			<div
@@ -127,78 +367,8 @@
 				</svg>
 				<span>Loading models</span>
 			</div>
-
-			<!-- Model controls -->
-			<div
-				class="control-panel fixed top-20 right-8 flex flex-col gap-4 items-end pointer-events-none z-20"
-			>
-				<div
-					class="control-group flex gap-2 pointer-events-auto shadow-sm"
-				>
-					<button
-						id="export-png"
-						class="btn btn-secondary flex items-center gap-2 font-medium text-sm py-2.5 px-4 rounded-l-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 text-black dark:text-white hover:-translate-y-0.5 hover:shadow-md transition-all"
-						aria-label="Export as PNG"
-					>
-						<svg
-							viewBox="0 0 24 24"
-							width="16"
-							height="16"
-							class="stroke-current stroke-2 stroke-round stroke-linejoin-round fill-none"
-						>
-							<path
-								d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
-							></path>
-							<circle cx="12" cy="13" r="4"></circle>
-						</svg>
-						<span>PNG</span>
-					</button>
-
-					<button
-						id="export-model"
-						class="btn btn-primary flex items-center gap-2 font-medium text-sm py-2.5 px-4 rounded-r-lg bg-blue-600 border border-blue-600 text-white hover:brightness-105 hover:-translate-y-0.5 hover:shadow-md transition-all"
-						aria-label="Export model as GLB"
-					>
-						<svg
-							viewBox="0 0 24 24"
-							width="16"
-							height="16"
-							class="stroke-current stroke-2 stroke-round stroke-linejoin-round fill-none"
-						>
-							<path
-								d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-							></path>
-							<polyline points="7 10 12 15 17 10"></polyline>
-							<line x1="12" y1="15" x2="12" y2="3"></line>
-						</svg>
-						<span>GLB</span>
-					</button>
-				</div>
-
-				<label
-					id="upload-model-btn"
-					class="btn btn-outline flex items-center gap-2 font-medium text-sm py-2.5 px-4 rounded-lg bg-white/90 dark:bg-black/90 backdrop-blur-sm border border-gray-200 dark:border-gray-800 text-black dark:text-white hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer pointer-events-auto"
-					aria-label="Upload your own model"
-				>
-					<input type="file" id="model-upload" accept=".glb" hidden />
-					<svg
-						viewBox="0 0 24 24"
-						width="16"
-						height="16"
-						class="stroke-current stroke-2 stroke-round stroke-linejoin-round fill-none"
-					>
-						<path
-							d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-						></path>
-						<polyline points="17 8 12 3 7 8"></polyline>
-						<line x1="12" y1="3" x2="12" y2="15"></line>
-					</svg>
-					<span>Upload Model</span>
-				</label>
-			</div>
 		</div>
 
 		<script type="module" src="/src/main.ts"></script>
 	</body>
 </html>
-div
