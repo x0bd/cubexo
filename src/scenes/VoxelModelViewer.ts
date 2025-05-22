@@ -244,9 +244,9 @@ export class VoxelModelViewer {
 			// Update lighting for dark mode
 			this.updateLightingForTheme(true);
 		} else {
-			// Light mode - soft white background
-			this.scene.background = new THREE.Color(0xfafafa); // Soft white
-			console.log('[VoxelModelViewer] Setting light mode background (0xfafafa).');
+			// Light mode - pure white background (shadcn style)
+			this.scene.background = new THREE.Color(0xffffff); // Pure white (shadcn)
+			console.log('[VoxelModelViewer] Setting light mode background (0xffffff) - shadcn style.');
 			
 			// Update lighting for light mode
 			this.updateLightingForTheme(false);
@@ -370,23 +370,23 @@ export class VoxelModelViewer {
 				shadowPlane.material.needsUpdate = true;
 			}
 		} else {
-			// Light theme lighting - brighter, warmer tones
+			// Light theme lighting - clean, crisp shadcn-style lighting
 			if (mainLight) {
-				mainLight.intensity = 1.4;
-				mainLight.color.set(0xfffaf0); // Slightly warm white
+				mainLight.intensity = 1.2;
+				mainLight.color.set(0xffffff); // Pure white (shadcn style)
 			}
 			if (fillLight) {
-				fillLight.intensity = 0.7;
-				fillLight.color.set(0xfff8e1); // Warm fill light
+				fillLight.intensity = 0.6;
+				fillLight.color.set(0xf9fafb); // Very slight cool tint
 			}
 			if (ambientLight) {
-				ambientLight.intensity = 0.9;
-				ambientLight.color.set(0xfffff0); // Ivory
+				ambientLight.intensity = 0.8;
+				ambientLight.color.set(0xffffff); // Pure white
 			}
 
-			// Update shadow opacity - slightly darker for better contrast against light background
+			// Update shadow opacity - subtle shadows for shadcn aesthetic
 			if (shadowPlane && shadowPlane.material instanceof THREE.ShadowMaterial) {
-				shadowPlane.material.opacity = 0.2;
+				shadowPlane.material.opacity = 0.1; // More subtle shadow
 				shadowPlane.material.needsUpdate = true;
 			}
 		}
