@@ -17,6 +17,7 @@
 		"@tailwindcss/postcss": "^4.1.7",
 		"@tailwindcss/vite": "^4.1.7",
 		"gsap": "^3.13.0",
+		"lucide": "^0.511.0",
 		"postcss": "^8.5.3",
 		"simplex-noise": "^4.0.3",
 		"tailwindcss": "^4.1.7",

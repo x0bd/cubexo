@@ -34,12 +34,12 @@ export class ModelSelector {
 		// Add renderer to the page with proper z-index to be visible
 		const rendererElement = document.createElement("div");
 		rendererElement.id = "preview-renderer-container";
-		rendererElement.style.position = "absolute";
+		rendererElement.style.position = "fixed";
 		rendererElement.style.top = "0";
 		rendererElement.style.left = "0";
 		rendererElement.style.width = "100%";
 		rendererElement.style.height = "100%";
-		rendererElement.style.zIndex = "5";
+		rendererElement.style.zIndex = "15";
 		rendererElement.style.pointerEvents = "none";
 		document.body.appendChild(rendererElement);
 		rendererElement.appendChild(this.renderer.domElement);
@@ -49,6 +49,23 @@ export class ModelSelector {
 		this.modelSelectedCallback = callback;
 		this.updateSceneSize();
 		this.startRenderingPreviews();
+
+		// Listen for theme changes
+		window.addEventListener("themechange", (e: Event) => {
+			const customEvent = e as CustomEvent;
+			const isDark = customEvent.detail?.theme === "dark";
+			this.updateSceneBackgrounds(isDark);
+		});
+	}
+
+	/**
+	 * Update scene backgrounds when theme changes
+	 */
+	private updateSceneBackgrounds(isDark: boolean): void {
+		const bgColor = new THREE.Color(isDark ? 0x111111 : 0xf8f8f8);
+		this.previewScenes.forEach((scene) => {
+			scene.background = bgColor;
+		});
 	}
 
 	public addModelPreview(modelData: ModelData, modelIdx: number): void {
@@ -76,8 +93,9 @@ export class ModelSelector {
 	public createPreviewScene(modelIdx: number): THREE.Scene {
 		const scene = new THREE.Scene();
 
-		// Use subtle background color
-		scene.background = new THREE.Color(0xf8f8f8); // Light gray background
+		// Make background color theme-aware
+		const isDarkMode = document.documentElement.classList.contains("dark");
+		scene.background = new THREE.Color(isDarkMode ? 0x111111 : 0xf8f8f8);
 
 		// Create preview element with Tailwind classes
 		const element = document.createElement("div");
@@ -119,27 +137,31 @@ export class ModelSelector {
 			this.selectorElement.appendChild(element);
 		}
 
-		// Setup camera
-		const camera = new THREE.PerspectiveCamera(50, 1, 1, 100);
-		camera.position.set(0, 1, 2).multiplyScalar(1.2);
+		// Setup camera with improved parameters
+		const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+		camera.position.set(0, 0.8, 2.5);
 		scene.userData.camera = camera;
 
-		// Setup controls
+		// Setup controls with better parameters
 		const orbit = new OrbitControls(camera, element);
-		orbit.minDistance = 2;
-		orbit.maxDistance = 5;
+		orbit.minDistance = 1.5;
+		orbit.maxDistance = 4;
+		orbit.enableZoom = false; // Disable zoom in preview thumbnails
+		orbit.enablePan = false; // Disable panning in preview thumbnails
+		orbit.rotateSpeed = 1.0; // Adjust rotation speed
 		orbit.autoRotate = true;
-		orbit.autoRotateSpeed = 6;
+		orbit.autoRotateSpeed = 3; // Slower rotation for better viewing
 		orbit.enableDamping = true;
+		orbit.dampingFactor = 0.05;
 		scene.userData.orbit = orbit;
 
-		// Improved lighting setup
+		// Improved lighting setup for better model visibility
 		// 1. Brighter ambient light for better overall illumination
-		const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+		const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
 		scene.add(ambientLight);
 
 		// 2. Main directional light for shadows and definition
-		const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+		const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
 		mainLight.position.set(1, 2, 2);
 		mainLight.castShadow = true;
 		mainLight.shadow.mapSize.width = 512;
@@ -147,12 +169,12 @@ export class ModelSelector {
 		scene.add(mainLight);
 
 		// 3. Fill light from the opposite side to reduce harsh shadows
-		const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+		const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
 		fillLight.position.set(-2, 0, -1);
 		scene.add(fillLight);
 
 		// 4. Rim light for better edge definition
-		const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+		const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
 		rimLight.position.set(0, 1, -2);
 		scene.add(rimLight);
 
@@ -164,7 +186,7 @@ export class ModelSelector {
 		});
 		const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
 		groundPlane.rotation.x = -Math.PI / 2;
-		groundPlane.position.y = -1;
+		groundPlane.position.y = -0.8; // Raised position to better match models
 		groundPlane.receiveShadow = true;
 		scene.add(groundPlane);
 
@@ -244,16 +266,23 @@ export class ModelSelector {
 			}
 		});
 
-		// Scale and center
+		// Scale and center with more precision
 		const box = new THREE.Box3().setFromObject(clonedModel);
 		const size = box.getSize(new THREE.Vector3());
-		const scaleFactor = 2 / size.length();
+		const maxDimension = Math.max(size.x, size.y, size.z);
+		const scaleFactor = 1.8 / maxDimension; // Using a fixed scale factor relative to the largest dimension
 
-		const center = box
-			.getCenter(new THREE.Vector3())
-			.multiplyScalar(-scaleFactor);
-		clonedModel.position.copy(center);
+		// Precisely center the model
+		const center = box.getCenter(new THREE.Vector3());
+		clonedModel.position.set(
+			-center.x * scaleFactor,
+			-center.y * scaleFactor,
+			-center.z * scaleFactor
+		);
 		clonedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+		// Slightly elevate the model for better visibility
+		clonedModel.position.y += 0.2;
 
 		// Store model name in the element for export functionality
 		if (modelName) {
@@ -311,7 +340,7 @@ export class ModelSelector {
 			element.style.width = `${width}px`;
 			element.style.height = `${width}px`;
 
-			// Update rect
+			// Update rect with precise positioning
 			const rect = element.getBoundingClientRect();
 			scene.userData.rect = {
 				width: rect.width,
@@ -348,20 +377,17 @@ export class ModelSelector {
 				const orbit = scene.userData.orbit as OrbitControls;
 				if (orbit) orbit.update();
 
-				// Set viewport
+				// Set viewport and scissor with exact positioning
 				const rect = scene.userData.rect;
-				this.renderer.setViewport(
-					rect.left,
-					rect.bottom,
-					rect.width,
-					rect.height
-				);
-				this.renderer.setScissor(
-					rect.left,
-					rect.bottom,
-					rect.width,
-					rect.height
-				);
+
+				// Ensure perfect alignment by using integer values
+				const left = Math.floor(rect.left);
+				const bottom = Math.floor(rect.bottom);
+				const width = Math.floor(rect.width);
+				const height = Math.floor(rect.height);
+
+				this.renderer.setViewport(left, bottom, width, height);
+				this.renderer.setScissor(left, bottom, width, height);
 
 				// Render
 				const camera = scene.userData.camera as THREE.Camera;
