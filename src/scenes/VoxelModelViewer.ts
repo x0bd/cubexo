@@ -710,12 +710,12 @@ export class VoxelModelViewer {
 		// Create notification element with Tailwind classes
 		const notification = document.createElement("div");
 		notification.className =
-			"fixed bottom-8 right-8 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg py-3 px-4 flex items-center gap-3 shadow-md z-50 animate-fade-in";
+			"fixed bottom-8 right-8 bg-gray-900 border border-gray-800 rounded-lg py-3 px-4 flex items-center gap-3 shadow-md z-50 animate-fade-in";
 
 		// Success icon
 		const icon = document.createElement("div");
 		icon.innerHTML = `
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600 dark:text-blue-400">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-400">
 				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
 				<polyline points="22 4 12 14.01 9 11.01"></polyline>
 			</svg>
@@ -724,7 +724,7 @@ export class VoxelModelViewer {
 
 		// Message
 		const text = document.createElement("span");
-		text.className = "text-sm font-medium text-gray-900 dark:text-gray-100";
+		text.className = "text-sm font-medium text-gray-100";
 		text.textContent = message;
 		notification.appendChild(text);
 

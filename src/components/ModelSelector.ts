@@ -306,10 +306,8 @@ export class ModelSelector {
 					// Add active styles with premium Japanese-inspired aesthetic
 					element.classList.add(
 						"border-indigo-500",
-						"dark:border-indigo-500",
 						"ring-2",
 						"ring-indigo-500/40",
-						"dark:ring-indigo-500/40",
 						"scale-105",
 						"shadow-lg"
 					);
@@ -324,10 +322,8 @@ export class ModelSelector {
 					// Remove active styles
 					element.classList.remove(
 						"border-indigo-500",
-						"dark:border-indigo-500",
 						"ring-2",
 						"ring-indigo-500/40",
-						"dark:ring-indigo-500/40",
 						"scale-105",
 						"shadow-lg"
 					);

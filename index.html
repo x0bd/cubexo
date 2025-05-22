@@ -171,40 +171,12 @@
 				border-color: rgba(59, 130, 246, 0.5) !important;
 				box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
 			}
-			/* Theme toggle icon visibility */
-			.light-mode #theme-toggle .lucide-sun-moon {
-				opacity: 1 !important;
-				transform: scale(1) !important;
-			}
-			.light-mode #theme-toggle .lucide-moon-star {
-				opacity: 0 !important;
-				transform: scale(0.5) !important;
-			}
-			.dark-mode #theme-toggle .lucide-sun-moon {
-				opacity: 0 !important;
-				transform: scale(0.5) !important;
-			}
-			.dark-mode #theme-toggle .lucide-moon-star {
-				opacity: 1 !important;
-				transform: scale(1) !important;
-			}
-			/* Fallback for when body classes aren't applied yet */
-			html.dark #theme-toggle .lucide-sun-moon {
-				opacity: 0 !important;
-			}
-			html.dark #theme-toggle .lucide-moon-star {
-				opacity: 1 !important;
-			}
-			html:not(.dark) #theme-toggle .lucide-sun-moon {
-				opacity: 1 !important;
-			}
-			html:not(.dark) #theme-toggle .lucide-moon-star {
-				opacity: 0 !important;
-			}
+
+
 		</style>
 	</head>
 	<body
-		class="bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 h-screen overflow-hidden font-sans antialiased transition-colors duration-300"
+		class="bg-zinc-950 text-zinc-100 h-screen overflow-hidden font-sans antialiased transition-colors duration-300 dark-mode"
 	>
 		<!-- Canvas for Three.js rendering -->
 		<canvas id="webgl" class="fixed inset-0 w-full h-full z-0"></canvas>
@@ -216,18 +188,18 @@
 				class="fixed top-6 left-6 flex items-center gap-3 pointer-events-auto"
 			>
 				<div
-					class="w-10 h-10 rounded-xl glass-panel bg-zinc-900/80 dark:bg-zinc-900/50 border-zinc-800/60 dark:border-zinc-700/40 flex items-center justify-center text-xl shadow-lg"
+					class="w-10 h-10 rounded-xl glass-panel bg-zinc-900/50 border-zinc-700/40 flex items-center justify-center text-xl shadow-lg"
 				>
 					<span class="text-zinc-50">▧</span>
 				</div>
 				<div class="flex flex-col">
 					<h1
-						class="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50 jp"
+						class="text-lg font-bold tracking-tight text-zinc-50 jp"
 					>
 						CubeXO
 					</h1>
 					<div
-						class="text-[10px] geist-mono font-medium text-zinc-500 dark:text-zinc-400 tracking-wide"
+						class="text-[10px] geist-mono font-medium text-zinc-400 tracking-wide"
 					>
 						ボクセル・エクスプローラー
 					</div>
@@ -236,12 +208,12 @@
 
 			<!-- macOS-style Dock -->
 			<div
-				class="dock fixed bottom-6 left-1/2 -translate-x-1/2 flex items-end gap-3 p-3 rounded-2xl z-50 pointer-events-auto dark:bg-zinc-900/80 dark:border-zinc-800/50 dark:shadow-xl bg-[#FAFAFA] border border-[#E4E4E7] shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
+				class="dock fixed bottom-6 left-1/2 -translate-x-1/2 flex items-end gap-3 p-3 rounded-2xl z-50 pointer-events-auto bg-zinc-900/80 border-zinc-800/50 shadow-xl border"
 			>
 				<!-- Normal Mode -->
 				<button
 					id="mode-normal"
-					class="dock-icon w-12 h-12 flex items-center justify-center text-black dark:text-zinc-300 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative traf-button active"
+					class="dock-icon w-12 h-12 flex items-center justify-center text-zinc-300 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative traf-button active"
 					aria-label="Normal Convert Mode"
 				>
 					<svg
@@ -337,56 +309,9 @@
 
 				<!-- Divider -->
 				<div
-					class="h-10 w-px bg-zinc-600/20 dark:bg-zinc-600/30 mx-1"
+					class="h-10 w-px bg-zinc-600/30 mx-1"
 				></div>
 
-				<!-- Theme Toggle -->
-				<button
-					id="theme-toggle"
-					class="dock-icon w-12 h-12 flex items-center justify-center text-zinc-900 dark:text-zinc-100 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative traf-button"
-					aria-label="Toggle Theme"
-				>
-					<!-- Sun icon for light mode -->
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="22"
-						height="22"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.75"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						class="lucide lucide-sun-moon absolute transition-all duration-300"
-					>
-						<circle cx="12" cy="12" r="4" />
-						<path d="M12 2v2" />
-						<path d="M12 20v2" />
-						<path d="m4.93 4.93 1.41 1.41" />
-						<path d="m17.66 17.66 1.41 1.41" />
-						<path d="M2 12h2" />
-						<path d="M20 12h2" />
-						<path d="m6.34 17.66-1.41 1.41" />
-						<path d="m19.07 4.93-1.41 1.41" />
-					</svg>
-					<!-- Moon icon for dark mode -->
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="22"
-						height="22"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.75"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						class="lucide lucide-moon-star absolute transition-all duration-300"
-					>
-						<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-						<path d="M19 3v4" />
-						<path d="M21 5h-4" />
-					</svg>
-				</button>
 			</div>
 
 			<!-- Right Panel Container -->
@@ -395,7 +320,7 @@
 			>
 				<!-- Models Panel -->
 				<div
-					class="panel max-h-[60vh] rounded-xl glass-panel bg-zinc-800/80 dark:bg-zinc-900/80 border-zinc-700/50 dark:border-zinc-700/50 shadow-xl flex flex-col overflow-hidden"
+					class="panel max-h-[60vh] rounded-xl glass-panel bg-zinc-900/80 border-zinc-700/50 shadow-xl flex flex-col overflow-hidden"
 				>
 					<div
 						class="panel-header flex items-center justify-between px-4 py-3 border-b border-zinc-700/50 dark:border-zinc-700/50"
@@ -428,7 +353,7 @@
 							<button
 								id="export-png"
 								aria-label="Export as PNG"
-								class="w-7 h-7 flex items-center justify-center rounded-md bg-zinc-700/90 dark:bg-zinc-800/90 border border-zinc-600/70 dark:border-zinc-700/70 hover:bg-zinc-600/90 dark:hover:bg-zinc-700/90 text-zinc-200 dark:text-zinc-200 transition-all traf-button"
+								class="w-7 h-7 flex items-center justify-center rounded-md bg-zinc-800/90 border border-zinc-700/70 hover:bg-zinc-700/90 text-zinc-200 transition-all traf-button"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
