@@ -1,12 +1,14 @@
 /**
- * Theme Manager - Handles dark/light mode preferences with Tailwind
+ * Theme Manager - Handles dark/light mode preferences
+ * Inspired by minimalist design principles
  */
 
 export class ThemeManager {
 	private darkModeMediaQuery: MediaQueryList;
 	private themeToggleBtn: HTMLElement | null;
-	private darkThemeClass = "dark";
+	private darkThemeClass = "dark-theme";
 	private themeKey = "cubexo-theme-preference";
+	private initialTransition = "background-color 0.3s ease, color 0.3s ease";
 
 	constructor() {
 		this.darkModeMediaQuery = window.matchMedia(
@@ -18,6 +20,20 @@ export class ThemeManager {
 	public init(): void {
 		this.loadThemePreference();
 		this.setupEventListeners();
+		this.disableTransitionsTemporarily();
+	}
+
+	private disableTransitionsTemporarily(): void {
+		// Disable transitions during initial load to prevent flash
+		document.body.style.transition = "none";
+
+		// Force a reflow to ensure the transition is applied
+		document.body.offsetHeight;
+
+		// Re-enable transitions after a small delay
+		setTimeout(() => {
+			document.body.style.transition = this.initialTransition;
+		}, 50);
 	}
 
 	private loadThemePreference(): void {
@@ -41,11 +57,7 @@ export class ThemeManager {
 		// Toggle theme when button is clicked
 		if (this.themeToggleBtn) {
 			this.themeToggleBtn.addEventListener("click", () => {
-				if (
-					document.documentElement.classList.contains(
-						this.darkThemeClass
-					)
-				) {
+				if (document.body.classList.contains(this.darkThemeClass)) {
 					this.enableLightTheme();
 				} else {
 					this.enableDarkTheme();
@@ -67,12 +79,10 @@ export class ThemeManager {
 	}
 
 	private enableDarkTheme(savePreference = true): void {
-		document.documentElement.classList.add(this.darkThemeClass);
-
+		document.body.classList.add(this.darkThemeClass);
 		if (savePreference) {
 			localStorage.setItem(this.themeKey, "dark");
 		}
-
 		// Update meta theme color
 		this.updateMetaThemeColor("#000000");
 
@@ -85,12 +95,10 @@ export class ThemeManager {
 	}
 
 	private enableLightTheme(savePreference = true): void {
-		document.documentElement.classList.remove(this.darkThemeClass);
-
+		document.body.classList.remove(this.darkThemeClass);
 		if (savePreference) {
 			localStorage.setItem(this.themeKey, "light");
 		}
-
 		// Update meta theme color
 		this.updateMetaThemeColor("#ffffff");
 
@@ -117,7 +125,7 @@ export class ThemeManager {
 
 	// Public method to get current theme
 	public getCurrentTheme(): "dark" | "light" {
-		return document.documentElement.classList.contains(this.darkThemeClass)
+		return document.body.classList.contains(this.darkThemeClass)
 			? "dark"
 			: "light";
 	}
