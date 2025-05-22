@@ -4,6 +4,11 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 export class ModelUploader {
 	private gltfLoader: GLTFLoader;
 
+	// Add callback for model upload
+	public onModelUploaded:
+		| ((model: THREE.Group, fileName: string) => void)
+		| null = null;
+
 	constructor() {
 		this.gltfLoader = new GLTFLoader();
 	}
@@ -29,6 +34,11 @@ export class ModelUploader {
 
 					// Apply some preprocessing to the model
 					this.preprocessModel(gltf.scene);
+
+					// Call the callback if defined
+					if (this.onModelUploaded) {
+						this.onModelUploaded(gltf.scene, file.name);
+					}
 
 					// Resolve with the model
 					resolve(gltf.scene);

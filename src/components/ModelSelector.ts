@@ -5,7 +5,7 @@ import type { ModelData } from "../types/types";
 export class ModelSelector {
 	private selectorElement: HTMLElement | null;
 	private previewScenes: THREE.Scene[] = [];
-	private previewWidth = 84; // Width in pixels - updated to match new design
+	private previewWidth = 84; // Width in pixels - matches Tailwind sizing
 	private activeModelIdx = 0;
 	private renderer: THREE.WebGLRenderer;
 	private modelSelectedCallback:
@@ -77,23 +77,23 @@ export class ModelSelector {
 		const scene = new THREE.Scene();
 
 		// Use subtle background color
-		scene.background = new THREE.Color(0xf0f0f0);
+		scene.background = new THREE.Color(0xf8f8f8); // Light gray background
 
-		// Create preview element
+		// Create preview element with Tailwind classes
 		const element = document.createElement("div");
-		element.className = "model-prev";
-		element.style.width = `${this.previewWidth}px`;
-		element.style.height = `${this.previewWidth}px`;
+		element.className =
+			"w-[84px] h-[84px] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden cursor-pointer relative transition-all duration-200 hover:-translate-y-1 hover:border-gray-400 dark:hover:border-gray-500";
 		element.dataset.modelIdx = modelIdx.toString();
 		element.dataset.modelName = `model-${modelIdx}`;
 
-		// Add label element
+		// Add label element with Tailwind classes
 		const labelEl = document.createElement("div");
-		labelEl.className = "model-label";
+		labelEl.className =
+			"model-label absolute bottom-0 left-0 right-0 py-1 px-1.5 text-[11px] font-medium text-center bg-white/80 dark:bg-black/80 backdrop-blur-sm border-t border-gray-200 dark:border-gray-800";
 		labelEl.textContent = `Model ${modelIdx + 1}`;
 		element.appendChild(labelEl);
 
-		// Make sure the element is clickable with proper pointer events
+		// Make sure the element is clickable
 		element.style.pointerEvents = "auto";
 
 		// Add click handler
@@ -269,14 +269,24 @@ export class ModelSelector {
 	}
 
 	private updateActivePreview(): void {
-		// Update active class on preview elements
+		// Update active class on preview elements with Tailwind classes
 		this.previewScenes.forEach((scene) => {
 			const element = scene.userData.element as HTMLElement;
 			if (element) {
 				if (scene.userData.modelIdx === this.activeModelIdx) {
-					element.classList.add("active");
+					// Add active styles with Tailwind
+					element.classList.add(
+						"border-blue-600",
+						"dark:border-blue-500",
+						"scale-105"
+					);
 				} else {
-					element.classList.remove("active");
+					// Remove active styles
+					element.classList.remove(
+						"border-blue-600",
+						"dark:border-blue-500",
+						"scale-105"
+					);
 				}
 			}
 		});

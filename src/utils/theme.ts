@@ -1,6 +1,6 @@
 /**
  * Theme Manager - Handles dark/light mode preferences
- * Inspired by minimalist design principles
+ * Works with Tailwind's dark mode
  */
 
 export class ThemeManager {
@@ -80,6 +80,8 @@ export class ThemeManager {
 
 	private enableDarkTheme(savePreference = true): void {
 		document.body.classList.add(this.darkThemeClass);
+		document.documentElement.classList.add("dark");
+
 		if (savePreference) {
 			localStorage.setItem(this.themeKey, "dark");
 		}
@@ -96,6 +98,8 @@ export class ThemeManager {
 
 	private enableLightTheme(savePreference = true): void {
 		document.body.classList.remove(this.darkThemeClass);
+		document.documentElement.classList.remove("dark");
+
 		if (savePreference) {
 			localStorage.setItem(this.themeKey, "light");
 		}
