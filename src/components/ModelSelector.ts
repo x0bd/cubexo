@@ -5,7 +5,7 @@ import type { ModelData } from "../types/types";
 export class ModelSelector {
 	private selectorElement: HTMLElement | null;
 	private previewScenes: THREE.Scene[] = [];
-	private previewWidth = 84; // Width in pixels - matches Tailwind sizing
+	private previewWidth = 90; // Width in pixels - slightly larger for better visibility
 	private activeModelIdx = 0;
 	private renderer: THREE.WebGLRenderer;
 	private modelSelectedCallback:
@@ -62,7 +62,7 @@ export class ModelSelector {
 	 * Update scene backgrounds when theme changes
 	 */
 	private updateSceneBackgrounds(isDark: boolean): void {
-		const bgColor = new THREE.Color(isDark ? 0x111111 : 0xf8f8f8);
+		const bgColor = new THREE.Color(isDark ? 0x18181b : 0x27272a);
 		this.previewScenes.forEach((scene) => {
 			scene.background = bgColor;
 		});
@@ -95,19 +95,19 @@ export class ModelSelector {
 
 		// Make background color theme-aware with zinc palette
 		const isDarkMode = document.documentElement.classList.contains("dark");
-		scene.background = new THREE.Color(isDarkMode ? 0x18181b : 0xfafafa); // zinc-950 or zinc-50
+		scene.background = new THREE.Color(isDarkMode ? 0x18181b : 0x27272a); // zinc-900 for unified look
 
 		// Create preview element with updated Tailwind classes for our aesthetic
 		const element = document.createElement("div");
 		element.className =
-			"w-[72px] h-[72px] border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden cursor-pointer relative transition-all duration-200 hover:scale-105 hover:shadow-md";
+			"w-[90px] h-[90px] bg-zinc-900/50 border border-zinc-700/50 rounded-lg overflow-hidden cursor-pointer relative transition-all duration-200 hover:scale-105 hover:shadow-lg hover:border-zinc-600/70 group";
 		element.dataset.modelIdx = modelIdx.toString();
 		element.dataset.modelName = `model-${modelIdx}`;
 
-		// Add label element with Geist Mono style
+		// Add label element with improved Japanese-inspired styling
 		const labelEl = document.createElement("div");
 		labelEl.className =
-			"model-label absolute bottom-0 left-0 right-0 py-0.5 px-1.5 text-[10px] geist-mono font-medium text-center bg-white/70 dark:bg-zinc-900/70 backdrop-blur-sm border-t border-zinc-200/50 dark:border-zinc-800/50";
+			"model-label absolute bottom-0 left-0 right-0 py-1 px-1.5 text-[10px] jp tracking-wide uppercase text-center bg-zinc-900/80 backdrop-blur-sm border-t border-zinc-700/40 text-zinc-300 transform translate-y-full group-hover:translate-y-0 transition-transform duration-200";
 		labelEl.textContent = `Model ${modelIdx + 1}`;
 		element.appendChild(labelEl);
 
@@ -303,27 +303,41 @@ export class ModelSelector {
 			const element = scene.userData.element as HTMLElement;
 			if (element) {
 				if (scene.userData.modelIdx === this.activeModelIdx) {
-					// Add active styles with Zinc palette and ring for Japanese aesthetic
+					// Add active styles with premium Japanese-inspired aesthetic
 					element.classList.add(
 						"border-indigo-500",
 						"dark:border-indigo-500",
 						"ring-2",
-						"ring-indigo-500/30",
-						"dark:ring-indigo-500/30",
+						"ring-indigo-500/40",
+						"dark:ring-indigo-500/40",
 						"scale-105",
-						"shadow-md"
+						"shadow-lg"
 					);
+
+					// Show the label for active model
+					const label = element.querySelector(".model-label");
+					if (label) {
+						(label as HTMLElement).style.transform =
+							"translateY(0)";
+					}
 				} else {
 					// Remove active styles
 					element.classList.remove(
 						"border-indigo-500",
 						"dark:border-indigo-500",
 						"ring-2",
-						"ring-indigo-500/30",
-						"dark:ring-indigo-500/30",
+						"ring-indigo-500/40",
+						"dark:ring-indigo-500/40",
 						"scale-105",
-						"shadow-md"
+						"shadow-lg"
 					);
+
+					// Hide label for inactive models
+					const label = element.querySelector(".model-label");
+					if (label) {
+						(label as HTMLElement).style.transform =
+							"translateY(100%)";
+					}
 				}
 			}
 		});

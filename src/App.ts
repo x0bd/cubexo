@@ -37,6 +37,9 @@ export class App {
 		this.setupExportButton();
 		this.setupPngExportButton();
 		this.setupModelUploader();
+
+		// Setup dock mode switchers
+		this.setupModeSwitchers();
 	}
 
 	public async init(): Promise<void> {
@@ -338,29 +341,28 @@ export class App {
 		message: string,
 		type: "success" | "error" = "success"
 	): void {
-		// Create notification element with updated panel design
+		// Create notification element with updated premium Japanese design
 		const notificationEl = document.createElement("div");
 		notificationEl.className =
-			"fixed bottom-6 right-6 py-2.5 px-3.5 rounded-lg shadow-lg flex items-center gap-3 z-50 " +
-			"bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200/80 dark:border-zinc-800/50 " +
-			(type === "success"
-				? "text-emerald-700 dark:text-emerald-400"
-				: "text-rose-700 dark:text-rose-400");
+			"fixed bottom-6 right-6 py-2.5 px-3.5 rounded-lg shadow-xl flex items-center gap-3 z-50 " +
+			"bg-zinc-900/80 backdrop-blur-md border border-zinc-700/50 " +
+			(type === "success" ? "text-emerald-500" : "text-rose-500");
 
-		// Add icon
+		// Add icon with premium styling
 		const iconEl = document.createElement("span");
+		iconEl.className = "flex items-center justify-center";
 
 		// Create SVG icon based on type
 		if (type === "success") {
 			iconEl.innerHTML = `
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle">
+				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle">
 					<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
 					<polyline points="22 4 12 14.01 9 11.01"/>
 				</svg>
 			`;
 		} else {
 			iconEl.innerHTML = `
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-circle">
+				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-circle">
 					<circle cx="12" cy="12" r="10"/>
 					<line x1="12" y1="8" x2="12" y2="12"/>
 					<line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -370,25 +372,106 @@ export class App {
 
 		notificationEl.appendChild(iconEl);
 
-		// Add message text with Geist Mono
+		// Add message text with premium Japanese-style typography
 		const messageEl = document.createElement("span");
-		messageEl.className = "text-xs geist-mono";
+		messageEl.className =
+			"text-xs jp tracking-wide uppercase text-zinc-200";
 		messageEl.textContent = message;
 		notificationEl.appendChild(messageEl);
 
 		// Add to DOM
 		document.body.appendChild(notificationEl);
 
+		// Animate appearance
+		gsap.fromTo(
+			notificationEl,
+			{ y: 20, opacity: 0 },
+			{ y: 0, opacity: 1, duration: 0.3, ease: "power2.out" }
+		);
+
 		// Animate and remove after delay
 		setTimeout(() => {
-			notificationEl.style.opacity = "0";
-			notificationEl.style.transform = "translateY(8px)";
-			notificationEl.style.transition =
-				"opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)";
-
-			setTimeout(() => {
-				document.body.removeChild(notificationEl);
-			}, 400);
+			gsap.to(notificationEl, {
+				y: 10,
+				opacity: 0,
+				duration: 0.4,
+				ease: "power3.in",
+				onComplete: () => {
+					document.body.removeChild(notificationEl);
+				},
+			});
 		}, 3000);
+	}
+
+	/**
+	 * Setup mode switchers in the dock
+	 */
+	private setupModeSwitchers(): void {
+		const modes = ["normal", "edit", "fun"];
+
+		// Add event listeners to each mode button
+		modes.forEach((mode) => {
+			const button = document.getElementById(`mode-${mode}`);
+			if (!button) return;
+
+			button.addEventListener("click", () => {
+				// Remove active class from all buttons
+				modes.forEach((m) => {
+					const btn = document.getElementById(`mode-${m}`);
+					if (btn) btn.classList.remove("active");
+				});
+
+				// Add active class to clicked button
+				button.classList.add("active");
+
+				// Switch mode based on clicked button
+				this.switchMode(mode);
+			});
+		});
+
+		// Move theme button functionality from panel to dock
+		const themeToggle = document.getElementById("theme-toggle");
+		if (themeToggle) {
+			themeToggle.addEventListener("click", () => {
+				const isDark =
+					document.documentElement.classList.contains("dark");
+				document.documentElement.classList.toggle("dark");
+
+				// Dispatch custom event for components to react to theme change
+				window.dispatchEvent(
+					new CustomEvent("themechange", {
+						detail: { theme: !isDark ? "dark" : "light" },
+					})
+				);
+			});
+		}
+	}
+
+	/**
+	 * Switch application mode
+	 */
+	private switchMode(mode: string): void {
+		console.log(`Switching to ${mode} mode`);
+
+		// Handle mode-specific functionality
+		switch (mode) {
+			case "normal":
+				// Standard conversion mode
+				this.showNotification("STANDARD MODE");
+				break;
+
+			case "edit":
+				// Voxel editing mode
+				this.showNotification("VOXEL EDIT MODE", "success");
+				break;
+
+			case "fun":
+				// Fun/Magic mode
+				this.showNotification("MAGIC MODE ✨", "success");
+				break;
+
+			default:
+				console.error(`Unknown mode: ${mode}`);
+		}
 	}
 }
