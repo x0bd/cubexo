@@ -210,38 +210,43 @@ export class VoxelModelViewer {
 		// Set initial background color based on theme
 		this.updateBackgroundForTheme();
 
-		// Listen for theme changes on both window and document
+		// Listen for theme changes on window
 		const themeChangeHandler = ((event: CustomEvent) => {
+			console.log('[VoxelModelViewer] Received themechange event on window:', event.detail);
 			const isDark = event.detail?.theme === 'dark';
-			console.log('Theme change detected in scene:', event.detail?.theme);
+			console.log(`[VoxelModelViewer] Theme changed to: ${isDark ? 'dark' : 'light'}`);
 			this.updateBackgroundForTheme(isDark);
 		}) as EventListener;
 
 		window.addEventListener("themechange", themeChangeHandler);
-		document.addEventListener("themechange", themeChangeHandler);
+		console.log('[VoxelModelViewer] Added themechange event listener to window.');
 	}
 
 	private updateBackgroundForTheme(isDark?: boolean): void {
-		if (!this.scene) return;
+		console.log('[VoxelModelViewer] updateBackgroundForTheme called.');
+		if (!this.scene) {
+			console.error('[VoxelModelViewer] Scene not initialized in updateBackgroundForTheme.');
+			return;
+		}
 
 		// If isDark is not provided, detect from the DOM
 		if (isDark === undefined) {
 			isDark = document.documentElement.classList.contains("dark");
-			console.log('Theme detection from DOM:', isDark ? 'dark' : 'light');
+			console.log('[VoxelModelViewer] Theme detection from DOM:', isDark ? 'dark' : 'light');
 		}
 
 		// Set scene background color based on theme
 		if (isDark) {
 			// Dark mode - darker background
 			this.scene.background = new THREE.Color(0x111111);
-			console.log('Setting dark background');
+			console.log('[VoxelModelViewer] Setting dark background (0x111111).');
 			
 			// Update lighting for dark mode
 			this.updateLightingForTheme(true);
 		} else {
-			// Light mode - still dark but slightly lighter for contrast
-			this.scene.background = new THREE.Color(0x181818);
-			console.log('Setting light mode background (still dark but lighter)');
+			// Light mode - soft white background
+			this.scene.background = new THREE.Color(0xfafafa); // Soft white
+			console.log('[VoxelModelViewer] Setting light mode background (0xfafafa).');
 			
 			// Update lighting for light mode
 			this.updateLightingForTheme(false);
@@ -250,6 +255,9 @@ export class VoxelModelViewer {
 		// Force a render to show the changes immediately
 		if (this.renderer && this.camera) {
 			this.renderer.render(this.scene, this.camera);
+			console.log('[VoxelModelViewer] Scene rendered after theme update.');
+		} else {
+			console.warn('[VoxelModelViewer] Renderer or camera not available for immediate render after theme update.');
 		}
 	}
 
@@ -342,10 +350,19 @@ export class VoxelModelViewer {
 		const shadowPlane = this.scene.children.find(child => child.name === 'shadowPlane') as THREE.Mesh;
 
 		if (isDark) {
-			// Dark theme lighting
-			if (mainLight) mainLight.intensity = 1.0;
-			if (fillLight) fillLight.intensity = 0.5;
-			if (ambientLight) ambientLight.intensity = 0.7;
+			// Dark theme lighting - more dramatic, higher contrast
+			if (mainLight) {
+				mainLight.intensity = 1.0;
+				mainLight.color.set(0xffffff);
+			}
+			if (fillLight) {
+				fillLight.intensity = 0.5;
+				fillLight.color.set(0xffffff);
+			}
+			if (ambientLight) {
+				ambientLight.intensity = 0.7;
+				ambientLight.color.set(0xffffff);
+			}
 
 			// Update shadow opacity
 			if (shadowPlane && shadowPlane.material instanceof THREE.ShadowMaterial) {
@@ -353,14 +370,23 @@ export class VoxelModelViewer {
 				shadowPlane.material.needsUpdate = true;
 			}
 		} else {
-			// Light theme lighting (slightly brighter)
-			if (mainLight) mainLight.intensity = 1.2;
-			if (fillLight) fillLight.intensity = 0.6;
-			if (ambientLight) ambientLight.intensity = 0.8;
+			// Light theme lighting - brighter, warmer tones
+			if (mainLight) {
+				mainLight.intensity = 1.4;
+				mainLight.color.set(0xfffaf0); // Slightly warm white
+			}
+			if (fillLight) {
+				fillLight.intensity = 0.7;
+				fillLight.color.set(0xfff8e1); // Warm fill light
+			}
+			if (ambientLight) {
+				ambientLight.intensity = 0.9;
+				ambientLight.color.set(0xfffff0); // Ivory
+			}
 
-			// Update shadow opacity
+			// Update shadow opacity - slightly darker for better contrast against light background
 			if (shadowPlane && shadowPlane.material instanceof THREE.ShadowMaterial) {
-				shadowPlane.material.opacity = 0.15;
+				shadowPlane.material.opacity = 0.2;
 				shadowPlane.material.needsUpdate = true;
 			}
 		}

@@ -6,6 +6,7 @@ import * as THREE from "three";
 import gsap from "gsap";
 import { ExportFormat } from "./utils/ModelExporter";
 import { ModelUploader } from "./utils/ModelUploader";
+import { ThemeManager } from "./utils/theme"; // Added import for ThemeManager
 
 export class App {
 	private viewer: VoxelModelViewer;
@@ -13,6 +14,7 @@ export class App {
 	private modelSelector: ModelSelector;
 	private voxelizer: Voxelizer;
 	private modelUploader: ModelUploader;
+	private themeManager: ThemeManager; // Declared themeManager property
 	private isInitialized = false;
 	private loaderElement: HTMLElement | null;
 	private activeModelIdx = 1; // Start with Chicken (index 1)
@@ -26,6 +28,11 @@ export class App {
 		// Get DOM elements
 		this.loaderElement = document.querySelector("#loader");
 
+		// Initialize theme manager
+		console.log('[App] Initializing ThemeManager...');
+		this.themeManager = new ThemeManager();
+		this.themeManager.init(); // Call init() to set up event listeners and initial theme
+		console.log('[App] ThemeManager initialized and started.');
 		// Initialize components
 		this.viewer = new VoxelModelViewer();
 		this.modelLoader = new ModelLoader();

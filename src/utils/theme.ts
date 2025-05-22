@@ -13,10 +13,27 @@ export class ThemeManager {
 	}
 
 	public init(): void {
-		// Always start with dark theme for our Vercel-inspired design
-		this.enableDarkTheme(false);
+		console.log('[ThemeManager] Initializing theme manager...');
+		
+		// Check if user has a saved preference
+		const savedTheme = localStorage.getItem(this.themeKey);
+		console.log(`[ThemeManager] Saved theme preference: ${savedTheme || 'none'}`);
+		
+		// Apply theme based on preference or default to dark
+		if (savedTheme === 'light') {
+			this.enableLightTheme(false);
+		} else {
+			// Default to dark theme for our Vercel-inspired design
+			this.enableDarkTheme(false);
+		}
+		
+		// Set up event listeners for theme toggle button
 		this.setupEventListeners();
+		
+		// Temporarily disable transitions during initial load
 		this.disableTransitionsTemporarily();
+		
+		console.log(`[ThemeManager] Initialization complete with theme: ${this.getCurrentTheme()}`);
 	}
 
 	private disableTransitionsTemporarily(): void {
@@ -36,21 +53,35 @@ export class ThemeManager {
 		// Toggle theme when button is clicked
 		if (this.themeToggleBtn) {
 			this.themeToggleBtn.addEventListener("click", () => {
-				if (document.documentElement.classList.contains("dark")) {
-					this.enableLightTheme();
-				} else {
-					this.enableDarkTheme();
-				}
+				this.toggleTheme();
 			});
 		}
 	}
 
+	public toggleTheme(): void {
+		console.log('[ThemeManager] toggleTheme called.');
+		const currentTheme = this.getCurrentTheme();
+		console.log(`[ThemeManager] Current theme before toggle: ${currentTheme}`);
+		if (currentTheme === "dark") {
+			this.enableLightTheme();
+		} else {
+			this.enableDarkTheme();
+		}
+		console.log(`[ThemeManager] Current theme after toggle: ${this.getCurrentTheme()}`);
+	}
+
 	private enableDarkTheme(savePreference = true): void {
+		console.log('[ThemeManager] enableDarkTheme called.');
 		// Apply dark mode class to html element for Tailwind
 		document.documentElement.classList.add("dark");
+		
+		// Apply dark mode class to body for additional styling
+		document.body.classList.add("dark-mode");
+		document.body.classList.remove("light-mode");
 
 		if (savePreference) {
 			localStorage.setItem(this.themeKey, "dark");
+			console.log('[ThemeManager] Dark theme preference saved to localStorage.');
 		}
 
 		// Update meta theme color
@@ -58,26 +89,33 @@ export class ThemeManager {
 
 		// Dispatch event for scene to update
 		this.dispatchThemeChangeEvent("dark");
-		console.log('Dark theme enabled');
+		console.log('[ThemeManager] Dark theme enabled and event dispatched.');
 	}
 
 	private enableLightTheme(savePreference = true): void {
+		console.log('[ThemeManager] enableLightTheme called.');
 		// Remove dark mode class from html element for Tailwind
 		document.documentElement.classList.remove("dark");
+		
+		// Apply light mode class to body for additional styling
+		document.body.classList.add("light-mode");
+		document.body.classList.remove("dark-mode");
 
 		if (savePreference) {
 			localStorage.setItem(this.themeKey, "light");
+			console.log('[ThemeManager] Light theme preference saved to localStorage.');
 		}
 
-		// Update meta theme color - still dark for our dark UI
-		this.updateMetaThemeColor("#111111");
+		// Update meta theme color for light mode
+		this.updateMetaThemeColor("#f4f4f5"); // zinc-100
 
 		// Dispatch event for scene to update
 		this.dispatchThemeChangeEvent("light");
-		console.log('Light theme enabled');
+		console.log('[ThemeManager] Light theme enabled and event dispatched.');
 	}
 
 	private dispatchThemeChangeEvent(theme: "dark" | "light"): void {
+		console.log(`[ThemeManager] dispatchThemeChangeEvent called with theme: ${theme}`);
 		// Create and dispatch a custom event
 		const event = new CustomEvent("themechange", {
 			detail: { theme }
@@ -85,9 +123,7 @@ export class ThemeManager {
 
 		// Dispatch on window
 		window.dispatchEvent(event);
-
-		// Also dispatch on document for broader compatibility
-		document.dispatchEvent(event);
+		console.log(`[ThemeManager] 'themechange' event dispatched on window with detail:`, event.detail);
 
 		console.log(`Theme change event dispatched: ${theme}`);
 	}
