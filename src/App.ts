@@ -207,7 +207,7 @@ export class App {
 
 		console.log(`Exporting model ${this.activeModelIdx} as PNG`);
 		this.viewer.exportAsPng();
-		this.showExportNotification("Image exported");
+		this.showNotification("Image exported");
 	}
 
 	/**
@@ -294,7 +294,7 @@ export class App {
 				}
 
 				// Show success notification
-				this.showUploadSuccess(name);
+				this.showNotification(`${name} uploaded successfully`);
 			} catch (error) {
 				console.error("Error processing uploaded model:", error);
 
@@ -327,81 +327,67 @@ export class App {
 			model: THREE.Group,
 			fileName: string
 		) => {
-			this.showUploadSuccess(fileName);
+			this.showNotification(`${fileName} uploaded successfully`);
 		};
 	}
 
 	/**
-	 * Show a success notification when a model is uploaded
+	 * Show notification
 	 */
-	private showUploadSuccess(modelName: string): void {
+	private showNotification(
+		message: string,
+		type: "success" | "error" = "success"
+	): void {
 		// Create notification element with Tailwind classes
-		const notification = document.createElement("div");
-		notification.className =
-			"fixed bottom-8 right-8 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg py-3 px-4 flex items-center gap-3 shadow-md z-50 animate-fade-in";
+		const notificationEl = document.createElement("div");
+		notificationEl.className =
+			"fixed top-8 left-1/2 -translate-x-1/2 py-3 px-4 rounded-lg shadow-lg flex items-center gap-3 backdrop-blur-sm z-50 " +
+			(type === "success"
+				? "bg-green-50/90 dark:bg-green-950/90 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-900"
+				: "bg-red-50/90 dark:bg-red-950/90 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-900");
 
-		// Success icon
-		const icon = document.createElement("div");
-		icon.innerHTML = `
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600 dark:text-blue-400">
-				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-				<polyline points="22 4 12 14.01 9 11.01"></polyline>
-			</svg>
-		`;
-		notification.appendChild(icon);
+		// Add success icon
+		const iconEl = document.createElement("span");
 
-		// Message
-		const text = document.createElement("span");
-		text.className = "text-sm font-medium text-gray-900 dark:text-gray-100";
-		text.textContent = `${modelName} uploaded successfully`;
-		notification.appendChild(text);
+		// Create SVG icon based on type
+		if (type === "success") {
+			iconEl.innerHTML = `
+				<svg viewBox="0 0 24 24" width="20" height="20" class="stroke-green-600 dark:stroke-green-400 fill-none stroke-2">
+					<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+					<polyline points="22 4 12 14.01 9 11.01"></polyline>
+				</svg>
+			`;
+		} else {
+			iconEl.innerHTML = `
+				<svg viewBox="0 0 24 24" width="20" height="20" class="stroke-red-600 dark:stroke-red-400 fill-none stroke-2">
+					<circle cx="12" cy="12" r="10"></circle>
+					<line x1="15" y1="9" x2="9" y2="15"></line>
+					<line x1="9" y1="9" x2="15" y2="15"></line>
+				</svg>
+			`;
+		}
 
-		document.body.appendChild(notification);
+		notificationEl.appendChild(iconEl);
 
-		// Add fade-out animation
+		// Add message text
+		const messageEl = document.createElement("span");
+		messageEl.className = "font-medium text-sm";
+		messageEl.textContent = message;
+		notificationEl.appendChild(messageEl);
+
+		// Add to DOM
+		document.body.appendChild(notificationEl);
+
+		// Animate and remove after delay
 		setTimeout(() => {
-			notification.classList.add("animate-fade-out");
+			notificationEl.style.opacity = "0";
+			notificationEl.style.transform = "translate(-50%, -20px)";
+			notificationEl.style.transition =
+				"opacity 0.5s ease, transform 0.5s ease";
+
 			setTimeout(() => {
-				if (notification.parentNode) {
-					notification.parentNode.removeChild(notification);
-				}
-			}, 300);
-		}, 3000);
-	}
-
-	/**
-	 * Show a success notification when a model is exported
-	 */
-	private showExportNotification(message: string): void {
-		// Create notification element with improved design
-		const notification = document.createElement("div");
-		notification.className = "export-notification";
-
-		// Success icon
-		const icon = document.createElement("div");
-		icon.innerHTML = `
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-				<polyline points="22 4 12 14.01 9 11.01"></polyline>
-			</svg>
-		`;
-		notification.appendChild(icon);
-
-		// Message
-		const text = document.createElement("span");
-		text.textContent = message;
-		notification.appendChild(text);
-
-		document.body.appendChild(notification);
-
-		// Animate out after delay
-		setTimeout(() => {
-			notification.classList.add("fade-out");
-			setTimeout(() => {
-				if (notification.parentNode) {
-					notification.parentNode.removeChild(notification);
-				}
-			}, 300);
+				document.body.removeChild(notificationEl);
+			}, 500);
 		}, 3000);
 	}
 }
