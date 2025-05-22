@@ -11,7 +11,6 @@ export class VoxelModelViewer {
 	private camera: THREE.PerspectiveCamera | null = null;
 	private controls: OrbitControls | null = null;
 	private lightHolder: THREE.Group | null = null;
-	private raycaster: THREE.Raycaster | null = null;
 
 	private voxelGeometry: RoundedBoxGeometry | null = null;
 	private voxelMaterial: THREE.Material | null = null;
@@ -54,8 +53,6 @@ export class VoxelModelViewer {
 		this.setupControls();
 		this.setupGeometries();
 
-		this.raycaster = new THREE.Raycaster();
-
 		window.addEventListener("resize", this.handleResize.bind(this));
 		this.handleResize();
 
@@ -80,7 +77,7 @@ export class VoxelModelViewer {
 		this.activeModelIndex = modelIdx;
 	}
 
-	public animateToModel(oldModelIdx: number, newModelIdx: number): void {
+	public animateToModel(_oldModelIdx: number, newModelIdx: number): void {
 		// Animate voxels data
 		for (let i = 0; i < this.voxels.length; i++) {
 			gsap.killTweensOf(this.voxels[i].color);
@@ -213,10 +210,15 @@ export class VoxelModelViewer {
 		// Set initial background color based on theme
 		this.updateBackgroundForTheme();
 
-		// Listen for theme changes
-		window.addEventListener("theme-changed", ((event: CustomEvent) => {
-			this.updateBackgroundForTheme(event.detail?.isDark);
-		}) as EventListener);
+		// Listen for theme changes on both window and document
+		const themeChangeHandler = ((event: CustomEvent) => {
+			const isDark = event.detail?.theme === 'dark';
+			console.log('Theme change detected in scene:', event.detail?.theme);
+			this.updateBackgroundForTheme(isDark);
+		}) as EventListener;
+
+		window.addEventListener("themechange", themeChangeHandler);
+		document.addEventListener("themechange", themeChangeHandler);
 	}
 
 	private updateBackgroundForTheme(isDark?: boolean): void {
@@ -224,14 +226,30 @@ export class VoxelModelViewer {
 
 		// If isDark is not provided, detect from the DOM
 		if (isDark === undefined) {
-			isDark = document.documentElement.classList.contains("dark-theme");
+			isDark = document.documentElement.classList.contains("dark");
+			console.log('Theme detection from DOM:', isDark ? 'dark' : 'light');
 		}
 
-		// Pure black/white for Vercel style
+		// Set scene background color based on theme
 		if (isDark) {
-			this.scene.background = new THREE.Color(0x000000);
+			// Dark mode - darker background
+			this.scene.background = new THREE.Color(0x111111);
+			console.log('Setting dark background');
+			
+			// Update lighting for dark mode
+			this.updateLightingForTheme(true);
 		} else {
-			this.scene.background = new THREE.Color(0xffffff);
+			// Light mode - still dark but slightly lighter for contrast
+			this.scene.background = new THREE.Color(0x181818);
+			console.log('Setting light mode background (still dark but lighter)');
+			
+			// Update lighting for light mode
+			this.updateLightingForTheme(false);
+		}
+
+		// Force a render to show the changes immediately
+		if (this.renderer && this.camera) {
+			this.renderer.render(this.scene, this.camera);
 		}
 	}
 
@@ -264,23 +282,27 @@ export class VoxelModelViewer {
 	private setupLights(): void {
 		if (!this.scene) return;
 
-		// Increase ambient light intensity for better overall brightness
+		// Create ambient light
 		const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+		ambientLight.name = 'ambientLight';
 		this.scene.add(ambientLight);
 
 		// Create a group to hold the lights
 		this.lightHolder = new THREE.Group();
+		this.lightHolder.name = 'lightHolder';
 
-		// Increase main light intensity
+		// Main directional light
 		const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+		mainLight.name = 'mainLight';
 		mainLight.position.set(10, 15, 10);
 		mainLight.castShadow = true;
 		mainLight.shadow.mapSize = new THREE.Vector2(1024, 1024);
 		mainLight.shadow.bias = -0.0001;
 		this.lightHolder.add(mainLight);
 
-		// Brighter fill light
+		// Fill light
 		const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+		fillLight.name = 'fillLight';
 		fillLight.position.set(-10, 5, -5);
 		this.lightHolder.add(fillLight);
 
@@ -288,23 +310,62 @@ export class VoxelModelViewer {
 		this.scene.add(this.lightHolder);
 
 		// Determine if dark mode is active
-		const isDark =
-			document.documentElement.classList.contains("dark-theme");
+		const isDark = document.documentElement.classList.contains("dark");
 
 		// Minimal ground shadow with reduced opacity for better contrast
 		const planeGeometry = new THREE.PlaneGeometry(40, 40);
 		const shadowPlaneMaterial = new THREE.ShadowMaterial({
-			opacity: isDark ? 0.06 : 0.1, // Reduced shadow opacity
+			opacity: isDark ? 0.1 : 0.15,
 			transparent: true,
 		});
 		const shadowPlaneMesh = new THREE.Mesh(
 			planeGeometry,
 			shadowPlaneMaterial
 		);
-		shadowPlaneMesh.position.y = -4;
-		shadowPlaneMesh.rotation.x = -0.5 * Math.PI;
+		shadowPlaneMesh.name = 'shadowPlane';
+		shadowPlaneMesh.rotation.x = -Math.PI / 2;
+		shadowPlaneMesh.position.y = -5;
 		shadowPlaneMesh.receiveShadow = true;
-		this.lightHolder.add(shadowPlaneMesh);
+		this.scene.add(shadowPlaneMesh);
+		
+		// Initialize lighting based on current theme
+		this.updateLightingForTheme(isDark);
+	}
+
+	private updateLightingForTheme(isDark: boolean): void {
+		if (!this.scene || !this.lightHolder) return;
+
+		// Find lights by name
+		const mainLight = this.lightHolder.children.find(child => child.name === 'mainLight') as THREE.DirectionalLight;
+		const fillLight = this.lightHolder.children.find(child => child.name === 'fillLight') as THREE.DirectionalLight;
+		const ambientLight = this.scene.children.find(child => child.name === 'ambientLight') as THREE.AmbientLight;
+		const shadowPlane = this.scene.children.find(child => child.name === 'shadowPlane') as THREE.Mesh;
+
+		if (isDark) {
+			// Dark theme lighting
+			if (mainLight) mainLight.intensity = 1.0;
+			if (fillLight) fillLight.intensity = 0.5;
+			if (ambientLight) ambientLight.intensity = 0.7;
+
+			// Update shadow opacity
+			if (shadowPlane && shadowPlane.material instanceof THREE.ShadowMaterial) {
+				shadowPlane.material.opacity = 0.1;
+				shadowPlane.material.needsUpdate = true;
+			}
+		} else {
+			// Light theme lighting (slightly brighter)
+			if (mainLight) mainLight.intensity = 1.2;
+			if (fillLight) fillLight.intensity = 0.6;
+			if (ambientLight) ambientLight.intensity = 0.8;
+
+			// Update shadow opacity
+			if (shadowPlane && shadowPlane.material instanceof THREE.ShadowMaterial) {
+				shadowPlane.material.opacity = 0.15;
+				shadowPlane.material.needsUpdate = true;
+			}
+		}
+
+		console.log(`Updated lighting for ${isDark ? 'dark' : 'light'} theme`);
 	}
 
 	private setupGeometries(): void {
@@ -532,7 +593,7 @@ export class VoxelModelViewer {
 		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
 		this.renderer.toneMappingExposure = 1.2;
 
-		// Get the current camera direction and target
+		// Get the current camera direction
 		const cameraDirection = new THREE.Vector3();
 		this.camera.getWorldDirection(cameraDirection);
 
@@ -541,18 +602,7 @@ export class VoxelModelViewer {
 		const center = new THREE.Vector3();
 		box.getCenter(center);
 
-		// Store original camera target
-		if (this.controls) {
-			originalCamera.target = this.controls.target.clone();
-		}
-
-		// Calculate model size for zoom factor
-		const size = new THREE.Vector3();
-		box.getSize(size);
-		const maxDim = Math.max(size.x, size.y, size.z);
-
-		// Zoom in by moving camera closer along its current direction
-		// Keep the same viewing angle but get closer
+		// Create a new scene for high-res rendering
 		const zoomFactor = 0.4; // Adjusted from 0.6 to 0.4 for a closer zoom (larger model in frame)
 		const originalDistance = this.camera.position.distanceTo(center);
 		const newDistance = originalDistance * zoomFactor;

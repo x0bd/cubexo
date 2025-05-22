@@ -84,10 +84,31 @@
 			.custom-scrollbar::-webkit-scrollbar-thumb:hover {
 				background: rgba(161, 161, 170, 0.5);
 			}
+			/* Vercel-inspired glass effect */
+			.glass-panel {
+				backdrop-filter: blur(12px);
+				border: 1px solid rgba(63, 63, 70, 0.4);
+				box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.2);
+				transition: all 0.2s ease;
+			}
+			.glass-panel:hover {
+				border-color: rgba(113, 113, 122, 0.5);
+			}
+			/* TRAF-inspired button styles */
+			.traf-button {
+				transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+			}
+			.traf-button:hover {
+				transform: translateY(-2px);
+				box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+			}
+			.traf-button:active {
+				transform: translateY(0);
+			}
 		</style>
 	</head>
 	<body
-		class="bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 h-screen overflow-hidden font-sans antialiased transition-colors duration-200"
+		class="bg-zinc-900 text-zinc-100 dark:bg-zinc-950 dark:text-zinc-100 h-screen overflow-hidden font-sans antialiased transition-colors duration-300"
 	>
 		<!-- Canvas for Three.js rendering -->
 		<canvas id="webgl" class="fixed inset-0 w-full h-full z-0"></canvas>
@@ -96,16 +117,16 @@
 		<div id="app" class="fixed inset-0 z-10 pointer-events-none">
 			<!-- Logo in top left -->
 			<div
-				class="fixed top-6 left-6 flex items-center gap-2.5 pointer-events-auto"
+				class="fixed top-6 left-6 flex items-center gap-3 pointer-events-auto"
 			>
 				<div
-					class="w-9 h-9 rounded-xl bg-zinc-900/90 dark:bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 dark:border-zinc-700/30 shadow-lg flex items-center justify-center text-xl"
+					class="w-10 h-10 rounded-xl glass-panel bg-zinc-900/80 dark:bg-zinc-900/50 border-zinc-800/60 dark:border-zinc-700/40 flex items-center justify-center text-xl shadow-lg"
 				>
-					<span class="text-zinc-100">▧</span>
+					<span class="text-zinc-50">▧</span>
 				</div>
 				<div class="flex flex-col">
 					<h1
-						class="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100 jp"
+						class="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50 jp"
 					>
 						CubeXO
 					</h1>
@@ -119,12 +140,12 @@
 
 			<!-- macOS-style Dock -->
 			<div
-				class="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-end gap-2.5 p-2.5 rounded-2xl bg-zinc-900/50 dark:bg-zinc-900/40 backdrop-blur-lg border border-white/10 dark:border-zinc-700/30 shadow-lg z-50 pointer-events-auto"
+				class="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-end gap-3 p-3 rounded-2xl glass-panel bg-zinc-900/60 dark:bg-zinc-900/50 border-zinc-800/50 dark:border-zinc-700/40 shadow-xl z-50 pointer-events-auto"
 			>
 				<!-- Normal Mode -->
 				<button
 					id="mode-normal"
-					class="dock-icon w-12 h-12 flex items-center justify-center text-zinc-300 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative active"
+					class="dock-icon w-12 h-12 flex items-center justify-center text-zinc-200 dark:text-zinc-300 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative traf-button active"
 					aria-label="Normal Convert Mode"
 				>
 					<svg
@@ -150,7 +171,7 @@
 				<!-- Voxel Edit Mode -->
 				<button
 					id="mode-edit"
-					class="dock-icon w-12 h-12 flex items-center justify-center text-zinc-300 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative"
+					class="dock-icon w-12 h-12 flex items-center justify-center text-zinc-200 dark:text-zinc-300 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative traf-button"
 					aria-label="Voxel Edit Mode"
 				>
 					<svg
@@ -183,7 +204,7 @@
 				<!-- Fun/Magic Mode -->
 				<button
 					id="mode-fun"
-					class="dock-icon w-12 h-12 flex items-center justify-center text-zinc-300 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative"
+					class="dock-icon w-12 h-12 flex items-center justify-center text-zinc-200 dark:text-zinc-300 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative traf-button"
 					aria-label="Fun/Magic Mode"
 				>
 					<svg
@@ -220,13 +241,13 @@
 
 				<!-- Divider -->
 				<div
-					class="h-10 w-px bg-white/10 dark:bg-zinc-600/20 mx-1"
+					class="h-10 w-px bg-zinc-600/20 dark:bg-zinc-600/30 mx-1"
 				></div>
 
 				<!-- Theme Toggle -->
 				<button
 					id="theme-toggle"
-					class="dock-icon w-12 h-12 flex items-center justify-center text-zinc-300 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative"
+					class="dock-icon w-12 h-12 flex items-center justify-center text-zinc-200 dark:text-zinc-300 transition-all duration-300 hover:scale-110 hover:-translate-y-1 relative traf-button"
 					aria-label="Toggle Theme"
 				>
 					<svg
@@ -276,13 +297,13 @@
 			>
 				<!-- Models Panel -->
 				<div
-					class="panel max-h-[60vh] rounded-xl bg-zinc-900/50 dark:bg-zinc-900/40 backdrop-blur-md border border-zinc-800/30 dark:border-zinc-700/40 shadow-xl flex flex-col overflow-hidden"
+					class="panel max-h-[60vh] rounded-xl glass-panel bg-zinc-800/80 dark:bg-zinc-900/80 border-zinc-700/50 dark:border-zinc-700/50 shadow-xl flex flex-col overflow-hidden"
 				>
 					<div
-						class="panel-header flex items-center justify-between px-3.5 py-2.5 border-b border-zinc-700/30"
+						class="panel-header flex items-center justify-between px-4 py-3 border-b border-zinc-700/50 dark:border-zinc-700/50"
 					>
 						<div class="flex items-center gap-2">
-							<span class="text-zinc-400">
+							<span class="text-zinc-300 dark:text-zinc-300">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="18"
@@ -301,7 +322,7 @@
 									<path d="M12 12v9.75" />
 								</svg>
 							</span>
-							<span class="text-sm font-medium jp text-zinc-200"
+							<span class="text-sm font-medium jp text-zinc-200 dark:text-zinc-200"
 								>MODELS</span
 							>
 						</div>
@@ -309,7 +330,7 @@
 							<button
 								id="export-png"
 								aria-label="Export as PNG"
-								class="w-7 h-7 flex items-center justify-center rounded-md bg-zinc-800/70 border border-zinc-700/50 hover:bg-zinc-700/70 text-zinc-300 transition-all"
+								class="w-7 h-7 flex items-center justify-center rounded-md bg-zinc-700/90 dark:bg-zinc-800/90 border border-zinc-600/70 dark:border-zinc-700/70 hover:bg-zinc-600/90 dark:hover:bg-zinc-700/90 text-zinc-200 dark:text-zinc-200 transition-all traf-button"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -339,7 +360,7 @@
 							<button
 								id="export-model"
 								aria-label="Export model as GLB"
-								class="w-7 h-7 flex items-center justify-center rounded-md bg-zinc-800/70 border border-zinc-700/50 hover:bg-zinc-700/70 text-zinc-300 transition-all"
+								class="w-7 h-7 flex items-center justify-center rounded-md bg-zinc-700/90 dark:bg-zinc-800/90 border border-zinc-600/70 dark:border-zinc-700/70 hover:bg-zinc-600/90 dark:hover:bg-zinc-700/90 text-zinc-200 dark:text-zinc-200 transition-all traf-button"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -369,11 +390,11 @@
 					></div>
 
 					<div
-						class="panel-footer px-3 py-2.5 border-t border-zinc-700/30"
+						class="panel-footer px-4 py-3 border-t border-zinc-700/50 dark:border-zinc-700/50"
 					>
 						<label
 							id="upload-model-btn"
-							class="w-full flex items-center justify-between py-1.5 px-3 rounded-md bg-indigo-600/90 hover:bg-indigo-500/90 text-white border border-indigo-500/40 transition-all cursor-pointer"
+							class="w-full flex items-center justify-between py-1.5 px-3 rounded-md bg-indigo-600/90 hover:bg-indigo-500/90 text-white border border-indigo-500/40 transition-all cursor-pointer traf-button"
 							aria-label="Upload your own model"
 						>
 							<span class="text-xs jp tracking-wide"
@@ -409,13 +430,13 @@
 
 				<!-- Properties Panel -->
 				<div
-					class="panel rounded-xl bg-zinc-900/50 dark:bg-zinc-900/40 backdrop-blur-md border border-zinc-800/30 dark:border-zinc-700/40 shadow-xl flex flex-col"
+					class="panel rounded-xl glass-panel bg-zinc-800/80 dark:bg-zinc-900/80 border-zinc-700/50 dark:border-zinc-700/50 shadow-xl flex flex-col"
 				>
 					<div
-						class="panel-header flex items-center justify-between px-3.5 py-2.5 border-b border-zinc-700/30"
+						class="panel-header flex items-center justify-between px-4 py-3 border-b border-zinc-700/50 dark:border-zinc-700/50"
 					>
 						<div class="flex items-center gap-2">
-							<span class="text-zinc-400">
+							<span class="text-zinc-300 dark:text-zinc-300">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="18"
@@ -434,7 +455,7 @@
 									<circle cx="7" cy="7" r="3" />
 								</svg>
 							</span>
-							<span class="text-sm font-medium jp text-zinc-200"
+							<span class="text-sm font-medium jp text-zinc-200 dark:text-zinc-200"
 								>PROPERTIES</span
 							>
 						</div>
@@ -446,64 +467,64 @@
 								class="flex items-center justify-between mb-1.5"
 							>
 								<div
-									class="text-xs jp text-zinc-400 tracking-wide"
+									class="text-xs jp text-zinc-300 dark:text-zinc-300 tracking-wide"
 								>
 									RESOLUTION
 								</div>
-								<span class="text-xs geist-mono text-zinc-300"
+								<span class="text-xs geist-mono text-zinc-300 dark:text-zinc-300"
 									>16</span
 								>
 							</div>
 							<div class="flex items-center gap-2.5">
-								<span class="text-xs text-zinc-400">8</span>
+								<span class="text-xs text-zinc-500 dark:text-zinc-400">8</span>
 								<input
 									type="range"
 									min="8"
 									max="32"
 									value="16"
-									class="w-full h-1 rounded-lg appearance-none cursor-pointer bg-zinc-700/50"
+									class="w-full h-1 rounded-lg appearance-none cursor-pointer bg-zinc-600/90 dark:bg-zinc-700/90"
 								/>
-								<span class="text-xs text-zinc-400">32</span>
+								<span class="text-xs text-zinc-500 dark:text-zinc-400">32</span>
 							</div>
 						</div>
 
 						<div class="property-group pt-1">
 							<div
-								class="text-xs jp text-zinc-400 tracking-wide mb-1.5"
+								class="text-xs jp text-zinc-500 dark:text-zinc-400 tracking-wide mb-1.5"
 							>
 								COLOR PALETTE
 							</div>
-							<div class="grid grid-cols-6 gap-1.5">
+							<div class="grid grid-cols-6 gap-2">
 								<button
-									class="w-6 h-6 rounded-md bg-indigo-500 hover:ring-2 ring-indigo-400/30 transition-all"
+									class="w-6 h-6 rounded-md bg-indigo-500 hover:ring-2 ring-indigo-400/50 dark:ring-indigo-400/30 transition-all shadow-sm traf-button"
 								></button>
 								<button
-									class="w-6 h-6 rounded-md bg-cyan-500 hover:ring-2 ring-cyan-400/30 transition-all"
+									class="w-6 h-6 rounded-md bg-cyan-500 hover:ring-2 ring-cyan-400/50 dark:ring-cyan-400/30 transition-all shadow-sm traf-button"
 								></button>
 								<button
-									class="w-6 h-6 rounded-md bg-amber-500 hover:ring-2 ring-amber-400/30 transition-all"
+									class="w-6 h-6 rounded-md bg-amber-500 hover:ring-2 ring-amber-400/50 dark:ring-amber-400/30 transition-all shadow-sm traf-button"
 								></button>
 								<button
-									class="w-6 h-6 rounded-md bg-rose-500 hover:ring-2 ring-rose-400/30 transition-all"
+									class="w-6 h-6 rounded-md bg-rose-500 hover:ring-2 ring-rose-400/50 dark:ring-rose-400/30 transition-all shadow-sm traf-button"
 								></button>
 								<button
-									class="w-6 h-6 rounded-md bg-violet-500 hover:ring-2 ring-violet-400/30 transition-all"
+									class="w-6 h-6 rounded-md bg-violet-500 hover:ring-2 ring-violet-400/50 dark:ring-violet-400/30 transition-all shadow-sm traf-button"
 								></button>
 								<button
-									class="w-6 h-6 rounded-md bg-zinc-500 hover:ring-2 ring-zinc-400/30 transition-all"
+									class="w-6 h-6 rounded-md bg-zinc-500 hover:ring-2 ring-zinc-400/50 dark:ring-zinc-400/30 transition-all shadow-sm traf-button"
 								></button>
 							</div>
 						</div>
 
 						<div class="property-group pt-1">
 							<div
-								class="text-xs jp text-zinc-400 tracking-wide mb-1.5"
+								class="text-xs jp text-zinc-500 dark:text-zinc-400 tracking-wide mb-1.5"
 							>
 								ANIMATION
 							</div>
 							<div class="flex items-center gap-2.5">
 								<button
-									class="flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded-md bg-zinc-800/70 border border-zinc-700/50 hover:bg-zinc-700/70 text-zinc-300 text-xs jp tracking-wide transition-all"
+									class="flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded-md bg-zinc-700/90 dark:bg-zinc-800/90 border border-zinc-600/70 dark:border-zinc-700/70 hover:bg-zinc-600/90 dark:hover:bg-zinc-700/90 text-zinc-200 dark:text-zinc-200 text-xs jp tracking-wide transition-all traf-button"
 								>
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -522,7 +543,7 @@
 									PLAY
 								</button>
 								<button
-									class="flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded-md bg-zinc-800/70 border border-zinc-700/50 hover:bg-zinc-700/70 text-zinc-300 text-xs jp tracking-wide transition-all"
+									class="flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded-md bg-zinc-700/90 dark:bg-zinc-800/90 border border-zinc-600/70 dark:border-zinc-700/70 hover:bg-zinc-600/90 dark:hover:bg-zinc-700/90 text-zinc-200 dark:text-zinc-200 text-xs jp tracking-wide transition-all traf-button"
 								>
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -552,7 +573,7 @@
 			<!-- Loading indicator -->
 			<div
 				id="loader"
-				class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-zinc-900/70 text-zinc-200 px-5 py-4 rounded-xl font-medium text-sm flex gap-3 items-center shadow-lg border border-zinc-700/40 pointer-events-auto z-50"
+				class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 glass-panel bg-zinc-800/90 dark:bg-zinc-900/90 text-zinc-200 dark:text-zinc-200 px-5 py-4 rounded-xl font-medium text-sm flex gap-3 items-center shadow-lg border border-zinc-700/50 dark:border-zinc-700/50 pointer-events-auto z-50"
 			>
 				<svg
 					class="spinner animate-spin"

@@ -4,21 +4,17 @@
  */
 
 export class ThemeManager {
-	private darkModeMediaQuery: MediaQueryList;
 	private themeToggleBtn: HTMLElement | null;
-	private darkThemeClass = "dark-theme";
 	private themeKey = "cubexo-theme-preference";
 	private initialTransition = "background-color 0.3s ease, color 0.3s ease";
 
 	constructor() {
-		this.darkModeMediaQuery = window.matchMedia(
-			"(prefers-color-scheme: dark)"
-		);
 		this.themeToggleBtn = document.getElementById("theme-toggle");
 	}
 
 	public init(): void {
-		this.loadThemePreference();
+		// Always start with dark theme for our Vercel-inspired design
+		this.enableDarkTheme(false);
 		this.setupEventListeners();
 		this.disableTransitionsTemporarily();
 	}
@@ -36,82 +32,64 @@ export class ThemeManager {
 		}, 50);
 	}
 
-	private loadThemePreference(): void {
-		const savedTheme = localStorage.getItem(this.themeKey);
-
-		if (savedTheme === "dark") {
-			this.enableDarkTheme(false);
-		} else if (savedTheme === "light") {
-			this.enableLightTheme(false);
-		} else {
-			// No saved preference, use system preference
-			if (this.darkModeMediaQuery.matches) {
-				this.enableDarkTheme(false);
-			} else {
-				this.enableLightTheme(false);
-			}
-		}
-	}
-
 	private setupEventListeners(): void {
 		// Toggle theme when button is clicked
 		if (this.themeToggleBtn) {
 			this.themeToggleBtn.addEventListener("click", () => {
-				if (document.body.classList.contains(this.darkThemeClass)) {
+				if (document.documentElement.classList.contains("dark")) {
 					this.enableLightTheme();
 				} else {
 					this.enableDarkTheme();
 				}
 			});
 		}
-
-		// Listen for system theme changes
-		this.darkModeMediaQuery.addEventListener("change", (e) => {
-			// Only apply system preference if no manual preference is set
-			if (!localStorage.getItem(this.themeKey)) {
-				if (e.matches) {
-					this.enableDarkTheme(false);
-				} else {
-					this.enableLightTheme(false);
-				}
-			}
-		});
 	}
 
 	private enableDarkTheme(savePreference = true): void {
-		document.body.classList.add(this.darkThemeClass);
+		// Apply dark mode class to html element for Tailwind
 		document.documentElement.classList.add("dark");
 
 		if (savePreference) {
 			localStorage.setItem(this.themeKey, "dark");
 		}
-		// Update meta theme color
-		this.updateMetaThemeColor("#000000");
 
-		// Dispatch event for other components that need to be aware of theme changes
-		window.dispatchEvent(
-			new CustomEvent("themechange", {
-				detail: { theme: "dark" },
-			})
-		);
+		// Update meta theme color
+		this.updateMetaThemeColor("#111111");
+
+		// Dispatch event for scene to update
+		this.dispatchThemeChangeEvent("dark");
+		console.log('Dark theme enabled');
 	}
 
 	private enableLightTheme(savePreference = true): void {
-		document.body.classList.remove(this.darkThemeClass);
+		// Remove dark mode class from html element for Tailwind
 		document.documentElement.classList.remove("dark");
 
 		if (savePreference) {
 			localStorage.setItem(this.themeKey, "light");
 		}
-		// Update meta theme color
-		this.updateMetaThemeColor("#ffffff");
 
-		// Dispatch event for other components that need to be aware of theme changes
-		window.dispatchEvent(
-			new CustomEvent("themechange", {
-				detail: { theme: "light" },
-			})
-		);
+		// Update meta theme color - still dark for our dark UI
+		this.updateMetaThemeColor("#111111");
+
+		// Dispatch event for scene to update
+		this.dispatchThemeChangeEvent("light");
+		console.log('Light theme enabled');
+	}
+
+	private dispatchThemeChangeEvent(theme: "dark" | "light"): void {
+		// Create and dispatch a custom event
+		const event = new CustomEvent("themechange", {
+			detail: { theme }
+		});
+
+		// Dispatch on window
+		window.dispatchEvent(event);
+
+		// Also dispatch on document for broader compatibility
+		document.dispatchEvent(event);
+
+		console.log(`Theme change event dispatched: ${theme}`);
 	}
 
 	private updateMetaThemeColor(color: string): void {
@@ -125,11 +103,12 @@ export class ThemeManager {
 		}
 
 		metaThemeColor.setAttribute("content", color);
+		console.log(`Theme color updated to: ${color}`);
 	}
 
 	// Public method to get current theme
 	public getCurrentTheme(): "dark" | "light" {
-		return document.body.classList.contains(this.darkThemeClass)
+		return document.documentElement.classList.contains("dark")
 			? "dark"
 			: "light";
 	}
