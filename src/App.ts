@@ -6,7 +6,9 @@ import * as THREE from "three";
 import gsap from "gsap";
 import { ExportFormat } from "./utils/ModelExporter";
 import { ModelUploader } from "./utils/ModelUploader";
-import { ThemeManager } from "./utils/theme"; // Added import for ThemeManager
+import { ThemeManager } from "./utils/theme";
+// Import the extension to add setVisible method to VoxelModelViewer
+import "./scenes/VoxelModelViewerExtension";
 
 export class App {
 	private viewer: VoxelModelViewer;
@@ -14,12 +16,11 @@ export class App {
 	private modelSelector: ModelSelector;
 	private voxelizer: Voxelizer;
 	private modelUploader: ModelUploader;
-	private themeManager: ThemeManager; // Declared themeManager property
+	private themeManager: ThemeManager;
 	private isInitialized = false;
 	private loaderElement: HTMLElement | null;
 	private activeModelIdx = 1; // Start with Chicken (index 1)
-	private userModels: { name: string; url: string; model: THREE.Group }[] =
-		[];
+	private userModels: { name: string; url: string; model: THREE.Group }[] = [];
 
 	constructor() {
 		// Log for debugging
@@ -33,6 +34,7 @@ export class App {
 		this.themeManager = new ThemeManager();
 		this.themeManager.init(); // Call init() to set up event listeners and initial theme
 		console.log('[App] ThemeManager initialized and started.');
+		
 		// Initialize components
 		this.viewer = new VoxelModelViewer();
 		this.modelLoader = new ModelLoader();
@@ -468,8 +470,8 @@ export class App {
 				break;
 
 			case "edit":
-				// Voxel editing mode
-				this.showNotification("VOXEL EDIT MODE", "success");
+				// Voxel editing mode (not implemented yet)
+				this.showNotification("VOXEL EDIT MODE - Coming soon", "success");
 				break;
 
 			case "fun":
