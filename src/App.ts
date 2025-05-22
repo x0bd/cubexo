@@ -338,14 +338,14 @@ export class App {
 		message: string,
 		type: "success" | "error" = "success"
 	): void {
-		// Create notification element with panel-style design
+		// Create notification element with updated panel design
 		const notificationEl = document.createElement("div");
 		notificationEl.className =
-			"fixed bottom-4 right-4 py-2 px-3 rounded-lg shadow-lg flex items-center gap-3 z-50 " +
-			"bg-white/90 dark:bg-black/90 backdrop-blur-md border border-gray-200 dark:border-gray-800 " +
+			"fixed bottom-6 right-6 py-2.5 px-3.5 rounded-lg shadow-lg flex items-center gap-3 z-50 " +
+			"bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200/80 dark:border-zinc-800/50 " +
 			(type === "success"
-				? "text-green-700 dark:text-green-400"
-				: "text-red-700 dark:text-red-400");
+				? "text-emerald-700 dark:text-emerald-400"
+				: "text-rose-700 dark:text-rose-400");
 
 		// Add icon
 		const iconEl = document.createElement("span");
@@ -353,26 +353,26 @@ export class App {
 		// Create SVG icon based on type
 		if (type === "success") {
 			iconEl.innerHTML = `
-				<svg viewBox="0 0 24 24" width="16" height="16" class="stroke-green-600 dark:stroke-green-400 fill-none stroke-2">
-					<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-					<polyline points="22 4 12 14.01 9 11.01"></polyline>
+				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle">
+					<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+					<polyline points="22 4 12 14.01 9 11.01"/>
 				</svg>
 			`;
 		} else {
 			iconEl.innerHTML = `
-				<svg viewBox="0 0 24 24" width="16" height="16" class="stroke-red-600 dark:stroke-red-400 fill-none stroke-2">
-					<circle cx="12" cy="12" r="10"></circle>
-					<line x1="15" y1="9" x2="9" y2="15"></line>
-					<line x1="9" y1="9" x2="15" y2="15"></line>
+				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-circle">
+					<circle cx="12" cy="12" r="10"/>
+					<line x1="12" y1="8" x2="12" y2="12"/>
+					<line x1="12" y1="16" x2="12.01" y2="16"/>
 				</svg>
 			`;
 		}
 
 		notificationEl.appendChild(iconEl);
 
-		// Add message text
+		// Add message text with Geist Mono
 		const messageEl = document.createElement("span");
-		messageEl.className = "text-xs font-medium";
+		messageEl.className = "text-xs geist-mono";
 		messageEl.textContent = message;
 		notificationEl.appendChild(messageEl);
 
@@ -382,9 +382,9 @@ export class App {
 		// Animate and remove after delay
 		setTimeout(() => {
 			notificationEl.style.opacity = "0";
-			notificationEl.style.transform = "translateY(10px)";
+			notificationEl.style.transform = "translateY(8px)";
 			notificationEl.style.transition =
-				"opacity 0.4s ease, transform 0.4s ease";
+				"opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)";
 
 			setTimeout(() => {
 				document.body.removeChild(notificationEl);

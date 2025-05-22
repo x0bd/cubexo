@@ -93,21 +93,21 @@ export class ModelSelector {
 	public createPreviewScene(modelIdx: number): THREE.Scene {
 		const scene = new THREE.Scene();
 
-		// Make background color theme-aware
+		// Make background color theme-aware with zinc palette
 		const isDarkMode = document.documentElement.classList.contains("dark");
-		scene.background = new THREE.Color(isDarkMode ? 0x111111 : 0xf8f8f8);
+		scene.background = new THREE.Color(isDarkMode ? 0x18181b : 0xfafafa); // zinc-950 or zinc-50
 
-		// Create preview element with Tailwind classes - smaller for panel layout
+		// Create preview element with updated Tailwind classes for our aesthetic
 		const element = document.createElement("div");
 		element.className =
-			"w-[64px] h-[64px] border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden cursor-pointer relative transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-400 dark:hover:border-gray-500";
+			"w-[72px] h-[72px] border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden cursor-pointer relative transition-all duration-200 hover:scale-105 hover:shadow-md";
 		element.dataset.modelIdx = modelIdx.toString();
 		element.dataset.modelName = `model-${modelIdx}`;
 
-		// Add label element with Tailwind classes
+		// Add label element with Geist Mono style
 		const labelEl = document.createElement("div");
 		labelEl.className =
-			"model-label absolute bottom-0 left-0 right-0 py-0.5 px-1 text-[10px] font-medium text-center bg-white/70 dark:bg-black/70 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700";
+			"model-label absolute bottom-0 left-0 right-0 py-0.5 px-1.5 text-[10px] geist-mono font-medium text-center bg-white/70 dark:bg-zinc-900/70 backdrop-blur-sm border-t border-zinc-200/50 dark:border-zinc-800/50";
 		labelEl.textContent = `Model ${modelIdx + 1}`;
 		element.appendChild(labelEl);
 
@@ -298,23 +298,31 @@ export class ModelSelector {
 	}
 
 	private updateActivePreview(): void {
-		// Update active class on preview elements with Tailwind classes
+		// Update active class on preview elements
 		this.previewScenes.forEach((scene) => {
 			const element = scene.userData.element as HTMLElement;
 			if (element) {
 				if (scene.userData.modelIdx === this.activeModelIdx) {
-					// Add active styles with Tailwind
+					// Add active styles with Zinc palette and ring for Japanese aesthetic
 					element.classList.add(
-						"border-blue-600",
-						"dark:border-blue-500",
-						"scale-105"
+						"border-indigo-500",
+						"dark:border-indigo-500",
+						"ring-2",
+						"ring-indigo-500/30",
+						"dark:ring-indigo-500/30",
+						"scale-105",
+						"shadow-md"
 					);
 				} else {
 					// Remove active styles
 					element.classList.remove(
-						"border-blue-600",
-						"dark:border-blue-500",
-						"scale-105"
+						"border-indigo-500",
+						"dark:border-indigo-500",
+						"ring-2",
+						"ring-indigo-500/30",
+						"dark:ring-indigo-500/30",
+						"scale-105",
+						"shadow-md"
 					);
 				}
 			}
