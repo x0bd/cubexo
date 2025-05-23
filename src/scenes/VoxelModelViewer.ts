@@ -87,7 +87,53 @@ export class VoxelModelViewer {
 	}
 
 	public setActiveModel(modelIdx: number): void {
+		if (modelIdx < 0 || modelIdx >= this.voxelsPerModel.length) {
+			console.warn("Invalid model index.");
+			return;
+		}
+
+		const oldModelIdx = this.activeModelIndex;
 		this.activeModelIndex = modelIdx;
+		this.voxels = this.voxelsPerModel[this.activeModelIndex];
+
+		// Populate/Update voxelOriginalPositions with the true resting positions for the new model
+		this.voxelOriginalPositions.clear(); // Clear for the new model
+		for (let i = 0; i < this.voxels.length; i++) {
+			if (this.voxels[i] && this.voxels[i].position) {
+				this.voxelOriginalPositions.set(i, this.voxels[i].position.clone());
+			} else {
+				console.warn(`Voxel at index ${i} is undefined or has no position during setActiveModel.`);
+			}
+		}
+
+		// Check if instancedMesh needs to be recreated or if it's just a model switch
+		const needsRecreation = !this.instancedMesh || this.instancedMesh.count !== this.voxels.length;
+
+		if (oldModelIdx === this.activeModelIndex && !needsRecreation) {
+			// If same model and count matches, likely just a refresh, ensure positions are reset
+			// This might happen if setActiveModel is called again for the current model
+			this.forceResetAllVoxelPositions(); // Use the newly populated true originals
+		} else if (needsRecreation) {
+			this.recreateInstancedMesh(this.voxels.length);
+		} else if (oldModelIdx !== this.activeModelIndex) { // Corrected: newModelIdx to this.activeModelIndex
+			this.animateToModel(oldModelIdx, this.activeModelIndex);
+		} else {
+      // Fallback: if not animating and not recreating, still ensure positions are set from new model data
+      for (let i = 0; i < this.voxels.length; i++) {
+        if (this.voxels[i] && this.voxels[i].position) { // Added null check for this.voxels[i].position
+          this.dummy.position.copy(this.voxels[i].position);
+          this.dummy.updateMatrix();
+          if (this.instancedMesh) {
+            this.instancedMesh.setMatrixAt(i, this.dummy.matrix);
+          }
+        }
+      }
+      if (this.instancedMesh) {
+        this.instancedMesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+
+		this.isInteractionEnabled = true; // Ensure interactions are enabled
 	}
 
 	public animateToModel(_oldModelIdx: number, newModelIdx: number): void {
@@ -754,204 +800,186 @@ export class VoxelModelViewer {
 	 */
 	private forceResetAllVoxelPositions(): void {
 		if (!this.instancedMesh) return;
-		
-		// Reset all voxels to their original positions
+
+		// console.log("Executing forceResetAllVoxelPositions");
+
 		for (let i = 0; i < this.voxels.length; i++) {
-			const originalPosition = this.voxelOriginalPositions.get(i);
-			if (originalPosition) {
-				// Set position directly without animation
-				this.voxels[i].position.copy(originalPosition);
-				this.updateMatrix(i);
+			const trueOriginalPosition = this.voxelOriginalPositions.get(i);
+			const voxelData = this.voxelsPerModel[this.activeModelIndex]?.[i];
+
+			if (trueOriginalPosition && this.voxels[i]) {
+				this.voxels[i].position.copy(trueOriginalPosition);
+				// No animation, direct set for force reset
+				// Scale is reset below, color is reset here if needed
+				if (voxelData && this.voxels[i].color) {
+					this.voxels[i].color.copy(voxelData.color);
+				}
+				this.updateMatrix(i); // Updates position and color based on this.voxels[i]
+			} else {
+				// console.warn(`No original position found for voxel ${i} during forceReset.`);
 			}
 		}
-		
-		// Reset scale for all voxels
+
+		// Reset scale for all voxels (assuming scale is always reset to 1)
+		// and ensure color is from original model data via updateMatrix
 		for (let i = 0; i < this.voxels.length; i++) {
-			this.dummy.position.copy(this.voxels[i].position);
-			this.dummy.scale.set(1, 1, 1); // Reset to default scale
-			this.dummy.updateMatrix();
-			this.instancedMesh.setMatrixAt(i, this.dummy.matrix);
+			const trueOriginalPosition = this.voxelOriginalPositions.get(i);
+			const voxelData = this.voxelsPerModel[this.activeModelIndex]?.[i];
+
+			if (this.voxels[i]) { // Check if voxel exists
+				if (trueOriginalPosition) {
+					this.dummy.position.copy(trueOriginalPosition); // Use original position for dummy
+				} else {
+					// Fallback if no original position, use current (less ideal but prevents error)
+					this.dummy.position.copy(this.voxels[i].position);
+				}
+				this.dummy.scale.set(1, 1, 1); // Reset to default scale
+				// Color is set via instancedMesh.setColorAt if instanceColor is used and resetColors is true.
+				this.dummy.updateMatrix();
+				this.instancedMesh.setMatrixAt(i, this.dummy.matrix);
+				// Also ensure the instanced mesh color is updated if it's per-instance
+				if (this.instancedMesh.instanceColor && voxelData) {
+					this.instancedMesh.setColorAt(i, voxelData.color);
+				}
+			}
 		}
-		
-		// Update the instance matrix
+
 		if (this.instancedMesh) {
 			this.instancedMesh.instanceMatrix.needsUpdate = true;
+			if (this.instancedMesh.instanceColor) {
+				this.instancedMesh.instanceColor.needsUpdate = true;
+			}
 		}
-		
-		// Clear the original positions map
-		this.voxelOriginalPositions.clear();
+		// DO NOT CLEAR: this.voxelOriginalPositions.clear();
+		// console.log("Force reset all voxel positions and colors completed.");
 	}
+
 
 	/**
 	 * Handle click effect for a voxel - affects a group of nearby voxels
 	 * @param index The index of the voxel that was clicked
 	 */
 	private handleVoxelClick(index: number): void {
-		if (!this.instancedMesh || index < 0 || index >= this.voxels.length) return;
+		if (!this.instancedMesh || index < 0 || index >= this.voxels.length || !this.isInteractionEnabled) {
+			// console.log("Click handling skipped: Pre-conditions not met or interaction disabled.");
+			return;
+		}
 
-		// Store the clicked voxel position
-		const clickedPosition = this.voxels[index].position.clone();
-		const clickedColor = this.voxels[index].color.clone();
+		// console.log(`Handling click for voxel: ${index}`);
+		this.isInteractionEnabled = false; // Disable further interactions during this animation
 
-		// Find nearby voxels to include in the group effect
-		const groupRadius = 2.0; // Adjust based on your model scale
-		const affectedVoxels: number[] = [];
+		const clickedVoxelTrueOriginalPos = this.voxelOriginalPositions.get(index);
+		if (!clickedVoxelTrueOriginalPos) {
+			console.error("Clicked voxel has no true original position stored. Aborting click effect.");
+			this.isInteractionEnabled = true; // Re-enable before exiting
+			return;
+		}
 
-		// Clear any previous original positions
-		this.voxelOriginalPositions.clear();
+		const groupRadius = 2.0; // Radius for affecting nearby voxels
+		const affectedVoxelsIndices: number[] = [];
 		
-		// Store original positions for all voxels before animation
+		// Store positions AT THE MOMENT OF CLICK for calculating explosion vectors
+		// These are temporary and not the 'true' original positions.
+		const positionsAtClickTime: Map<number, THREE.Vector3> = new Map();
+
 		for (let i = 0; i < this.voxels.length; i++) {
-			this.voxelOriginalPositions.set(i, this.voxels[i].position.clone());
-			
-			// Find voxels within the group radius
-			const distance = this.voxels[i].position.distanceTo(clickedPosition);
-			if (distance <= groupRadius) {
-				affectedVoxels.push(i);
+			if (this.voxels[i] && this.voxels[i].position) {
+				positionsAtClickTime.set(i, this.voxels[i].position.clone()); // Current position of voxel i
+
+				const trueOriginalPosOfCurrentVoxel = this.voxelOriginalPositions.get(i);
+				if (trueOriginalPosOfCurrentVoxel) {
+					const distance = trueOriginalPosOfCurrentVoxel.distanceTo(clickedVoxelTrueOriginalPos);
+					if (distance <= groupRadius) {
+						affectedVoxelsIndices.push(i);
+					}
+				}
 			}
 		}
 
-		// Kill any existing tweens
+		// Kill any existing tweens that might conflict
+		// This is a broad approach; more targeted killing could be used if performance becomes an issue.
+		gsap.killTweensOf(this.voxels.map(v => v.position));
+		gsap.killTweensOf(this.voxels.map(v => v.color));
 		this.voxelHoverTweens.forEach((tween) => tween.kill());
 		this.voxelHoverTweens.clear();
 
-		// Create a master timeline for the group effect
 		const masterTimeline = gsap.timeline({
 			onComplete: () => {
-				// Final check to ensure all voxels are in their original positions
-				this.forceResetAllVoxelPositions();
+				// console.log("Click master timeline onComplete: Forcing reset and re-enabling interactions.");
+				this.forceResetAllVoxelPositions(); // Ultimate failsafe to restore true original state
+				this.isInteractionEnabled = true; // Re-enable interactions
 			}
 		});
 
-		// Phase 1: Explode the group outward
-		for (const voxelIndex of affectedVoxels) {
-			const voxel = this.voxels[voxelIndex];
-			const originalPosition = this.voxelOriginalPositions.get(voxelIndex) || voxel.position.clone();
-			
-			// Calculate direction from clicked voxel
-			const direction = new THREE.Vector3()
-				.subVectors(voxel.position, clickedPosition)
-				.normalize();
-			
-			// For the central voxel, use a random direction if it's the same as clicked
-			if (direction.lengthSq() === 0) {
-				direction.set(
-					Math.random() * 2 - 1,
-					Math.random() * 2 - 1,
-					Math.random() * 2 - 1
-				).normalize();
+		// STAGE 1: Explode outward and brighten
+		for (const voxelIdx of affectedVoxelsIndices) {
+			const voxel = this.voxels[voxelIdx];
+			const posAtClick = positionsAtClickTime.get(voxelIdx);
+			const trueOriginalModelColor = this.voxelsPerModel[this.activeModelIndex]?.[voxelIdx]?.color.clone() || new THREE.Color(0xffffff);
+
+			if (!voxel || !posAtClick) continue; // Skip if voxel or its position at click time is missing
+
+			let direction = new THREE.Vector3().subVectors(posAtClick, clickedVoxelTrueOriginalPos).normalize();
+			if (voxelIdx === index || direction.lengthSq() < 0.001) { // Central voxel or coincident
+				direction.set(Math.random() * 2 - 1, 0.7 + Math.random() * 0.6, Math.random() * 2 - 1).normalize(); // Bias upward, more pronounced
 			}
-			
-			// Calculate explosion distance based on distance from center
-			const distanceFromCenter = voxel.position.distanceTo(clickedPosition);
-			const explosionFactor = 1 - (distanceFromCenter / groupRadius);
-			const explosionDistance = 1.0 + explosionFactor * 1.5; // More explosion for closer voxels
-			
-			// Calculate target position
-			const targetPosition = originalPosition.clone().add(
-				direction.multiplyScalar(explosionDistance)
-			);
-			
-			// Create animation with randomized timing for more organic feel
-			const startDelay = Math.random() * 0.1;
-			const explodeDuration = 0.2 + Math.random() * 0.15;
-			
-			// Brighten color for explosion phase
-			const brightnessFactor = 1.0 + explosionFactor * 0.5; // More brightness for closer voxels
-			const brightColor = voxel.color.clone().multiplyScalar(brightnessFactor);
-			
-			// Create individual timeline for this voxel
-			const voxelTimeline = gsap.timeline();
-			
-			// Brighten color
-			voxelTimeline.to(voxel.color, {
-				r: Math.min(brightColor.r, 1.0),
-				g: Math.min(brightColor.g, 1.0),
-				b: Math.min(brightColor.b, 1.0),
-				duration: explodeDuration * 0.5,
-				delay: startDelay,
-				onUpdate: () => {
-					if (this.instancedMesh) {
-						this.instancedMesh.setColorAt(voxelIndex, voxel.color);
-						if (this.instancedMesh.instanceColor) {
-							this.instancedMesh.instanceColor.needsUpdate = true;
-						}
-					}
-				}
-			});
-			
-			// Explode outward
-			voxelTimeline.to(voxel.position, {
-				x: targetPosition.x,
-				y: targetPosition.y,
-				z: targetPosition.z,
-				duration: explodeDuration,
-				ease: "power2.out",
-				onUpdate: () => this.updateMatrix(voxelIndex)
-			}, "<");
-			
-			// Add this voxel's timeline to the master timeline
-			masterTimeline.add(voxelTimeline, 0);
+			const explosionStrength = 1.2 + Math.random() * 0.8; // Slightly stronger, more varied explosion
+			const targetExplodePos = new THREE.Vector3().addVectors(posAtClick, direction.multiplyScalar(explosionStrength));
+
+			masterTimeline.to(voxel.position, {
+				x: targetExplodePos.x,
+				y: targetExplodePos.y,
+				z: targetExplodePos.z,
+				duration: 0.45, // Slightly longer explosion phase
+				ease: "circ.out", // Different ease for variety
+				onUpdate: () => this.updateMatrix(voxelIdx),
+			}, "explode");
+
+			masterTimeline.to(voxel.color, {
+				r: Math.min(1, trueOriginalModelColor.r * 1.3 + 0.2),
+				g: Math.min(1, trueOriginalModelColor.g * 1.3 + 0.2),
+				b: Math.min(1, trueOriginalModelColor.b * 1.3 + 0.2),
+				duration: 0.25,
+				ease: "power1.out",
+				onUpdate: () => this.updateMatrix(voxelIdx), // Ensure color updates are reflected
+			}, "explode");
 		}
 
-		// Phase 2: Return to original positions with elastic effect
-		masterTimeline.add(() => {
-			// Create return animations for all affected voxels
-			for (const voxelIndex of affectedVoxels) {
-				const voxel = this.voxels[voxelIndex];
-				const originalPosition = this.voxelOriginalPositions.get(voxelIndex) || voxel.position.clone();
-				const originalColor = this.voxelOriginalPositions.has(voxelIndex) ? 
-					(voxelIndex === index ? clickedColor : voxel.color.clone().multiplyScalar(0.8)) : 
-					voxel.color.clone();
-				
-				// Randomize return timing
-				const returnDelay = 0.1 + Math.random() * 0.2;
-				const returnDuration = 0.5 + Math.random() * 0.3;
-				
-				// Create return timeline
-				const returnTimeline = gsap.timeline();
-				
-				// Return to original position with elastic effect
-				returnTimeline.to(voxel.position, {
-					x: originalPosition.x,
-					y: originalPosition.y,
-					z: originalPosition.z,
-					duration: returnDuration,
-					delay: returnDelay,
-					ease: "elastic.out(1, 0.5)",
-					onUpdate: () => this.updateMatrix(voxelIndex)
-				});
-				
-				// Return to original color
-				returnTimeline.to(voxel.color, {
-					r: originalColor.r,
-					g: originalColor.g,
-					b: originalColor.b,
-					duration: returnDuration * 0.7,
-					onUpdate: () => {
-						if (this.instancedMesh) {
-							this.instancedMesh.setColorAt(voxelIndex, voxel.color);
-							if (this.instancedMesh.instanceColor) {
-								this.instancedMesh.instanceColor.needsUpdate = true;
-							}
-						}
-					}
-				}, "<0.1");
-				
-				// Add to master timeline
-				masterTimeline.add(returnTimeline, ">0.2");
-			}
-		}, ">0.3");
+		// STAGE 2: Pause (achieved by label offset for return tweens)
+		masterTimeline.addLabel("returnStart", ">+0.35"); // Slightly longer pause after explosion
 
-		// Add a safety timeout to force reset positions after a certain time
-		// This ensures voxels return to original positions even if animations are interrupted
-		const maxAnimationTime = 2000; // 2 seconds should be enough for all animations to complete
-		setTimeout(() => {
-			this.forceResetAllVoxelPositions();
-		}, maxAnimationTime);
+		// STAGE 3: Return to TRUE original positions and colors
+		for (const voxelIdx of affectedVoxelsIndices) {
+			const voxel = this.voxels[voxelIdx];
+			const trueOriginalPosition = this.voxelOriginalPositions.get(voxelIdx);
+			const trueOriginalModelColor = this.voxelsPerModel[this.activeModelIndex]?.[voxelIdx]?.color.clone();
 
-		// Show a notification
-		this.showEffectNotification(`Group effect triggered!`);
+			if (!voxel || !trueOriginalPosition || !trueOriginalModelColor) continue; // Skip if essential data is missing
+
+			masterTimeline.to(voxel.position, {
+				x: trueOriginalPosition.x,
+				y: trueOriginalPosition.y,
+				z: trueOriginalPosition.z,
+				duration: 0.7, // Longer, smoother return
+				ease: "elastic.out(1, 0.55)", // Adjusted elastic effect
+				onUpdate: () => this.updateMatrix(voxelIdx),
+			}, "returnStart");
+
+			masterTimeline.to(voxel.color, {
+				r: trueOriginalModelColor.r,
+				g: trueOriginalModelColor.g,
+				b: trueOriginalModelColor.b,
+				duration: 0.4, // Color return duration
+				ease: "power2.inOut",
+				onUpdate: () => this.updateMatrix(voxelIdx), // Ensure color updates are reflected
+			}, "returnStart");
+		}
+		
+		// If no voxels were affected (e.g., clicking far from model), ensure interaction is re-enabled promptly.
+		if (affectedVoxelsIndices.length === 0) {
+			// console.log("No voxels affected by click, re-enabling interactions immediately.");
+			this.isInteractionEnabled = true;
+		}
 	}
 
 	private handleResize(): void {
