@@ -255,8 +255,9 @@ export class App {
 				const name = ModelUploader.getModelNameFromFile(file);
 
 				// Create a data URL as a placeholder "url" for the model
+				// Add a prefix to indicate this is a user-uploaded model for proper scaling
 				const modelData = {
-					name,
+					name: `user-model-${name}`, // Add prefix to help with identification
 					url: `user-model://${name}`,
 					model,
 				};

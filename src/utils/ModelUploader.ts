@@ -72,13 +72,30 @@ export class ModelUploader {
 		const center = new THREE.Vector3();
 		box.getCenter(center);
 
-		// Calculate scale to normalize the model to a standard size
+		// Log original model dimensions for debugging
+		console.log('ModelUploader - Original model dimensions:', {
+			size: size,
+			center: center
+		});
+
+		// Calculate scale to normalize the model so its largest dimension is 1 (unit size)
 		const maxDim = Math.max(size.x, size.y, size.z);
-		const scale = 6 / maxDim; // Scale to fit in a 6x6x6 box
+		let scale = 1.0; // Default scale if maxDim is 0 or invalid
+		if (maxDim > 0) {
+			scale = 1.0 / maxDim; // Normalize to unit size
+		}
+
+		console.log('ModelUploader - Normalizing to unit size with scale factor:', scale);
 
 		// Apply transformations to center and scale the model
-		model.position.copy(center).multiplyScalar(-1);
-		model.scale.multiplyScalar(scale);
+		model.position.copy(center).multiplyScalar(-scale); // Center based on the new scale
+		model.scale.set(scale, scale, scale); // Set scale to normalize
+
+		// Log final model state
+		console.log('ModelUploader - Final model position and scale:', {
+			position: model.position,
+			scale: model.scale
+		});
 
 		// Ensure all objects in the model cast shadows and preserve colors
 		model.traverse((obj) => {

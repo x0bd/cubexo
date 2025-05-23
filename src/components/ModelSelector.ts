@@ -5,7 +5,8 @@ import type { ModelData } from "../types/types";
 export class ModelSelector {
 	private selectorElement: HTMLElement | null;
 	private previewScenes: THREE.Scene[] = [];
-	private previewWidth = 90; // Width in pixels - slightly larger for better visibility
+	private previewWidth = 130; // Increased width for better visibility
+	private previewHeight = 130; // Matching height for square proportions
 	private activeModelIdx = 0;
 	private renderer: THREE.WebGLRenderer;
 	private modelSelectedCallback:
@@ -82,10 +83,18 @@ export class ModelSelector {
 				// Add model label
 				const labelEl = element.querySelector(".model-label");
 				if (labelEl) {
-					labelEl.textContent = modelData.name;
+					// Extract just the base name without the prefix for display
+					let displayName = modelData.name;
+					if (displayName.startsWith('user-model-')) {
+						displayName = displayName.substring('user-model-'.length);
+					}
+					labelEl.textContent = displayName;
 				}
 			}
 
+			// Log the model data for debugging
+			console.log(`Adding model preview for ${modelData.name} at index ${modelIdx}`);
+			
 			this.addModelToScene(modelIdx, modelData.model, modelData.name);
 		}
 	}
@@ -100,7 +109,7 @@ export class ModelSelector {
 		// Create preview element with updated Tailwind classes for our aesthetic
 		const element = document.createElement("div");
 		element.className =
-			"w-[90px] h-[90px] bg-zinc-900/50 border border-zinc-700/50 rounded-lg overflow-hidden cursor-pointer relative transition-all duration-200 hover:scale-105 hover:shadow-lg hover:border-zinc-600/70 group";
+			"w-[130px] h-[130px] bg-zinc-900/50 border border-zinc-700/50 rounded-lg overflow-hidden cursor-pointer relative transition-all duration-200 hover:scale-105 hover:shadow-lg hover:border-zinc-600/70 group";
 		element.dataset.modelIdx = modelIdx.toString();
 		element.dataset.modelName = `model-${modelIdx}`;
 
@@ -266,29 +275,67 @@ export class ModelSelector {
 			}
 		});
 
-		// Scale and center with more precision
+		// Log model information for debugging
+		console.log(`Processing model ${modelIdx} (${modelName || 'unnamed'})`);
+		console.log(`Original model dimensions before scaling:`, clonedModel);
+
+		// Determine if this is a user-uploaded model (still needed for potential y-offset)
+		const isUserUploadedModel = modelName && modelName.includes("user-model") || 
+									 modelIdx >= 4; // Assuming first 4 models are built-in
+
+		console.log(`Is user uploaded model (for y-offset): ${isUserUploadedModel}`);
+
+		// Scale and center. Models should arrive pre-normalized (largest dimension ~1.0).
 		const box = new THREE.Box3().setFromObject(clonedModel);
 		const size = box.getSize(new THREE.Vector3());
 		const maxDimension = Math.max(size.x, size.y, size.z);
-		const scaleFactor = 1.8 / maxDimension; // Using a fixed scale factor relative to the largest dimension
+		
+		console.log(`ModelSelector - Max dimension of (pre-normalized?) model: ${maxDimension}`);
 
-		// Precisely center the model
+		// Target a consistent final largest dimension for the preview (e.g., 1.8 units)
+		const DESIRED_PREVIEW_DIMENSION = 1.8;
+		let finalScale = DESIRED_PREVIEW_DIMENSION;
+		if (maxDimension > 0) { // Avoid division by zero if model is empty or flat
+			finalScale = DESIRED_PREVIEW_DIMENSION / maxDimension;
+		}
+
+		console.log(`ModelSelector - Applying final scale: ${finalScale} (target dim: ${DESIRED_PREVIEW_DIMENSION}, current maxDim: ${maxDimension})`);
+
+		// Precisely center the model based on the new final scale
 		const center = box.getCenter(new THREE.Vector3());
 		clonedModel.position.set(
-			-center.x * scaleFactor,
-			-center.y * scaleFactor,
-			-center.z * scaleFactor
+			-center.x * finalScale,
+			-center.y * finalScale,
+			-center.z * finalScale
 		);
-		clonedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+		
+		// Apply the final scaling to all models
+		clonedModel.scale.set(finalScale, finalScale, finalScale);
 
-		// Slightly elevate the model for better visibility
-		clonedModel.position.y += 0.2;
+		// Adjust position for better visibility
+		if (isUserUploadedModel) {
+			// For uploaded models, we might need more vertical adjustment
+			clonedModel.position.y += 0.5;
+		} else {
+			// Standard elevation for built-in models
+			clonedModel.position.y += 0.2;
+		}
+
+		console.log(`Final model position and scale:`, {
+			position: clonedModel.position,
+			scale: clonedModel.scale
+		});
 
 		// Store model name in the element for export functionality
 		if (modelName) {
 			const element = scene.userData.element as HTMLElement;
 			if (element) {
 				element.dataset.modelName = modelName;
+				
+				// Add a special class for uploaded models to style them differently if needed
+				if (modelName.includes("user-model")) {
+					element.classList.add("user-uploaded-model");
+				}
 			}
 		}
 
@@ -345,18 +392,19 @@ export class ModelSelector {
 		// Set renderer size
 		this.renderer.setSize(window.innerWidth, window.innerHeight);
 
+		// Update the selector element to create a grid layout
+		this.selectorElement.style.display = "grid";
+		this.selectorElement.style.gridTemplateColumns = "repeat(2, 1fr)";
+		this.selectorElement.style.gap = "12px";
+		this.selectorElement.style.justifyItems = "center";
+
 		this.previewScenes.forEach((scene) => {
 			const element = scene.userData.element as HTMLElement;
 			if (!element) return;
 
-			// Calculate width
-			const width = Math.min(
-				90,
-				(window.innerHeight * 0.8) /
-					Math.max(1, this.previewScenes.length)
-			);
-			element.style.width = `${width}px`;
-			element.style.height = `${width}px`;
+			// Use fixed width and height for consistent square proportions
+			element.style.width = `${this.previewWidth}px`;
+			element.style.height = `${this.previewHeight}px`;
 
 			// Update rect with precise positioning
 			const rect = element.getBoundingClientRect();
@@ -398,7 +446,7 @@ export class ModelSelector {
 				// Set viewport and scissor with exact positioning
 				const rect = scene.userData.rect;
 
-				// Ensure perfect alignment by using integer values
+				// Ensure perfect alignment by using integer values for all models
 				const left = Math.floor(rect.left);
 				const bottom = Math.floor(rect.bottom);
 				const width = Math.floor(rect.width);

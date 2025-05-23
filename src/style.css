@@ -25,6 +25,29 @@
 	}
 }
 
+.model-preview canvas {
+	width: 100%;
+	height: 100%;
+	display: block;
+	object-fit: contain; /* Ensure the canvas content is fully visible */
+}
+
+.model-preview {
+	position: relative;
+	width: 130px;
+	height: 130px; /* Explicit height to ensure square aspect ratio */
+	aspect-ratio: 1;
+	background-color: rgba(255, 255, 255, 0.05);
+	border-radius: 8px;
+	overflow: hidden;
+	transition: all 0.2s ease-in-out;
+	cursor: pointer;
+	margin: 5px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
 @layer utilities {
 	.animate-fade-in {
 		animation: fadeIn 0.2s forwards;
