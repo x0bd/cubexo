@@ -694,10 +694,136 @@ export class VoxelModelViewer {
 	}
 
 	/**
+	 * Apply a shake effect to the model
+	 * Uses GSAP to create a quick shaking animation on the model
+	 */
+	public applyShakeEffect(): void {
+		if (!this.instancedMesh) return;
+
+		// Kill any existing shake animations
+		gsap.killTweensOf(this.instancedMesh.position);
+		gsap.killTweensOf(this.instancedMesh.rotation);
+
+		// Store original position and rotation
+		const originalPosition = this.instancedMesh.position.clone();
+		const originalRotation = this.instancedMesh.rotation.clone();
+
+		// Create a timeline for the shake effect
+		const timeline = gsap.timeline({
+			onComplete: () => {
+				// Reset to original position and rotation when complete
+				gsap.to(this.instancedMesh.position, {
+					duration: 0.3,
+					x: originalPosition.x,
+					y: originalPosition.y,
+					z: originalPosition.z,
+					ease: "power2.out"
+				});
+				gsap.to(this.instancedMesh.rotation, {
+					duration: 0.3,
+					x: originalRotation.x,
+					y: originalRotation.y,
+					z: originalRotation.z,
+					ease: "power2.out"
+				});
+			}
+		});
+
+		// Add shake keyframes to the timeline
+		const intensity = 0.05;
+		const rotationIntensity = 0.08;
+		const shakeDuration = 0.05;
+		const totalDuration = 0.6;
+		const steps = 10;
+
+		for (let i = 0; i < steps; i++) {
+			const progress = i / steps;
+			const decreaseFactor = 1 - progress; // Decrease intensity over time
+			const posX = originalPosition.x + (Math.random() * 2 - 1) * intensity * decreaseFactor;
+			const posY = originalPosition.y + (Math.random() * 2 - 1) * intensity * decreaseFactor;
+			const posZ = originalPosition.z + (Math.random() * 2 - 1) * intensity * decreaseFactor;
+			const rotX = originalRotation.x + (Math.random() * 2 - 1) * rotationIntensity * decreaseFactor;
+			const rotY = originalRotation.y + (Math.random() * 2 - 1) * rotationIntensity * decreaseFactor;
+			const rotZ = originalRotation.z + (Math.random() * 2 - 1) * rotationIntensity * decreaseFactor;
+
+			timeline.to(this.instancedMesh.position, {
+				duration: shakeDuration,
+				x: posX,
+				y: posY,
+				z: posZ,
+				ease: "none"
+			}, progress * totalDuration);
+
+			timeline.to(this.instancedMesh.rotation, {
+				duration: shakeDuration,
+				x: rotX,
+				y: rotY,
+				z: rotZ,
+				ease: "none"
+			}, progress * totalDuration);
+		}
+
+		// Show a notification that the effect was applied
+		this.showEffectNotification("Shake effect applied");
+	}
+
+	// Show notification for effects with Tailwind classes
+	private showEffectNotification(message: string): void {
+		// Create notification element with Tailwind classes
+		const notification = document.createElement("div");
+		notification.className =
+			"fixed bottom-8 right-8 bg-indigo-900/90 border border-indigo-800/80 rounded-lg py-3 px-4 flex items-center gap-3 shadow-md z-50 animate-fade-in export-notification";
+
+		// Effect icon
+		const icon = document.createElement("div");
+		icon.innerHTML = `
+			<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400 lucide lucide-sparkles">
+				<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+				<path d="M5 3v4"/>
+				<path d="M19 17v4"/>
+				<path d="M3 5h4"/>
+				<path d="M17 19h4"/>
+			</svg>
+		`;
+		// Safely append the icon to the notification
+		if (icon && notification) {
+			notification.appendChild(icon);
+		}
+
+		// Message
+		const text = document.createElement("span");
+		text.className = "text-sm font-medium text-indigo-100";
+		text.textContent = message;
+		// Safely append the text to the notification
+		if (text && notification) {
+			notification.appendChild(text);
+		}
+
+		// Safely append the notification to the document body
+		if (notification && document.body) {
+			document.body.appendChild(notification);
+		}
+
+		// Add fade-out animation
+		if (notification) {
+			setTimeout(() => {
+				if (notification) {
+					notification.classList.add("animate-fade-out");
+					setTimeout(() => {
+						if (notification && notification.parentNode) {
+							notification.parentNode.removeChild(notification);
+						}
+					}, 300);
+				}
+			}, 2000);
+		}
+	}
+
+	/**
 	 * Show export notification with Tailwind classes
 	 */
 	private showExportNotification(message: string = "Model exported"): void {
-		// Remove any existing notifications
+		// Remove any existing notifications to prevent stacking
 		const existingNotifications = document.querySelectorAll(
 			".export-notification"
 		);
@@ -710,7 +836,7 @@ export class VoxelModelViewer {
 		// Create notification element with Tailwind classes
 		const notification = document.createElement("div");
 		notification.className =
-			"fixed bottom-8 right-8 bg-gray-900 border border-gray-800 rounded-lg py-3 px-4 flex items-center gap-3 shadow-md z-50 animate-fade-in";
+			"fixed bottom-8 right-8 bg-gray-900 border border-gray-800 rounded-lg py-3 px-4 flex items-center gap-3 shadow-md z-50 animate-fade-in export-notification";
 
 		// Success icon
 		const icon = document.createElement("div");
@@ -720,24 +846,37 @@ export class VoxelModelViewer {
 				<polyline points="22 4 12 14.01 9 11.01"></polyline>
 			</svg>
 		`;
-		notification.appendChild(icon);
+		// Safely append icon to notification
+		if (icon && notification) {
+			notification.appendChild(icon);
+		}
 
 		// Message
 		const text = document.createElement("span");
 		text.className = "text-sm font-medium text-gray-100";
 		text.textContent = message;
-		notification.appendChild(text);
+		// Safely append text to notification
+		if (text && notification) {
+			notification.appendChild(text);
+		}
 
-		document.body.appendChild(notification);
+		// Safely append notification to document body
+		if (notification && document.body) {
+			document.body.appendChild(notification);
+		}
 
 		// Add fade-out animation
-		setTimeout(() => {
-			notification.classList.add("animate-fade-out");
+		if (notification) {
 			setTimeout(() => {
-				if (notification.parentNode) {
-					notification.parentNode.removeChild(notification);
+				if (notification) {
+					notification.classList.add("animate-fade-out");
+					setTimeout(() => {
+						if (notification && notification.parentNode) {
+							notification.parentNode.removeChild(notification);
+						}
+					}, 300);
 				}
-			}, 300);
-		}, 3000);
+			}, 3000);
+		}
 	}
 }

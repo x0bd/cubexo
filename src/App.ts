@@ -50,6 +50,9 @@ export class App {
 		this.setupScreenshotButton();
 		this.setupDownloadButton();
 		this.setupUploadButton();
+		
+		// Setup effect buttons
+		this.setupEffectButtons();
 	}
 
 	public async init(): Promise<void> {
@@ -227,9 +230,7 @@ export class App {
 	 * Setup the model upload button
 	 */
 	private setupModelUploader(): void {
-		const uploadInput = document.getElementById(
-			"model-upload"
-		) as HTMLInputElement;
+		const uploadInput = document.getElementById("model-upload") as HTMLInputElement;
 		if (!uploadInput) return;
 
 		uploadInput.addEventListener("change", async (event) => {
@@ -322,27 +323,18 @@ export class App {
 								opacity: 0,
 								onComplete: () => {
 									if (this.loaderElement) {
-										this.loaderElement.style.display =
-											"none";
+										this.loaderElement.style.display = "none";
 									}
 								},
 							});
 						}
 					}, 2000);
 				}
+			} finally {
+				// Reset the file input value so the same file can be uploaded again if needed
+				uploadInput.value = "";
 			}
-
-			// Reset input so same file can be uploaded again
-			uploadInput.value = "";
 		});
-
-		// When upload is successful
-		this.modelUploader.onModelUploaded = (
-			model: THREE.Group,
-			fileName: string
-		) => {
-			this.showNotification(`${fileName} uploaded successfully`);
-		};
 	}
 
 	/**
@@ -415,6 +407,30 @@ export class App {
 	}
 
 	/**
+	 * Setup effect buttons in the effects panel
+	 */
+	private setupEffectButtons(): void {
+		// Setup shake effect button
+		const shakeButton = document.getElementById("effect-shake");
+		if (shakeButton) {
+			shakeButton.addEventListener("click", () => {
+				console.log("Applying shake effect");
+				// Apply the shake effect to the current model
+				this.viewer.applyShakeEffect();
+				
+				// Add active state to button
+				shakeButton.classList.add("bg-indigo-700/90", "border-indigo-600/70");
+				setTimeout(() => {
+					shakeButton.classList.remove("bg-indigo-700/90", "border-indigo-600/70");
+				}, 800); // Duration slightly longer than the effect
+			});
+		}
+
+		// Setup for other effect buttons will be added here in the future
+		// Each effect will follow a similar pattern to the shake effect
+	}
+
+	/**
 	 * Setup theme toggle button
 	 */
 	private setupThemeToggle(): void {
@@ -476,6 +492,30 @@ export class App {
 				fileInput.click();
 			}
 		});
+	}
+
+	/**
+	 * Setup effect buttons in the effects panel
+	 */
+	private setupEffectButtons(): void {
+		// Setup shake effect button
+		const shakeButton = document.getElementById("effect-shake");
+		if (shakeButton) {
+			shakeButton.addEventListener("click", () => {
+				console.log("Applying shake effect");
+				// Apply the shake effect to the current model
+				this.viewer.applyShakeEffect();
+				
+				// Add active state to button
+				shakeButton.classList.add("bg-indigo-700/90", "border-indigo-600/70");
+				setTimeout(() => {
+					shakeButton.classList.remove("bg-indigo-700/90", "border-indigo-600/70");
+				}, 800); // Duration slightly longer than the effect
+			});
+		}
+
+		// Setup for other effect buttons will be added here in the future
+		// Each effect will follow a similar pattern to the shake effect
 	}
 
 
