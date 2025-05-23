@@ -45,8 +45,11 @@ export class App {
 		this.setupPngExportButton();
 		this.setupModelUploader();
 
-		// Setup dock mode switchers
-		this.setupModeSwitchers();
+		// Setup theme toggle and utility buttons
+		this.setupThemeToggle();
+		this.setupScreenshotButton();
+		this.setupDownloadButton();
+		this.setupUploadButton();
 	}
 
 	public async init(): Promise<void> {
@@ -411,32 +414,9 @@ export class App {
 	}
 
 	/**
-	 * Setup mode switchers in the dock
+	 * Setup theme toggle button
 	 */
-	private setupModeSwitchers(): void {
-		const modes = ["normal", "edit", "fun"];
-
-		// Add event listeners to each mode button
-		modes.forEach((mode) => {
-			const button = document.getElementById(`mode-${mode}`);
-			if (!button) return;
-
-			button.addEventListener("click", () => {
-				// Remove active class from all buttons
-				modes.forEach((m) => {
-					const btn = document.getElementById(`mode-${m}`);
-					if (btn) btn.classList.remove("active");
-				});
-
-				// Add active class to clicked button
-				button.classList.add("active");
-
-				// Switch mode based on clicked button
-				this.switchMode(mode);
-			});
-		});
-
-		// Move theme button functionality from panel to dock
+	private setupThemeToggle(): void {
 		const themeToggle = document.getElementById("theme-toggle");
 		if (themeToggle) {
 			themeToggle.addEventListener("click", () => {
@@ -455,30 +435,47 @@ export class App {
 	}
 
 	/**
-	 * Switch application mode
+	 * Setup screenshot button
 	 */
-	private switchMode(mode: string): void {
-		console.log(`Switching to ${mode} mode`);
+	private setupScreenshotButton(): void {
+		const screenshotBtn = document.getElementById("screenshot-btn");
+		if (!screenshotBtn) return;
 
-		// Handle mode-specific functionality
-		switch (mode) {
-			case "normal":
-				// Standard conversion mode
-				this.showNotification("STANDARD MODE");
-				break;
-
-			case "edit":
-				// Voxel editing mode
-				this.showNotification("VOXEL EDIT MODE", "success");
-				break;
-
-			case "fun":
-				// Fun/Magic mode
-				this.showNotification("MAGIC MODE ✨", "success");
-				break;
-
-			default:
-				console.error(`Unknown mode: ${mode}`);
-		}
+		screenshotBtn.addEventListener("click", () => {
+			console.log("Taking screenshot");
+			this.exportAsPng();
+		});
 	}
+
+	/**
+	 * Setup download button
+	 */
+	private setupDownloadButton(): void {
+		const downloadBtn = document.getElementById("download-btn");
+		if (!downloadBtn) return;
+
+		downloadBtn.addEventListener("click", () => {
+			console.log("Downloading model");
+			this.exportCurrentModel();
+		});
+	}
+
+	/**
+	 * Setup upload button in the dock
+	 */
+	private setupUploadButton(): void {
+		const uploadBtn = document.getElementById("upload-btn");
+		if (!uploadBtn) return;
+
+		uploadBtn.addEventListener("click", () => {
+			console.log("Triggering model upload");
+			// Trigger the file input click
+			const fileInput = document.getElementById("model-upload") as HTMLInputElement;
+			if (fileInput) {
+				fileInput.click();
+			}
+		});
+	}
+
+
 }
