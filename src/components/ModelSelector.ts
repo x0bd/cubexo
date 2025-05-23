@@ -245,35 +245,36 @@ export class ModelSelector {
 		// Clone the model
 		const clonedModel = model.clone();
 
-		// Enhance material properties for better lighting
-		clonedModel.traverse((object) => {
+		// For previews, we can simplify material handling and skip shadow setup for performance.
+		// The main VoxelModelViewer will handle detailed rendering.
+		/* clonedModel.traverse((object) => {
 			if (object instanceof THREE.Mesh) {
 				// Update any existing materials to better reflect light
 				if (object.material) {
 					if (object.material instanceof THREE.MeshStandardMaterial) {
-						object.material = object.material.clone();
-						object.material.roughness = 0.3;
-						object.material.metalness = 0.15;
-						object.material.envMapIntensity = 1.0;
+						// object.material = object.material.clone(); // Avoid cloning for previews
+						// object.material.roughness = 0.3;
+						// object.material.metalness = 0.15;
+						// object.material.envMapIntensity = 1.0;
 					} else if (
 						object.material instanceof THREE.MeshPhongMaterial
 					) {
-						object.material = object.material.clone();
-						object.material.shininess = 60;
-						object.material.specular = new THREE.Color(0x333333);
+						// object.material = object.material.clone();
+						// object.material.shininess = 60;
+						// object.material.specular = new THREE.Color(0x333333);
 					} else if (
 						object.material instanceof THREE.MeshLambertMaterial
 					) {
-						object.material = object.material.clone();
-						object.material.emissive = new THREE.Color(0x111111);
+						// object.material = object.material.clone();
+						// object.material.emissive = new THREE.Color(0x111111);
 					}
 				}
 
-				// Enable shadows
-				object.castShadow = true;
-				object.receiveShadow = true;
+				// Skip detailed shadow setup for previews
+				// object.castShadow = true;
+				// object.receiveShadow = true;
 			}
-		});
+		}); */
 
 		// Log model information for debugging
 		console.log(`Processing model ${modelIdx} (${modelName || 'unnamed'})`);
