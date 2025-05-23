@@ -22,6 +22,14 @@ export class VoxelModelViewer {
 	private voxelsPerModel: Voxel[][] = [];
 	private voxels: Voxel[] = [];
 	private activeModelIndex = 0;
+	
+	// Mouse interaction properties
+	private raycaster: THREE.Raycaster = new THREE.Raycaster();
+	private mouse: THREE.Vector2 = new THREE.Vector2();
+	private hoveredVoxelIndex: number = -1;
+	private voxelOriginalPositions: Map<number, THREE.Vector3> = new Map();
+	private voxelHoverTweens: Map<number, gsap.core.Tween | gsap.core.Timeline> = new Map();
+	private isInteractionEnabled: boolean = true;
 
 	private params: AppParameters = {
 		modelPreviewSize: 2,
@@ -53,8 +61,12 @@ export class VoxelModelViewer {
 		this.setupLights();
 		this.setupControls();
 		this.setupGeometries();
+		this.setupInteraction();
 
-		window.addEventListener("resize", this.handleResize.bind(this));
+		// Add resize event listener
+		window.addEventListener("resize", () => this.handleResize());
+
+		// Initial resize to set correct sizes
 		this.handleResize();
 
 		// Create initial instanced mesh
@@ -489,12 +501,390 @@ export class VoxelModelViewer {
 		// Update light position to follow camera
 		this.lightHolder.quaternion.copy(this.camera.quaternion);
 
+		// Check for voxel interactions if enabled
+		if (this.isInteractionEnabled && this.instancedMesh) {
+			this.checkVoxelInteraction();
+		}
+
 		// Render scene
 		this.renderer.render(this.scene, this.camera);
 
 		// Continue animation loop
 		requestAnimationFrame(this.render);
 	};
+
+	/**
+	 * Set up mouse interaction for voxels
+	 */
+	private setupInteraction(): void {
+		if (!this.canvasElement) return;
+
+		// Mouse move event for hover effects
+		this.canvasElement.addEventListener('mousemove', (event) => {
+			if (!this.canvasElement) return;
+			
+			// Calculate mouse position in normalized device coordinates (-1 to +1)
+			const rect = this.canvasElement.getBoundingClientRect();
+			this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+			this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+		});
+
+		// Mouse click event for selecting voxels
+		this.canvasElement.addEventListener('click', () => {
+			if (this.hoveredVoxelIndex !== -1) {
+				this.handleVoxelClick(this.hoveredVoxelIndex);
+			}
+		});
+	}
+
+	/**
+	 * Check for voxel interactions using raycasting
+	 */
+	private checkVoxelInteraction(): void {
+		if (!this.camera || !this.instancedMesh) return;
+
+		// Update the raycaster with the current mouse position
+		this.raycaster.setFromCamera(this.mouse, this.camera);
+
+		// Check for intersections with the instanced mesh
+		const intersects = this.raycaster.intersectObject(this.instancedMesh);
+
+		// If we found an intersection
+		if (intersects.length > 0) {
+			// The instanceId property contains the index of the intersected instance
+			const voxelIndex = intersects[0].instanceId;
+			
+			if (voxelIndex !== undefined && voxelIndex !== this.hoveredVoxelIndex) {
+				// Unhover previous voxel if there was one
+				if (this.hoveredVoxelIndex !== -1) {
+					this.handleVoxelUnhover(this.hoveredVoxelIndex);
+				}
+				
+				// Hover new voxel
+				this.hoveredVoxelIndex = voxelIndex;
+				this.handleVoxelHover(voxelIndex);
+			}
+		} else if (this.hoveredVoxelIndex !== -1) {
+			// No intersection, unhover current voxel
+			this.handleVoxelUnhover(this.hoveredVoxelIndex);
+			this.hoveredVoxelIndex = -1;
+		}
+	}
+
+	/**
+	 * Handle hover effect for a voxel - disperses nearby voxels
+	 * @param index The index of the voxel to hover
+	 */
+	private handleVoxelHover(index: number): void {
+		if (!this.instancedMesh || index < 0 || index >= this.voxels.length) return;
+
+		// Get the position of the hovered voxel
+		const hoveredPosition = this.voxels[index].position.clone();
+		
+		// Kill any existing hover tweens for all voxels
+		this.voxelHoverTweens.forEach((tween) => tween.kill());
+		this.voxelHoverTweens.clear();
+
+		// Highlight the hovered voxel
+		const originalScale = 1.0;
+		const hoverScale = 1.2;
+		const scaleObj = { scale: originalScale };
+
+		// Create a tween for the hover effect on the main voxel
+		const mainTween = gsap.to(scaleObj, {
+			scale: hoverScale,
+			duration: 0.3,
+			ease: "power2.out",
+			onUpdate: () => {
+				// Update the matrix for this voxel with the new scale
+				if (this.instancedMesh) {
+					this.dummy.position.copy(this.voxels[index].position);
+					this.dummy.scale.set(scaleObj.scale, scaleObj.scale, scaleObj.scale);
+					this.dummy.updateMatrix();
+					this.instancedMesh.setMatrixAt(index, this.dummy.matrix);
+					this.instancedMesh.instanceMatrix.needsUpdate = true;
+				}
+			}
+		});
+
+		// Store the tween for later reference
+		this.voxelHoverTweens.set(index, mainTween);
+
+		// Find nearby voxels to disperse (within a certain radius)
+		const disperseRadius = 1.5; // Adjust based on your model scale
+		const maxDispersion = 0.5; // Maximum distance to push voxels away
+
+		// Process each voxel to see if it's nearby
+		for (let i = 0; i < this.voxels.length; i++) {
+			// Skip the hovered voxel itself
+			if (i === index) continue;
+
+			const voxelPos = this.voxels[i].position;
+			const distance = voxelPos.distanceTo(hoveredPosition);
+
+			// If this voxel is within our disperse radius
+			if (distance < disperseRadius) {
+				// Calculate the direction to push the voxel (away from hovered voxel)
+				const direction = new THREE.Vector3()
+					.subVectors(voxelPos, hoveredPosition)
+					.normalize();
+
+				// Calculate dispersion amount based on distance (closer = more dispersion)
+				const dispersionFactor = 1 - (distance / disperseRadius);
+				const dispersionAmount = maxDispersion * dispersionFactor;
+
+				// Store original position
+				const originalPosition = voxelPos.clone();
+
+				// Calculate target position
+				const targetPosition = originalPosition.clone().add(
+					direction.multiplyScalar(dispersionAmount)
+				);
+
+				// Create animation for this nearby voxel
+				const nearbyTween = gsap.timeline();
+
+				// Disperse outward
+				nearbyTween.to(voxelPos, {
+					x: targetPosition.x,
+					y: targetPosition.y,
+					z: targetPosition.z,
+					duration: 0.3,
+					ease: "power2.out",
+					onUpdate: () => this.updateMatrix(i)
+				});
+
+				// Store the tween for later reference
+				this.voxelHoverTweens.set(i, nearbyTween);
+			}
+		}
+	}
+
+	/**
+	 * Handle unhover effect for a voxel - smoothly returns all dispersed voxels
+	 * @param index The index of the voxel to unhover
+	 */
+	private handleVoxelUnhover(index: number): void {
+		if (!this.instancedMesh || index < 0 || index >= this.voxels.length) return;
+
+		// Kill any existing hover tweens for all voxels
+		this.voxelHoverTweens.forEach((tween) => tween.kill());
+		
+		// Return all voxels to their original positions
+		for (let i = 0; i < this.voxels.length; i++) {
+			// Get the original position from our map, or use current position if not found
+			const originalPosition = this.voxelOriginalPositions.get(i) || this.voxels[i].position.clone();
+			const currentPosition = this.voxels[i].position.clone();
+			
+			// Only animate if the positions are different
+			if (!originalPosition.equals(currentPosition)) {
+				// Create a return animation with slight randomization for a more natural feel
+				const returnDelay = Math.random() * 0.1; // Small random delay
+				const returnDuration = 0.3 + Math.random() * 0.2; // Slightly varied duration
+				
+				const returnTween = gsap.to(this.voxels[i].position, {
+					x: originalPosition.x,
+					y: originalPosition.y,
+					z: originalPosition.z,
+					duration: returnDuration,
+					delay: returnDelay,
+					ease: "elastic.out(1, 0.7)", // Elastic effect for a bouncy return
+					onUpdate: () => this.updateMatrix(i),
+					onComplete: () => {
+						// Remove from the tweens map when complete
+						this.voxelHoverTweens.delete(i);
+					}
+				});
+				
+				// Store the tween for later reference
+				this.voxelHoverTweens.set(i, returnTween);
+			}
+		}
+		
+		// Reset scale for the hovered voxel
+		if (index !== -1) {
+			const scaleObj = { scale: 1.2 }; // Assuming this was the hover scale
+			
+			const tween = gsap.to(scaleObj, {
+				scale: 1.0,
+				duration: 0.2,
+				ease: "power2.out",
+				onUpdate: () => {
+					// Update the matrix for this voxel with the new scale
+					if (this.instancedMesh) {
+						this.dummy.position.copy(this.voxels[index].position);
+						this.dummy.scale.set(scaleObj.scale, scaleObj.scale, scaleObj.scale);
+						this.dummy.updateMatrix();
+						this.instancedMesh.setMatrixAt(index, this.dummy.matrix);
+						this.instancedMesh.instanceMatrix.needsUpdate = true;
+					}
+				}
+			});
+			
+			// Store the tween for later reference
+			this.voxelHoverTweens.set(index, tween);
+		}
+		
+		// Clear the original positions map
+		this.voxelOriginalPositions.clear();
+	}
+
+	/**
+	 * Handle click effect for a voxel - affects a group of nearby voxels
+	 * @param index The index of the voxel that was clicked
+	 */
+	private handleVoxelClick(index: number): void {
+		if (!this.instancedMesh || index < 0 || index >= this.voxels.length) return;
+
+		// Store the clicked voxel position
+		const clickedPosition = this.voxels[index].position.clone();
+		const clickedColor = this.voxels[index].color.clone();
+
+		// Find nearby voxels to include in the group effect
+		const groupRadius = 2.0; // Adjust based on your model scale
+		const affectedVoxels: number[] = [];
+
+		// Store original positions for all voxels before animation
+		for (let i = 0; i < this.voxels.length; i++) {
+			this.voxelOriginalPositions.set(i, this.voxels[i].position.clone());
+			
+			// Find voxels within the group radius
+			const distance = this.voxels[i].position.distanceTo(clickedPosition);
+			if (distance <= groupRadius) {
+				affectedVoxels.push(i);
+			}
+		}
+
+		// Kill any existing tweens
+		this.voxelHoverTweens.forEach((tween) => tween.kill());
+		this.voxelHoverTweens.clear();
+
+		// Create a master timeline for the group effect
+		const masterTimeline = gsap.timeline();
+
+		// Phase 1: Explode the group outward
+		for (const voxelIndex of affectedVoxels) {
+			const voxel = this.voxels[voxelIndex];
+			const originalPosition = this.voxelOriginalPositions.get(voxelIndex) || voxel.position.clone();
+			
+			// Calculate direction from clicked voxel
+			const direction = new THREE.Vector3()
+				.subVectors(voxel.position, clickedPosition)
+				.normalize();
+			
+			// For the central voxel, use a random direction if it's the same as clicked
+			if (direction.lengthSq() === 0) {
+				direction.set(
+					Math.random() * 2 - 1,
+					Math.random() * 2 - 1,
+					Math.random() * 2 - 1
+				).normalize();
+			}
+			
+			// Calculate explosion distance based on distance from center
+			const distanceFromCenter = voxel.position.distanceTo(clickedPosition);
+			const explosionFactor = 1 - (distanceFromCenter / groupRadius);
+			const explosionDistance = 1.0 + explosionFactor * 1.5; // More explosion for closer voxels
+			
+			// Calculate target position
+			const targetPosition = originalPosition.clone().add(
+				direction.multiplyScalar(explosionDistance)
+			);
+			
+			// Create animation with randomized timing for more organic feel
+			const startDelay = Math.random() * 0.1;
+			const explodeDuration = 0.2 + Math.random() * 0.15;
+			
+			// Brighten color for explosion phase
+			const brightnessFactor = 1.0 + explosionFactor * 0.5; // More brightness for closer voxels
+			const brightColor = voxel.color.clone().multiplyScalar(brightnessFactor);
+			
+			// Create individual timeline for this voxel
+			const voxelTimeline = gsap.timeline();
+			
+			// Brighten color
+			voxelTimeline.to(voxel.color, {
+				r: Math.min(brightColor.r, 1.0),
+				g: Math.min(brightColor.g, 1.0),
+				b: Math.min(brightColor.b, 1.0),
+				duration: explodeDuration * 0.5,
+				delay: startDelay,
+				onUpdate: () => {
+					if (this.instancedMesh) {
+						this.instancedMesh.setColorAt(voxelIndex, voxel.color);
+						if (this.instancedMesh.instanceColor) {
+							this.instancedMesh.instanceColor.needsUpdate = true;
+						}
+					}
+				}
+			});
+			
+			// Explode outward
+			voxelTimeline.to(voxel.position, {
+				x: targetPosition.x,
+				y: targetPosition.y,
+				z: targetPosition.z,
+				duration: explodeDuration,
+				ease: "power2.out",
+				onUpdate: () => this.updateMatrix(voxelIndex)
+			}, "<");
+			
+			// Add this voxel's timeline to the master timeline
+			masterTimeline.add(voxelTimeline, 0);
+		}
+
+		// Phase 2: Return to original positions with elastic effect
+		masterTimeline.add(() => {
+			// Create return animations for all affected voxels
+			for (const voxelIndex of affectedVoxels) {
+				const voxel = this.voxels[voxelIndex];
+				const originalPosition = this.voxelOriginalPositions.get(voxelIndex) || voxel.position.clone();
+				const originalColor = this.voxelOriginalPositions.has(voxelIndex) ? 
+					(voxelIndex === index ? clickedColor : voxel.color.clone().multiplyScalar(0.8)) : 
+					voxel.color.clone();
+				
+				// Randomize return timing
+				const returnDelay = 0.1 + Math.random() * 0.2;
+				const returnDuration = 0.5 + Math.random() * 0.3;
+				
+				// Create return timeline
+				const returnTimeline = gsap.timeline();
+				
+				// Return to original position with elastic effect
+				returnTimeline.to(voxel.position, {
+					x: originalPosition.x,
+					y: originalPosition.y,
+					z: originalPosition.z,
+					duration: returnDuration,
+					delay: returnDelay,
+					ease: "elastic.out(1, 0.5)",
+					onUpdate: () => this.updateMatrix(voxelIndex)
+				});
+				
+				// Return to original color
+				returnTimeline.to(voxel.color, {
+					r: originalColor.r,
+					g: originalColor.g,
+					b: originalColor.b,
+					duration: returnDuration * 0.7,
+					onUpdate: () => {
+						if (this.instancedMesh) {
+							this.instancedMesh.setColorAt(voxelIndex, voxel.color);
+							if (this.instancedMesh.instanceColor) {
+								this.instancedMesh.instanceColor.needsUpdate = true;
+							}
+						}
+					}
+				}, "<0.1");
+				
+				// Add to master timeline
+				masterTimeline.add(returnTimeline, ">0.2");
+			}
+		}, ">0.3");
+
+		// Show a notification
+		this.showEffectNotification(`Group effect triggered!`);
+	}
 
 	private handleResize(): void {
 		if (!this.renderer || !this.camera) return;
