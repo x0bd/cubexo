@@ -6,6 +6,7 @@ import type { Voxel, AppParameters } from "../types/types";
 import { ModelExporter, ExportFormat } from "../utils/ModelExporter";
 
 export class VoxelModelViewer {
+	private matrixUpdateTween: gsap.core.Tween | null = null;
 	private renderer: THREE.WebGLRenderer | null = null;
 	private scene: THREE.Scene | null = null;
 	private camera: THREE.PerspectiveCamera | null = null;
@@ -699,69 +700,84 @@ export class VoxelModelViewer {
 	 */
 	public applyShakeEffect(): void {
 		if (!this.instancedMesh) return;
+		const currentMesh = this.instancedMesh; // Assign to a local const
 
-		// Kill any existing shake animations
-		gsap.killTweensOf(this.instancedMesh.position);
-		gsap.killTweensOf(this.instancedMesh.rotation);
+		// Kill any existing animations on scale
+		gsap.killTweensOf(currentMesh.scale);
 
-		// Store original position and rotation
-		const originalPosition = this.instancedMesh.position.clone();
-		const originalRotation = this.instancedMesh.rotation.clone();
+		// Store original rotation and scale
+		const originalRotation = currentMesh.rotation.clone();
+		const originalScale = currentMesh.scale.clone();
 
 		// Create a timeline for the shake effect
 		const timeline = gsap.timeline({
 			onComplete: () => {
-				// Reset to original position and rotation when complete
-				gsap.to(this.instancedMesh.position, {
-					duration: 0.3,
-					x: originalPosition.x,
-					y: originalPosition.y,
-					z: originalPosition.z,
-					ease: "power2.out"
-				});
-				gsap.to(this.instancedMesh.rotation, {
-					duration: 0.3,
-					x: originalRotation.x,
-					y: originalRotation.y,
-					z: originalRotation.z,
-					ease: "power2.out"
-				});
+				// Re-check this.instancedMesh as it's an async callback and its state might have changed
+				const meshInCallback = this.instancedMesh; // Assign to a new local constant
+				if (meshInCallback) { // Check the new local constant
+					// Reset to original rotation and scale
+					gsap.to(meshInCallback.rotation, { // Use meshInCallback
+						duration: 0.4,
+						x: originalRotation.x,
+						y: originalRotation.y,
+						z: originalRotation.z,
+						ease: "elastic.out(1, 0.75)"
+					});
+					gsap.to(meshInCallback.scale, { // Use meshInCallback
+						duration: 0.4,
+						x: originalScale.x,
+						y: originalScale.y,
+						z: originalScale.z,
+						ease: "elastic.out(1, 0.75)"
+					});
+				}
 			}
 		});
 
-		// Add shake keyframes to the timeline
-		const intensity = 0.05;
-		const rotationIntensity = 0.08;
-		const shakeDuration = 0.05;
-		const totalDuration = 0.6;
-		const steps = 10;
+		// Define shake parameters
+		const shakeIntensityPosition = 0.05; // Reduced from 0.1
+		const shakeIntensityRotation = 0.03; // Reduced from 0.05
+		const shakeDuration = 0.07; // Reduced from 0.1
+		const numShakes = 4; // Reduced from 5
+		const totalDuration = numShakes * shakeDuration;
 
-		for (let i = 0; i < steps; i++) {
-			const progress = i / steps;
-			const decreaseFactor = 1 - progress; // Decrease intensity over time
-			const posX = originalPosition.x + (Math.random() * 2 - 1) * intensity * decreaseFactor;
-			const posY = originalPosition.y + (Math.random() * 2 - 1) * intensity * decreaseFactor;
-			const posZ = originalPosition.z + (Math.random() * 2 - 1) * intensity * decreaseFactor;
-			const rotX = originalRotation.x + (Math.random() * 2 - 1) * rotationIntensity * decreaseFactor;
-			const rotY = originalRotation.y + (Math.random() * 2 - 1) * rotationIntensity * decreaseFactor;
-			const rotZ = originalRotation.z + (Math.random() * 2 - 1) * rotationIntensity * decreaseFactor;
+		// Add shakes to the timeline
+		for (let i = 0; i < numShakes; i++) {
+			const progress = (i + 1) / numShakes;
+			const currentIntensityPos = shakeIntensityPosition * (1 - progress * 0.5); // Intensity decreases slightly
+			const currentIntensityRot = shakeIntensityRotation * (1 - progress * 0.5);
 
-			timeline.to(this.instancedMesh.position, {
+			// Shake position
+			timeline.to(currentMesh.position, { // Use currentMesh
+				x: `+=${(Math.random() - 0.5) * 2 * currentIntensityPos}`,
+				y: `+=${(Math.random() - 0.5) * 2 * currentIntensityPos}`,
+				z: `+=${(Math.random() - 0.5) * 2 * currentIntensityPos}`,
 				duration: shakeDuration,
-				x: posX,
-				y: posY,
-				z: posZ,
-				ease: "none"
-			}, progress * totalDuration);
+				ease: "power1.inOut"
+			}, i * shakeDuration);
 
-			timeline.to(this.instancedMesh.rotation, {
+			// Shake rotation
+			timeline.to(currentMesh.rotation, { // Use currentMesh
+				x: `+=${(Math.random() - 0.5) * 2 * currentIntensityRot}`,
+				y: `+=${(Math.random() - 0.5) * 2 * currentIntensityRot}`,
+				z: `+=${(Math.random() - 0.5) * 2 * currentIntensityRot}`,
 				duration: shakeDuration,
-				x: rotX,
-				y: rotY,
-				z: rotZ,
-				ease: "none"
-			}, progress * totalDuration);
+				ease: "power1.inOut"
+			}, i * shakeDuration);
 		}
+
+		// Return to original position smoothly after shakes
+			timeline.to(currentMesh.position, { // Use currentMesh
+				x: 0, // Assuming original position is 0,0,0 relative to its parent
+				y: 0,
+				z: 0,
+				duration: 0.3,
+				ease: "power2.out"
+			}, totalDuration);
+
+
+		// Ensure the model is exactly at original rotation/scale at the very end via onComplete
+		// The onComplete callback already handles this.
 
 		// Show a notification that the effect was applied
 		this.showEffectNotification("Shake effect applied");
@@ -774,54 +790,107 @@ export class VoxelModelViewer {
 	public applyExplodeEffect(): void {
 		if (!this.instancedMesh) return;
 
-		// Kill any existing animations
-		gsap.killTweensOf(this.instancedMesh.scale);
+		// Kill any ongoing global matrix update tween from a previous effect
+		if (this.matrixUpdateTween) {
+			this.matrixUpdateTween.kill();
+			this.matrixUpdateTween = null;
+		}
 
-		// Store original scale
-		const originalScale = this.instancedMesh.scale.clone();
-
-		// Create a timeline for the explode effect
-		const timeline = gsap.timeline({
-			onComplete: () => {
-				// Reset to original scale when complete
-				gsap.to(this.instancedMesh.scale, {
-					duration: 0.5,
-					x: originalScale.x,
-					y: originalScale.y,
-					z: originalScale.z,
-					ease: "elastic.out(1, 0.5)"
-				});
+		// Kill existing tweens for all voxel positions to prevent conflicts
+		for (let i = 0; i < this.instancedMesh.count; i++) {
+			if (this.voxels[i]) {
+				gsap.killTweensOf(this.voxels[i].position);
 			}
-		});
+		}
 
-		// Explode outward
-		timeline.to(this.instancedMesh.scale, {
-			duration: 0.3,
-			x: originalScale.x * 1.5,
-			y: originalScale.y * 1.5,
-			z: originalScale.z * 1.5,
-			ease: "power2.out"
-		});
+		let maxIndividualAnimationDuration = 0;
 
-		// Hold briefly at maximum size
-		timeline.to(this.instancedMesh.scale, {
-			duration: 0.1,
-			x: originalScale.x * 1.5,
-			y: originalScale.y * 1.5,
-			z: originalScale.z * 1.5,
-			ease: "none"
-		});
+		for (let i = 0; i < this.instancedMesh.count; i++) {
+			const voxelInfo = this.voxels[i];
+			if (!voxelInfo) continue;
+
+			const originalPosition = voxelInfo.position.clone();
+
+			// Calculate exploded position
+			let direction = originalPosition.clone();
+			if (direction.lengthSq() === 0) { // If original position is at origin
+				direction.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
+			}
+			direction.normalize();
+
+			const explosionDistance = 3 + Math.random() * 4; // Explode out by 3 to 7 units
+			const explodedPosition = originalPosition.clone().add(direction.multiplyScalar(explosionDistance));
+
+			const explodeDuration = 0.3 + Math.random() * 0.2;
+			const returnDelay = 0.1;
+			const returnDuration = 0.5 + Math.random() * 0.3;
+			const startDelay = Math.random() * 0.15;
+
+			const individualDuration = startDelay + explodeDuration + returnDelay + returnDuration;
+			if (individualDuration > maxIndividualAnimationDuration) {
+				maxIndividualAnimationDuration = individualDuration;
+			}
+
+			const tl = gsap.timeline({
+				onUpdate: () => {
+					this.updateMatrix(i);
+				}
+			});
+
+			tl.to(voxelInfo.position, {
+				x: explodedPosition.x,
+				y: explodedPosition.y,
+				z: explodedPosition.z,
+				duration: explodeDuration,
+				ease: "power2.out",
+				delay: startDelay
+			})
+			.to(voxelInfo.position, { // Return to original
+				x: originalPosition.x,
+				y: originalPosition.y,
+				z: originalPosition.z,
+				duration: returnDuration,
+				ease: "elastic.out(1, 0.7)",
+				delay: returnDelay
+			});
+		}
+
+		// Ensure instanceMatrix.needsUpdate is set throughout the animations
+		if (maxIndividualAnimationDuration > 0 && this.instancedMesh) {
+			this.matrixUpdateTween = gsap.to({}, {
+				duration: maxIndividualAnimationDuration,
+				onUpdate: () => {
+					if (this.instancedMesh) {
+						this.instancedMesh.instanceMatrix.needsUpdate = true;
+					}
+				},
+				onComplete: () => {
+					// Final update to ensure all matrices are correct
+					if (this.instancedMesh) {
+						for (let k = 0; k < this.instancedMesh.count; k++) {
+							if (this.voxels[k]) {
+								this.updateMatrix(k);
+							}
+						}
+						this.instancedMesh.instanceMatrix.needsUpdate = true;
+					}
+					this.matrixUpdateTween = null; // Clear the reference
+				}
+			});
+		}
 
 		// Show a notification that the effect was applied
 		this.showEffectNotification("Explode effect applied");
 	}
 
-	// Show notification for effects with Tailwind classes
+	/**
+	 * Show notification for effects with Tailwind classes (indigo theme)
+	 */
 	private showEffectNotification(message: string): void {
 		// Create notification element with Tailwind classes
 		const notification = document.createElement("div");
 		notification.className =
-			"fixed bottom-8 right-8 bg-indigo-900/90 border border-indigo-800/80 rounded-lg py-3 px-4 flex items-center gap-3 shadow-md z-50 animate-fade-in export-notification";
+			"fixed bottom-8 right-8 bg-indigo-900/90 border border-indigo-800/80 rounded-lg py-3 px-4 flex items-center gap-3 shadow-md z-50 animate-fade-in export-notification"; // Note: class 'export-notification' might be generic, consider 'effect-notification'
 
 		// Effect icon
 		const icon = document.createElement("div");
@@ -834,8 +903,7 @@ export class VoxelModelViewer {
 				<path d="M17 19h4"/>
 			</svg>
 		`;
-		// Safely append the icon to the notification
-		if (icon && notification) {
+		if (notification) { // Check notification, not icon, for appending
 			notification.appendChild(icon);
 		}
 
@@ -843,29 +911,25 @@ export class VoxelModelViewer {
 		const text = document.createElement("span");
 		text.className = "text-sm font-medium text-indigo-100";
 		text.textContent = message;
-		// Safely append the text to the notification
-		if (text && notification) {
+		if (notification) { // Check notification for appending
 			notification.appendChild(text);
 		}
 
-		// Safely append the notification to the document body
-		if (notification && document.body) {
+		if (document.body) { // Check document.body for appending
 			document.body.appendChild(notification);
 		}
 
 		// Add fade-out animation
-		if (notification) {
-			setTimeout(() => {
-				if (notification) {
-					notification.classList.add("animate-fade-out");
-					setTimeout(() => {
-						if (notification && notification.parentNode) {
-							notification.parentNode.removeChild(notification);
-						}
-					}, 300);
-				}
-			}, 2000);
-		}
+		setTimeout(() => {
+			if (notification) {
+				notification.classList.add("animate-fade-out");
+				setTimeout(() => {
+					if (notification.parentNode) {
+						notification.parentNode.removeChild(notification);
+					}
+				}, 300); // Duration of fade-out animation
+			}
+		}, 2000); // Display duration before fading out
 	}
 
 	/**
