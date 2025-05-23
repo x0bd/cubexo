@@ -700,86 +700,107 @@ export class VoxelModelViewer {
 	 */
 	public applyShakeEffect(): void {
 		if (!this.instancedMesh) return;
-		const currentMesh = this.instancedMesh; // Assign to a local const
 
-		// Kill any existing animations on scale
-		gsap.killTweensOf(currentMesh.scale);
-
-		// Store original rotation and scale
-		const originalRotation = currentMesh.rotation.clone();
-		const originalScale = currentMesh.scale.clone();
-
-		// Create a timeline for the shake effect
-		const timeline = gsap.timeline({
-			onComplete: () => {
-				// Re-check this.instancedMesh as it's an async callback and its state might have changed
-				const meshInCallback = this.instancedMesh; // Assign to a new local constant
-				if (meshInCallback) { // Check the new local constant
-					// Reset to original rotation and scale
-					gsap.to(meshInCallback.rotation, { // Use meshInCallback
-						duration: 0.4,
-						x: originalRotation.x,
-						y: originalRotation.y,
-						z: originalRotation.z,
-						ease: "elastic.out(1, 0.75)"
-					});
-					gsap.to(meshInCallback.scale, { // Use meshInCallback
-						duration: 0.4,
-						x: originalScale.x,
-						y: originalScale.y,
-						z: originalScale.z,
-						ease: "elastic.out(1, 0.75)"
-					});
-				}
-			}
-		});
-
-		// Define shake parameters
-		const shakeIntensityPosition = 0.05; // Reduced from 0.1
-		const shakeIntensityRotation = 0.03; // Reduced from 0.05
-		const shakeDuration = 0.07; // Reduced from 0.1
-		const numShakes = 4; // Reduced from 5
-		const totalDuration = numShakes * shakeDuration;
-
-		// Add shakes to the timeline
-		for (let i = 0; i < numShakes; i++) {
-			const progress = (i + 1) / numShakes;
-			const currentIntensityPos = shakeIntensityPosition * (1 - progress * 0.5); // Intensity decreases slightly
-			const currentIntensityRot = shakeIntensityRotation * (1 - progress * 0.5);
-
-			// Shake position
-			timeline.to(currentMesh.position, { // Use currentMesh
-				x: `+=${(Math.random() - 0.5) * 2 * currentIntensityPos}`,
-				y: `+=${(Math.random() - 0.5) * 2 * currentIntensityPos}`,
-				z: `+=${(Math.random() - 0.5) * 2 * currentIntensityPos}`,
-				duration: shakeDuration,
-				ease: "power1.inOut"
-			}, i * shakeDuration);
-
-			// Shake rotation
-			timeline.to(currentMesh.rotation, { // Use currentMesh
-				x: `+=${(Math.random() - 0.5) * 2 * currentIntensityRot}`,
-				y: `+=${(Math.random() - 0.5) * 2 * currentIntensityRot}`,
-				z: `+=${(Math.random() - 0.5) * 2 * currentIntensityRot}`,
-				duration: shakeDuration,
-				ease: "power1.inOut"
-			}, i * shakeDuration);
+		// Kill any ongoing global matrix update tween from a previous effect
+		if (this.matrixUpdateTween) {
+			this.matrixUpdateTween.kill();
+			this.matrixUpdateTween = null;
 		}
 
-		// Return to original position smoothly after shakes
-			timeline.to(currentMesh.position, { // Use currentMesh
-				x: 0, // Assuming original position is 0,0,0 relative to its parent
-				y: 0,
-				z: 0,
-				duration: 0.3,
-				ease: "power2.out"
-			}, totalDuration);
+		// Kill existing tweens for all voxel positions to prevent conflicts
+		for (let i = 0; i < this.instancedMesh.count; i++) {
+			if (this.voxels[i]) {
+				gsap.killTweensOf(this.voxels[i].position);
+			}
+		}
 
+		let maxIndividualAnimationDuration = 0;
 
-		// Ensure the model is exactly at original rotation/scale at the very end via onComplete
-		// The onComplete callback already handles this.
+		const shakeIntensity = 0.15; // Max displacement for a single shake component (e.g., 0.15 units)
+		const numShakeCycles = 3;    // Number of back-and-forth shake cycles
+		const shakeCycleDuration = 0.06; // Duration of one full shake cycle (e.g., to target and back slightly)
+		const returnToOriginDuration = 0.4; // Duration to return to original position
+		const maxStartDelay = 0.1; // Max random start delay for each voxel, creates a wave effect
 
-		// Show a notification that the effect was applied
+		for (let i = 0; i < this.instancedMesh.count; i++) {
+			const voxelInfo = this.voxels[i];
+			if (!voxelInfo) continue;
+
+			const originalPosition = voxelInfo.position.clone();
+			const startDelay = Math.random() * maxStartDelay;
+
+			let currentVoxelAnimationDuration = startDelay;
+
+			const tl = gsap.timeline({
+				onUpdate: () => {
+					this.updateMatrix(i);
+				},
+				delay: startDelay
+			});
+
+			// Add shake cycles
+			for (let j = 0; j < numShakeCycles; j++) {
+				const shakeX = (Math.random() - 0.5) * 2 * shakeIntensity;
+				const shakeY = (Math.random() - 0.5) * 2 * shakeIntensity;
+				const shakeZ = (Math.random() - 0.5) * 2 * shakeIntensity;
+
+				// Shake to a random offset
+				tl.to(voxelInfo.position, {
+					x: originalPosition.x + shakeX,
+					y: originalPosition.y + shakeY,
+					z: originalPosition.z + shakeZ,
+					duration: shakeCycleDuration / 2,
+					ease: "power1.inOut"
+				});
+				// Return partially towards original or another random offset to create a jitter
+				tl.to(voxelInfo.position, {
+					x: originalPosition.x + shakeX * 0.25 * (Math.random() - 0.5),
+					y: originalPosition.y + shakeY * 0.25 * (Math.random() - 0.5),
+					z: originalPosition.z + shakeZ * 0.25 * (Math.random() - 0.5),
+					duration: shakeCycleDuration / 2,
+					ease: "power1.inOut"
+				});
+				currentVoxelAnimationDuration += shakeCycleDuration;
+			}
+
+			// Final return to original position
+			tl.to(voxelInfo.position, {
+				x: originalPosition.x,
+				y: originalPosition.y,
+				z: originalPosition.z,
+				duration: returnToOriginDuration,
+				ease: "elastic.out(1, 0.65)" // Slightly less aggressive elastic return
+			});
+			currentVoxelAnimationDuration += returnToOriginDuration;
+
+			if (currentVoxelAnimationDuration > maxIndividualAnimationDuration) {
+				maxIndividualAnimationDuration = currentVoxelAnimationDuration;
+			}
+		}
+
+		// Ensure instanceMatrix.needsUpdate is set throughout the animations
+		if (maxIndividualAnimationDuration > 0 && this.instancedMesh) {
+			this.matrixUpdateTween = gsap.to({}, {
+				duration: maxIndividualAnimationDuration,
+				onUpdate: () => {
+					if (this.instancedMesh) {
+						this.instancedMesh.instanceMatrix.needsUpdate = true;
+					}
+				},
+				onComplete: () => {
+					if (this.instancedMesh) {
+						for (let k = 0; k < this.instancedMesh.count; k++) {
+							if (this.voxels[k]) {
+								this.updateMatrix(k); // Ensure final positions are set
+							}
+						}
+						this.instancedMesh.instanceMatrix.needsUpdate = true;
+					}
+					this.matrixUpdateTween = null; // Clear the reference
+				}
+			});
+		}
+
 		this.showEffectNotification("Shake effect applied");
 	}
 
