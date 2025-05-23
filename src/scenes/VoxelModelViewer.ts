@@ -767,6 +767,55 @@ export class VoxelModelViewer {
 		this.showEffectNotification("Shake effect applied");
 	}
 
+	/**
+	 * Apply an explode effect to the model
+	 * Temporarily explodes the model outward and then brings it back together
+	 */
+	public applyExplodeEffect(): void {
+		if (!this.instancedMesh) return;
+
+		// Kill any existing animations
+		gsap.killTweensOf(this.instancedMesh.scale);
+
+		// Store original scale
+		const originalScale = this.instancedMesh.scale.clone();
+
+		// Create a timeline for the explode effect
+		const timeline = gsap.timeline({
+			onComplete: () => {
+				// Reset to original scale when complete
+				gsap.to(this.instancedMesh.scale, {
+					duration: 0.5,
+					x: originalScale.x,
+					y: originalScale.y,
+					z: originalScale.z,
+					ease: "elastic.out(1, 0.5)"
+				});
+			}
+		});
+
+		// Explode outward
+		timeline.to(this.instancedMesh.scale, {
+			duration: 0.3,
+			x: originalScale.x * 1.5,
+			y: originalScale.y * 1.5,
+			z: originalScale.z * 1.5,
+			ease: "power2.out"
+		});
+
+		// Hold briefly at maximum size
+		timeline.to(this.instancedMesh.scale, {
+			duration: 0.1,
+			x: originalScale.x * 1.5,
+			y: originalScale.y * 1.5,
+			z: originalScale.z * 1.5,
+			ease: "none"
+		});
+
+		// Show a notification that the effect was applied
+		this.showEffectNotification("Explode effect applied");
+	}
+
 	// Show notification for effects with Tailwind classes
 	private showEffectNotification(message: string): void {
 		// Create notification element with Tailwind classes
