@@ -585,6 +585,13 @@ export class VoxelModelViewer {
 		this.voxelHoverTweens.forEach((tween) => tween.kill());
 		this.voxelHoverTweens.clear();
 
+		// Store original positions for all voxels if not already stored
+		if (this.voxelOriginalPositions.size === 0) {
+			for (let i = 0; i < this.voxels.length; i++) {
+				this.voxelOriginalPositions.set(i, this.voxels[i].position.clone());
+			}
+		}
+
 		// Highlight the hovered voxel
 		const originalScale = 1.0;
 		const hoverScale = 1.2;
@@ -633,8 +640,8 @@ export class VoxelModelViewer {
 				const dispersionFactor = 1 - (distance / disperseRadius);
 				const dispersionAmount = maxDispersion * dispersionFactor;
 
-				// Store original position
-				const originalPosition = voxelPos.clone();
+				// Get original position from our stored map
+				const originalPosition = this.voxelOriginalPositions.get(i) || voxelPos.clone();
 
 				// Calculate target position
 				const targetPosition = originalPosition.clone().add(
@@ -669,35 +676,49 @@ export class VoxelModelViewer {
 
 		// Kill any existing hover tweens for all voxels
 		this.voxelHoverTweens.forEach((tween) => tween.kill());
+		this.voxelHoverTweens.clear();
+		
+		// Create a master timeline to ensure all animations complete
+		const masterTimeline = gsap.timeline({
+			onComplete: () => {
+				// Final check to ensure all voxels are in their original positions
+				this.forceResetAllVoxelPositions();
+			}
+		});
 		
 		// Return all voxels to their original positions
 		for (let i = 0; i < this.voxels.length; i++) {
 			// Get the original position from our map, or use current position if not found
-			const originalPosition = this.voxelOriginalPositions.get(i) || this.voxels[i].position.clone();
-			const currentPosition = this.voxels[i].position.clone();
+			const originalPosition = this.voxelOriginalPositions.get(i);
 			
-			// Only animate if the positions are different
-			if (!originalPosition.equals(currentPosition)) {
+			// Skip if we don't have an original position stored
+			if (!originalPosition) continue;
+			
+			const currentPosition = this.voxels[i].position;
+			
+			// Only animate if the positions are different (using a small threshold for floating point comparison)
+			const positionDifference = originalPosition.distanceTo(currentPosition);
+			if (positionDifference > 0.001) {
 				// Create a return animation with slight randomization for a more natural feel
-				const returnDelay = Math.random() * 0.1; // Small random delay
-				const returnDuration = 0.3 + Math.random() * 0.2; // Slightly varied duration
+				const returnDelay = Math.random() * 0.05; // Small random delay
+				const returnDuration = 0.3 + Math.random() * 0.1; // Slightly varied duration
 				
-				const returnTween = gsap.to(this.voxels[i].position, {
+				// Create individual timeline for this voxel
+				const voxelTimeline = gsap.timeline();
+				
+				// Return to original position with elastic effect
+				voxelTimeline.to(currentPosition, {
 					x: originalPosition.x,
 					y: originalPosition.y,
 					z: originalPosition.z,
 					duration: returnDuration,
 					delay: returnDelay,
 					ease: "elastic.out(1, 0.7)", // Elastic effect for a bouncy return
-					onUpdate: () => this.updateMatrix(i),
-					onComplete: () => {
-						// Remove from the tweens map when complete
-						this.voxelHoverTweens.delete(i);
-					}
+					onUpdate: () => this.updateMatrix(i)
 				});
 				
-				// Store the tween for later reference
-				this.voxelHoverTweens.set(i, returnTween);
+				// Add this voxel's timeline to the master timeline
+				masterTimeline.add(voxelTimeline, 0);
 			}
 		}
 		
@@ -705,7 +726,8 @@ export class VoxelModelViewer {
 		if (index !== -1) {
 			const scaleObj = { scale: 1.2 }; // Assuming this was the hover scale
 			
-			const tween = gsap.to(scaleObj, {
+			const scaleTween = gsap.timeline();
+			scaleTween.to(scaleObj, {
 				scale: 1.0,
 				duration: 0.2,
 				ease: "power2.out",
@@ -721,8 +743,39 @@ export class VoxelModelViewer {
 				}
 			});
 			
-			// Store the tween for later reference
-			this.voxelHoverTweens.set(index, tween);
+			// Add to master timeline
+			masterTimeline.add(scaleTween, 0);
+		}
+	}
+	
+	/**
+	 * Force reset all voxels to their original positions
+	 * This is a failsafe to ensure voxels always return to their original state
+	 */
+	private forceResetAllVoxelPositions(): void {
+		if (!this.instancedMesh) return;
+		
+		// Reset all voxels to their original positions
+		for (let i = 0; i < this.voxels.length; i++) {
+			const originalPosition = this.voxelOriginalPositions.get(i);
+			if (originalPosition) {
+				// Set position directly without animation
+				this.voxels[i].position.copy(originalPosition);
+				this.updateMatrix(i);
+			}
+		}
+		
+		// Reset scale for all voxels
+		for (let i = 0; i < this.voxels.length; i++) {
+			this.dummy.position.copy(this.voxels[i].position);
+			this.dummy.scale.set(1, 1, 1); // Reset to default scale
+			this.dummy.updateMatrix();
+			this.instancedMesh.setMatrixAt(i, this.dummy.matrix);
+		}
+		
+		// Update the instance matrix
+		if (this.instancedMesh) {
+			this.instancedMesh.instanceMatrix.needsUpdate = true;
 		}
 		
 		// Clear the original positions map
@@ -744,6 +797,9 @@ export class VoxelModelViewer {
 		const groupRadius = 2.0; // Adjust based on your model scale
 		const affectedVoxels: number[] = [];
 
+		// Clear any previous original positions
+		this.voxelOriginalPositions.clear();
+		
 		// Store original positions for all voxels before animation
 		for (let i = 0; i < this.voxels.length; i++) {
 			this.voxelOriginalPositions.set(i, this.voxels[i].position.clone());
@@ -760,7 +816,12 @@ export class VoxelModelViewer {
 		this.voxelHoverTweens.clear();
 
 		// Create a master timeline for the group effect
-		const masterTimeline = gsap.timeline();
+		const masterTimeline = gsap.timeline({
+			onComplete: () => {
+				// Final check to ensure all voxels are in their original positions
+				this.forceResetAllVoxelPositions();
+			}
+		});
 
 		// Phase 1: Explode the group outward
 		for (const voxelIndex of affectedVoxels) {
@@ -881,6 +942,13 @@ export class VoxelModelViewer {
 				masterTimeline.add(returnTimeline, ">0.2");
 			}
 		}, ">0.3");
+
+		// Add a safety timeout to force reset positions after a certain time
+		// This ensures voxels return to original positions even if animations are interrupted
+		const maxAnimationTime = 2000; // 2 seconds should be enough for all animations to complete
+		setTimeout(() => {
+			this.forceResetAllVoxelPositions();
+		}, maxAnimationTime);
 
 		// Show a notification
 		this.showEffectNotification(`Group effect triggered!`);
