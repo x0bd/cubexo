@@ -45,8 +45,6 @@ export class App {
 
 		// Setup theme toggle and utility buttons
 		this.setupThemeToggle();
-		this.setupScreenshotButton();
-		this.setupDownloadButton();
 		this.setupUploadButton();
 		
 		// Setup effect buttons
@@ -503,31 +501,7 @@ export class App {
 		}
 	}
 
-	/**
-	 * Setup screenshot button
-	 */
-	private setupScreenshotButton(): void {
-		const screenshotBtn = document.getElementById("screenshot-btn");
-		if (!screenshotBtn) return;
 
-		screenshotBtn.addEventListener("click", () => {
-			console.log("Taking screenshot");
-			this.exportAsPng();
-		});
-	}
-
-	/**
-	 * Setup download button
-	 */
-	private setupDownloadButton(): void {
-		const downloadBtn = document.getElementById("download-btn");
-		if (!downloadBtn) return;
-
-		downloadBtn.addEventListener("click", () => {
-			console.log("Downloading model");
-			this.exportCurrentModel();
-		});
-	}
 
 	/**
 	 * Setup upload button in the dock
