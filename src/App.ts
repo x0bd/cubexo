@@ -40,10 +40,8 @@ export class App {
 		this.modelSelector = new ModelSelector();
 		this.modelUploader = new ModelUploader();
 
-		// Setup export buttons
-		this.setupExportButton();
-		this.setupPngExportButton();
-		this.setupModelUploader();
+		// Setup export panel buttons
+		this.setupExportPanelButtons();
 
 		// Setup theme toggle and utility buttons
 		this.setupThemeToggle();
@@ -179,30 +177,68 @@ export class App {
 	}
 
 	/**
-	 * Setup the export button functionality
+	 * Setup the export panel buttons functionality
 	 */
-	private setupExportButton(): void {
-		const exportButton = document.getElementById("export-model");
-		if (!exportButton) return;
+	private setupExportPanelButtons(): void {
+		// Picture export button
+		const pictureButton = document.getElementById("export-picture");
+		if (pictureButton) {
+			pictureButton.addEventListener("click", () => {
+				console.log("Exporting high-resolution PNG image");
+				this.exportAsPng();
+				this.showNotification("Image exported");
+			});
+		}
 
-		// Simple OBJ export
-		exportButton.addEventListener("click", () => {
-			console.log("Exporting model as OBJ");
-			this.exportCurrentModel();
-		});
-	}
+		// Model export button
+		const modelButton = document.getElementById("export-model");
+		if (modelButton) {
+			modelButton.addEventListener("click", () => {
+				console.log("Exporting model as GLB");
+				this.exportCurrentModel();
+				this.showNotification("Model exported as GLB");
+			});
+		}
 
-	/**
-	 * Setup the PNG export button functionality
-	 */
-	private setupPngExportButton(): void {
-		const pngExportButton = document.getElementById("export-png");
-		if (!pngExportButton) return;
+		// GIF export button
+		const gifButton = document.getElementById("export-gif");
+		if (gifButton) {
+			gifButton.addEventListener("click", () => {
+				console.log("Exporting as GIF animation");
+				// TODO: Implement GIF export functionality
+				this.showNotification("GIF export coming soon");
+			});
+		}
 
-		pngExportButton.addEventListener("click", () => {
-			console.log("Exporting high-resolution PNG image");
-			this.exportAsPng();
-		});
+		// Audio reactive button
+		const audioReactiveButton = document.getElementById("export-audio-reactive");
+		if (audioReactiveButton) {
+			audioReactiveButton.addEventListener("click", () => {
+				console.log("Audio reactive mode");
+				// TODO: Implement audio reactive functionality
+				this.showNotification("Audio reactive mode coming soon");
+			});
+		}
+
+		// Download button
+		const downloadButton = document.getElementById("export-download");
+		if (downloadButton) {
+			downloadButton.addEventListener("click", () => {
+				console.log("Download current export");
+				this.exportCurrentModel();
+				this.showNotification("Model downloaded");
+			});
+		}
+
+		// Share button
+		const shareButton = document.getElementById("export-share");
+		if (shareButton) {
+			shareButton.addEventListener("click", () => {
+				console.log("Share current model");
+				// TODO: Implement sharing functionality
+				this.showNotification("Sharing coming soon");
+			});
+		}
 	}
 
 	/**
