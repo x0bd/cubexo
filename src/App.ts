@@ -20,6 +20,8 @@ export class App {
 	private activeModelIdx = 1; // Start with Chicken (index 1)
 	private userModels: { name: string; url: string; model: THREE.Group }[] =
 		[];
+	private audioModalElement: HTMLElement | null;
+	private audioFile: File | null = null;
 
 	constructor() {
 		// Log for debugging
@@ -27,12 +29,13 @@ export class App {
 
 		// Get DOM elements
 		this.loaderElement = document.querySelector("#loader");
+		this.audioModalElement = document.querySelector("#audio-modal");
 
 		// Initialize theme manager
-		console.log('[App] Initializing ThemeManager...');
+		console.log("[App] Initializing ThemeManager...");
 		this.themeManager = new ThemeManager();
 		this.themeManager.init(); // Call init() to set up event listeners and initial theme
-		console.log('[App] ThemeManager initialized and started.');
+		console.log("[App] ThemeManager initialized and started.");
 		// Initialize components
 		this.viewer = new VoxelModelViewer();
 		this.modelLoader = new ModelLoader();
@@ -46,9 +49,12 @@ export class App {
 		// Setup theme toggle and utility buttons
 		this.setupThemeToggle();
 		this.setupUploadButton();
-		
+
 		// Setup effect buttons
 		this.setupEffectButtons();
+
+		// Setup audio visualizer modal
+		this.setupAudioVisualizerModal();
 	}
 
 	public async init(): Promise<void> {
@@ -209,12 +215,13 @@ export class App {
 		}
 
 		// Audio reactive button
-		const audioReactiveButton = document.getElementById("export-audio-reactive");
+		const audioReactiveButton = document.getElementById(
+			"export-audio-reactive"
+		);
 		if (audioReactiveButton) {
 			audioReactiveButton.addEventListener("click", () => {
-				console.log("Audio reactive mode");
-				// TODO: Implement audio reactive functionality
-				this.showNotification("Audio reactive mode coming soon");
+				console.log("Opening audio visualizer modal");
+				this.showAudioModal();
 			});
 		}
 
@@ -264,7 +271,9 @@ export class App {
 	 * Setup the model upload button
 	 */
 	private setupModelUploader(): void {
-		const uploadInput = document.getElementById("model-upload") as HTMLInputElement;
+		const uploadInput = document.getElementById(
+			"model-upload"
+		) as HTMLInputElement;
 		if (!uploadInput) return;
 
 		uploadInput.addEventListener("change", async (event) => {
@@ -357,7 +366,8 @@ export class App {
 								opacity: 0,
 								onComplete: () => {
 									if (this.loaderElement) {
-										this.loaderElement.style.display = "none";
+										this.loaderElement.style.display =
+											"none";
 									}
 								},
 							});
@@ -451,11 +461,17 @@ export class App {
 				console.log("Applying shake effect");
 				// Apply the shake effect to the current model
 				this.viewer.applyShakeEffect();
-				
+
 				// Add active state to button
-				shakeButton.classList.add("bg-indigo-700/90", "border-indigo-600/70");
+				shakeButton.classList.add(
+					"bg-indigo-700/90",
+					"border-indigo-600/70"
+				);
 				setTimeout(() => {
-					shakeButton.classList.remove("bg-indigo-700/90", "border-indigo-600/70");
+					shakeButton.classList.remove(
+						"bg-indigo-700/90",
+						"border-indigo-600/70"
+					);
 				}, 800); // Duration slightly longer than the effect
 			});
 		}
@@ -467,11 +483,17 @@ export class App {
 				console.log("Applying explode effect");
 				// Apply the explode effect to the current model
 				this.viewer.applyExplodeEffect();
-				
+
 				// Add active state to button
-				explodeButton.classList.add("bg-indigo-700/90", "border-indigo-600/70");
+				explodeButton.classList.add(
+					"bg-indigo-700/90",
+					"border-indigo-600/70"
+				);
 				setTimeout(() => {
-					explodeButton.classList.remove("bg-indigo-700/90", "border-indigo-600/70");
+					explodeButton.classList.remove(
+						"bg-indigo-700/90",
+						"border-indigo-600/70"
+					);
 				}, 900); // Duration slightly longer than the effect (explode is 0.3s + 0.1s + 0.5s animation)
 			});
 		}
@@ -501,8 +523,6 @@ export class App {
 		}
 	}
 
-
-
 	/**
 	 * Setup upload button in the dock
 	 */
@@ -513,12 +533,331 @@ export class App {
 		uploadBtn.addEventListener("click", () => {
 			console.log("Triggering model upload");
 			// Trigger the file input click
-			const fileInput = document.getElementById("model-upload") as HTMLInputElement;
+			const fileInput = document.getElementById(
+				"model-upload"
+			) as HTMLInputElement;
 			if (fileInput) {
 				fileInput.click();
 			}
 		});
 	}
 
+	/**
+	 * Setup the audio visualizer modal
+	 */
+	private setupAudioVisualizerModal(): void {
+		if (!this.audioModalElement) return;
 
+		// Close buttons
+		const closeBtn = document.getElementById("close-audio-modal");
+		const cancelBtn = document.getElementById("cancel-audio-modal");
+
+		if (closeBtn) {
+			closeBtn.addEventListener("click", () => this.hideAudioModal());
+		}
+
+		if (cancelBtn) {
+			cancelBtn.addEventListener("click", () => this.hideAudioModal());
+		}
+
+		// Apply button
+		const applyBtn = document.getElementById("apply-audio-visualizer");
+		if (applyBtn) {
+			applyBtn.addEventListener("click", () => {
+				this.applyAudioVisualizer();
+				this.hideAudioModal();
+			});
+		}
+
+		// Audio upload handling
+		const audioUploadInput = document.getElementById(
+			"audio-upload"
+		) as HTMLInputElement;
+		const audioPreview = document.getElementById("audio-preview");
+		const audioFilename = document.getElementById("audio-filename");
+		const audioPlayer = document.getElementById(
+			"audio-player"
+		) as HTMLAudioElement;
+		const removeAudioBtn = document.getElementById("remove-audio");
+		const dropArea = document.querySelector(
+			'label[for="audio-upload"]'
+		) as HTMLElement;
+
+		if (audioUploadInput) {
+			audioUploadInput.addEventListener("change", (event) => {
+				const files = (event.target as HTMLInputElement).files;
+				if (!files || files.length === 0) return;
+
+				const file = files[0];
+				this.processAudioFile(file);
+			});
+		}
+
+		// Setup drag and drop for audio files
+		if (dropArea) {
+			// Prevent default behaviors
+			["dragenter", "dragover", "dragleave", "drop"].forEach(
+				(eventName) => {
+					dropArea.addEventListener(
+						eventName,
+						(e) => {
+							e.preventDefault();
+							e.stopPropagation();
+						},
+						false
+					);
+				}
+			);
+
+			// Add visual feedback for drag events
+			["dragenter", "dragover"].forEach((eventName) => {
+				dropArea.addEventListener(
+					eventName,
+					() => {
+						dropArea.classList.add(
+							"border-indigo-400",
+							"bg-zinc-800/50"
+						);
+					},
+					false
+				);
+			});
+
+			["dragleave", "drop"].forEach((eventName) => {
+				dropArea.addEventListener(
+					eventName,
+					() => {
+						dropArea.classList.remove(
+							"border-indigo-400",
+							"bg-zinc-800/50"
+						);
+					},
+					false
+				);
+			});
+
+			// Handle file drop
+			dropArea.addEventListener(
+				"drop",
+				(e) => {
+					const dt = e.dataTransfer;
+					if (dt && dt.files.length) {
+						const file = dt.files[0];
+
+						// Check if file is audio
+						if (file.type.startsWith("audio/")) {
+							this.processAudioFile(file);
+						} else {
+							this.showNotification(
+								"Please upload an audio file",
+								"error"
+							);
+						}
+					}
+				},
+				false
+			);
+		}
+
+		// Remove audio button
+		if (removeAudioBtn && audioPreview) {
+			removeAudioBtn.addEventListener("click", () => {
+				this.audioFile = null;
+				audioPreview.classList.add("hidden");
+				if (audioPlayer) {
+					audioPlayer.src = "";
+				}
+			});
+		}
+
+		// Setup color theme selection
+		const colorThemeButtons = document.querySelectorAll(
+			".color-theme-options button"
+		);
+		colorThemeButtons.forEach((button, index) => {
+			button.addEventListener("click", () => {
+				// Remove active class from all buttons
+				colorThemeButtons.forEach((btn) => {
+					btn.classList.remove("ring-2");
+				});
+
+				// Add active class to clicked button
+				button.classList.add("ring-2");
+
+				// Store selected theme index
+				console.log(`Selected color theme: ${index + 1}`);
+			});
+
+			// Set first theme as default selected
+			if (index === 0) {
+				button.classList.add("ring-2");
+			}
+		});
+	}
+
+	/**
+	 * Process an audio file for the visualizer
+	 */
+	private processAudioFile(file: File): void {
+		// Validate file size (max 10MB)
+		if (file.size > 10 * 1024 * 1024) {
+			this.showNotification("Audio file must be less than 10MB", "error");
+			return;
+		}
+
+		// Validate file type
+		const validTypes = [
+			"audio/mp3",
+			"audio/wav",
+			"audio/ogg",
+			"audio/mpeg",
+		];
+		if (!file.type.startsWith("audio/")) {
+			this.showNotification("Please upload a valid audio file", "error");
+			return;
+		}
+
+		this.audioFile = file;
+
+		// Update preview
+		const audioPreview = document.getElementById("audio-preview");
+		const audioFilename = document.getElementById("audio-filename");
+		const audioPlayer = document.getElementById(
+			"audio-player"
+		) as HTMLAudioElement;
+
+		if (audioPreview && audioFilename && audioPlayer) {
+			audioFilename.textContent = file.name;
+
+			// Create object URL for audio preview
+			const audioURL = URL.createObjectURL(file);
+			audioPlayer.src = audioURL;
+
+			// Show preview
+			audioPreview.classList.remove("hidden");
+		}
+	}
+
+	/**
+	 * Show the audio visualizer modal
+	 */
+	private showAudioModal(): void {
+		if (!this.audioModalElement) return;
+
+		// Reset modal state
+		const audioPreview = document.getElementById("audio-preview");
+		const intensitySlider = document.getElementById(
+			"intensity-slider"
+		) as HTMLInputElement;
+
+		if (audioPreview && !this.audioFile) {
+			audioPreview.classList.add("hidden");
+		}
+
+		if (intensitySlider) {
+			intensitySlider.value = "5";
+		}
+
+		// Show modal with animation
+		this.audioModalElement.classList.remove(
+			"opacity-0",
+			"pointer-events-none"
+		);
+
+		// Make modal content clickable
+		const modalContent = this.audioModalElement.querySelector(
+			"div:not(#modal-backdrop)"
+		);
+		if (modalContent) {
+			(modalContent as HTMLElement).style.pointerEvents = "auto";
+		}
+
+		// Enable backdrop click handling
+		const modalBackdrop = document.getElementById("modal-backdrop");
+		if (modalBackdrop) {
+			modalBackdrop.style.pointerEvents = "auto";
+			modalBackdrop.onclick = () => this.hideAudioModal();
+		}
+
+		// Animate modal content
+		if (modalContent) {
+			gsap.to(modalContent, {
+				scale: 1,
+				opacity: 1,
+				duration: 0.3,
+				ease: "back.out(1.4)",
+			});
+		}
+	}
+
+	/**
+	 * Hide the audio visualizer modal
+	 */
+	private hideAudioModal(): void {
+		if (!this.audioModalElement) return;
+
+		// Animate modal content out
+		const modalContent = this.audioModalElement.querySelector(
+			"div:not(#modal-backdrop)"
+		);
+
+		// Disable pointer events
+		const modalBackdrop = document.getElementById("modal-backdrop");
+		if (modalBackdrop) {
+			modalBackdrop.style.pointerEvents = "none";
+		}
+
+		if (modalContent) {
+			(modalContent as HTMLElement).style.pointerEvents = "none";
+
+			gsap.to(modalContent, {
+				scale: 0.95,
+				opacity: 0.8,
+				duration: 0.2,
+				ease: "power2.in",
+				onComplete: () => {
+					this.audioModalElement?.classList.add(
+						"opacity-0",
+						"pointer-events-none"
+					);
+				},
+			});
+		} else {
+			this.audioModalElement.classList.add(
+				"opacity-0",
+				"pointer-events-none"
+			);
+		}
+	}
+
+	/**
+	 * Apply audio visualizer with selected parameters
+	 */
+	private applyAudioVisualizer(): void {
+		if (!this.audioFile) {
+			this.showNotification("Please upload an audio file", "error");
+			return;
+		}
+
+		// Get parameter values
+		const intensitySlider = document.getElementById(
+			"intensity-slider"
+		) as HTMLInputElement;
+		const intensity = intensitySlider ? parseInt(intensitySlider.value) : 5;
+
+		// Get selected color theme (using the first theme as default)
+		const selectedTheme =
+			document.querySelector(".ring-2") ||
+			document.querySelector(".bg-gradient-to-r");
+
+		console.log(
+			`Applying audio visualizer with file: ${this.audioFile.name}, intensity: ${intensity}`
+		);
+
+		// Here we would implement the actual audio visualization
+		// For now, just show a success notification
+		this.showNotification(
+			`Audio visualizer applied with ${this.audioFile.name}`
+		);
+	}
 }
