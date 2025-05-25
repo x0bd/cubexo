@@ -20,8 +20,13 @@ export class App {
 	private activeModelIdx = 1; // Start with Chicken (index 1)
 	private userModels: { name: string; url: string; model: THREE.Group }[] =
 		[];
-	private audioModalElement: HTMLElement | null;
-	private audioFile: File | null = null;
+	// Audio visualizer properties
+	private audioContext: AudioContext | null = null;
+	private audioElement: HTMLAudioElement | null = null;
+	private audioSource: MediaElementAudioSourceNode | null = null;
+	private audioAnalyser: AnalyserNode | null = null;
+	private isVisualizerActive = false;
+	private visualizerAnimationFrame: number | null = null;
 
 	constructor() {
 		// Log for debugging
@@ -29,7 +34,6 @@ export class App {
 
 		// Get DOM elements
 		this.loaderElement = document.querySelector("#loader");
-		this.audioModalElement = document.querySelector("#audio-modal");
 
 		// Initialize theme manager
 		console.log("[App] Initializing ThemeManager...");
@@ -221,7 +225,7 @@ export class App {
 		if (audioReactiveButton) {
 			audioReactiveButton.addEventListener("click", () => {
 				console.log("Opening audio visualizer modal");
-				this.showAudioModal();
+				this.openAudioVisualizerModal();
 			});
 		}
 
@@ -543,321 +547,302 @@ export class App {
 	}
 
 	/**
-	 * Setup the audio visualizer modal
+	 * Setup audio visualizer modal and controls
 	 */
 	private setupAudioVisualizerModal(): void {
-		if (!this.audioModalElement) return;
-
-		// Close buttons
+		// Get modal elements
+		const modal = document.getElementById("audio-visualizer-modal");
 		const closeBtn = document.getElementById("close-audio-modal");
-		const cancelBtn = document.getElementById("cancel-audio-modal");
-
-		if (closeBtn) {
-			closeBtn.addEventListener("click", () => this.hideAudioModal());
-		}
-
-		if (cancelBtn) {
-			cancelBtn.addEventListener("click", () => this.hideAudioModal());
-		}
-
-		// Apply button
-		const applyBtn = document.getElementById("apply-audio-visualizer");
-		if (applyBtn) {
-			applyBtn.addEventListener("click", () => {
-				this.applyAudioVisualizer();
-				this.hideAudioModal();
-			});
-		}
-
-		// Audio upload handling
-		const audioUploadInput = document.getElementById(
-			"audio-upload"
+		const cancelBtn = document.getElementById("cancel-audio-visualizer");
+		const startBtn = document.getElementById("start-audio-visualizer");
+		const audioFileInput = document.getElementById(
+			"audio-file-input"
 		) as HTMLInputElement;
-		const audioPreview = document.getElementById("audio-preview");
 		const audioFilename = document.getElementById("audio-filename");
-		const audioPlayer = document.getElementById(
-			"audio-player"
-		) as HTMLAudioElement;
-		const removeAudioBtn = document.getElementById("remove-audio");
-		const dropArea = document.querySelector(
-			'label[for="audio-upload"]'
-		) as HTMLElement;
+		const audioPreview = document.getElementById("audio-preview");
+		const audioName = document.getElementById("audio-name");
+		const audioDuration = document.getElementById("audio-duration");
+		const playPauseBtn = document.getElementById("play-pause-audio");
+		const sensitivitySlider = document.getElementById(
+			"sensitivity-slider"
+		) as HTMLInputElement;
+		const sensitivityValue = document.getElementById("sensitivity-value");
+		const intensitySlider = document.getElementById(
+			"intensity-slider"
+		) as HTMLInputElement;
+		const intensityValue = document.getElementById("intensity-value");
 
-		if (audioUploadInput) {
-			audioUploadInput.addEventListener("change", (event) => {
-				const files = (event.target as HTMLInputElement).files;
-				if (!files || files.length === 0) return;
-
-				const file = files[0];
-				this.processAudioFile(file);
-			});
-		}
-
-		// Setup drag and drop for audio files
-		if (dropArea) {
-			// Prevent default behaviors
-			["dragenter", "dragover", "dragleave", "drop"].forEach(
-				(eventName) => {
-					dropArea.addEventListener(
-						eventName,
-						(e) => {
-							e.preventDefault();
-							e.stopPropagation();
-						},
-						false
-					);
-				}
-			);
-
-			// Add visual feedback for drag events
-			["dragenter", "dragover"].forEach((eventName) => {
-				dropArea.addEventListener(
-					eventName,
-					() => {
-						dropArea.classList.add(
-							"border-indigo-400",
-							"bg-zinc-800/50"
-						);
-					},
-					false
-				);
-			});
-
-			["dragleave", "drop"].forEach((eventName) => {
-				dropArea.addEventListener(
-					eventName,
-					() => {
-						dropArea.classList.remove(
-							"border-indigo-400",
-							"bg-zinc-800/50"
-						);
-					},
-					false
-				);
-			});
-
-			// Handle file drop
-			dropArea.addEventListener(
-				"drop",
-				(e) => {
-					const dt = e.dataTransfer;
-					if (dt && dt.files.length) {
-						const file = dt.files[0];
-
-						// Check if file is audio
-						if (file.type.startsWith("audio/")) {
-							this.processAudioFile(file);
-						} else {
-							this.showNotification(
-								"Please upload an audio file",
-								"error"
-							);
+		// Close modal handlers
+		const closeModal = () => {
+			if (modal) {
+				gsap.to(modal, {
+					opacity: 0,
+					duration: 0.2,
+					onComplete: () => {
+						if (modal) {
+							modal.classList.add("hidden");
+							modal.style.opacity = "1";
 						}
-					}
-				},
-				false
-			);
-		}
+					},
+				});
+			}
 
-		// Remove audio button
-		if (removeAudioBtn && audioPreview) {
-			removeAudioBtn.addEventListener("click", () => {
-				this.audioFile = null;
-				audioPreview.classList.add("hidden");
-				if (audioPlayer) {
-					audioPlayer.src = "";
+			// Stop audio if playing
+			if (this.audioElement) {
+				this.audioElement.pause();
+				this.audioElement.currentTime = 0;
+			}
+		};
+
+		if (closeBtn) closeBtn.addEventListener("click", closeModal);
+		if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+
+		// Audio file input handler
+		if (audioFileInput) {
+			audioFileInput.addEventListener("change", (event) => {
+				const input = event.target as HTMLInputElement;
+				const files = input.files;
+
+				if (files && files.length > 0) {
+					const file = files[0];
+
+					// Update the filename display
+					if (audioFilename) {
+						audioFilename.textContent =
+							file.name.length > 20
+								? file.name.substring(0, 17) + "..."
+								: file.name;
+					}
+
+					// Create audio element for preview
+					const audio = new Audio();
+					audio.src = URL.createObjectURL(file);
+
+					// When audio metadata is loaded
+					audio.addEventListener("loadedmetadata", () => {
+						if (audioName) audioName.textContent = file.name;
+
+						// Format and display duration
+						if (audioDuration) {
+							const minutes = Math.floor(audio.duration / 60);
+							const seconds = Math.floor(audio.duration % 60);
+							audioDuration.textContent = `${minutes}:${seconds
+								.toString()
+								.padStart(2, "0")}`;
+						}
+
+						// Show audio preview
+						if (audioPreview)
+							audioPreview.classList.remove("hidden");
+
+						// Store the audio element
+						this.audioElement = audio;
+					});
+
+					// Handle play/pause button
+					if (playPauseBtn) {
+						playPauseBtn.addEventListener("click", () => {
+							if (!this.audioElement) return;
+
+							if (this.audioElement.paused) {
+								this.audioElement.play();
+								playPauseBtn.innerHTML = `
+									<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pause">
+										<rect x="6" y="4" width="4" height="16"/>
+										<rect x="14" y="4" width="4" height="16"/>
+									</svg>
+								`;
+							} else {
+								this.audioElement.pause();
+								playPauseBtn.innerHTML = `
+									<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play">
+										<polygon points="5 3 19 12 5 21 5 3"/>
+									</svg>
+								`;
+							}
+						});
+					}
 				}
 			});
 		}
 
-		// Setup color theme selection
-		const colorThemeButtons = document.querySelectorAll(
-			".color-theme-options button"
-		);
-		colorThemeButtons.forEach((button, index) => {
-			button.addEventListener("click", () => {
-				// Remove active class from all buttons
-				colorThemeButtons.forEach((btn) => {
-					btn.classList.remove("ring-2");
-				});
-
-				// Add active class to clicked button
-				button.classList.add("ring-2");
-
-				// Store selected theme index
-				console.log(`Selected color theme: ${index + 1}`);
-			});
-
-			// Set first theme as default selected
-			if (index === 0) {
-				button.classList.add("ring-2");
-			}
-		});
-	}
-
-	/**
-	 * Process an audio file for the visualizer
-	 */
-	private processAudioFile(file: File): void {
-		// Validate file size (max 10MB)
-		if (file.size > 10 * 1024 * 1024) {
-			this.showNotification("Audio file must be less than 10MB", "error");
-			return;
-		}
-
-		// Validate file type
-		const validTypes = [
-			"audio/mp3",
-			"audio/wav",
-			"audio/ogg",
-			"audio/mpeg",
-		];
-		if (!file.type.startsWith("audio/")) {
-			this.showNotification("Please upload a valid audio file", "error");
-			return;
-		}
-
-		this.audioFile = file;
-
-		// Update preview
-		const audioPreview = document.getElementById("audio-preview");
-		const audioFilename = document.getElementById("audio-filename");
-		const audioPlayer = document.getElementById(
-			"audio-player"
-		) as HTMLAudioElement;
-
-		if (audioPreview && audioFilename && audioPlayer) {
-			audioFilename.textContent = file.name;
-
-			// Create object URL for audio preview
-			const audioURL = URL.createObjectURL(file);
-			audioPlayer.src = audioURL;
-
-			// Show preview
-			audioPreview.classList.remove("hidden");
-		}
-	}
-
-	/**
-	 * Show the audio visualizer modal
-	 */
-	private showAudioModal(): void {
-		if (!this.audioModalElement) return;
-
-		// Reset modal state
-		const audioPreview = document.getElementById("audio-preview");
-		const intensitySlider = document.getElementById(
-			"intensity-slider"
-		) as HTMLInputElement;
-
-		if (audioPreview && !this.audioFile) {
-			audioPreview.classList.add("hidden");
-		}
-
-		if (intensitySlider) {
-			intensitySlider.value = "5";
-		}
-
-		// Show modal with animation
-		this.audioModalElement.classList.remove(
-			"opacity-0",
-			"pointer-events-none"
-		);
-
-		// Make modal content clickable
-		const modalContent = this.audioModalElement.querySelector(
-			"div:not(#modal-backdrop)"
-		);
-		if (modalContent) {
-			(modalContent as HTMLElement).style.pointerEvents = "auto";
-		}
-
-		// Enable backdrop click handling
-		const modalBackdrop = document.getElementById("modal-backdrop");
-		if (modalBackdrop) {
-			modalBackdrop.style.pointerEvents = "auto";
-			modalBackdrop.onclick = () => this.hideAudioModal();
-		}
-
-		// Animate modal content
-		if (modalContent) {
-			gsap.to(modalContent, {
-				scale: 1,
-				opacity: 1,
-				duration: 0.3,
-				ease: "back.out(1.4)",
+		// Slider value updates
+		if (sensitivitySlider && sensitivityValue) {
+			sensitivitySlider.addEventListener("input", () => {
+				sensitivityValue.textContent = `${sensitivitySlider.value}%`;
 			});
 		}
-	}
 
-	/**
-	 * Hide the audio visualizer modal
-	 */
-	private hideAudioModal(): void {
-		if (!this.audioModalElement) return;
-
-		// Animate modal content out
-		const modalContent = this.audioModalElement.querySelector(
-			"div:not(#modal-backdrop)"
-		);
-
-		// Disable pointer events
-		const modalBackdrop = document.getElementById("modal-backdrop");
-		if (modalBackdrop) {
-			modalBackdrop.style.pointerEvents = "none";
+		if (intensitySlider && intensityValue) {
+			intensitySlider.addEventListener("input", () => {
+				intensityValue.textContent = `${intensitySlider.value}%`;
+			});
 		}
 
-		if (modalContent) {
-			(modalContent as HTMLElement).style.pointerEvents = "none";
-
-			gsap.to(modalContent, {
-				scale: 0.95,
-				opacity: 0.8,
-				duration: 0.2,
-				ease: "power2.in",
-				onComplete: () => {
-					this.audioModalElement?.classList.add(
-						"opacity-0",
-						"pointer-events-none"
+		// Start visualizer button
+		if (startBtn) {
+			startBtn.addEventListener("click", () => {
+				if (!this.audioElement) {
+					this.showNotification(
+						"Please select an audio file first",
+						"error"
 					);
-				},
+					return;
+				}
+
+				// Get parameter values
+				const sensitivity = sensitivitySlider
+					? parseInt(sensitivitySlider.value) / 100
+					: 0.5;
+				const intensity = intensitySlider
+					? parseInt(intensitySlider.value) / 100
+					: 0.5;
+
+				// Start the audio visualizer
+				this.startAudioVisualizer(sensitivity, intensity);
+
+				// Close the modal
+				closeModal();
+
+				// Show success notification
+				this.showNotification("Audio visualizer started");
 			});
-		} else {
-			this.audioModalElement.classList.add(
-				"opacity-0",
-				"pointer-events-none"
-			);
 		}
 	}
 
 	/**
-	 * Apply audio visualizer with selected parameters
+	 * Open the audio visualizer modal
 	 */
-	private applyAudioVisualizer(): void {
-		if (!this.audioFile) {
-			this.showNotification("Please upload an audio file", "error");
-			return;
+	private openAudioVisualizerModal(): void {
+		const modal = document.getElementById("audio-visualizer-modal");
+		if (modal) {
+			modal.classList.remove("hidden");
+
+			// Reset the form
+			const audioFilename = document.getElementById("audio-filename");
+			if (audioFilename) audioFilename.textContent = "SELECT AUDIO FILE";
+
+			const audioPreview = document.getElementById("audio-preview");
+			if (audioPreview) audioPreview.classList.add("hidden");
+
+			const sensitivitySlider = document.getElementById(
+				"sensitivity-slider"
+			) as HTMLInputElement;
+			if (sensitivitySlider) sensitivitySlider.value = "50";
+
+			const intensitySlider = document.getElementById(
+				"intensity-slider"
+			) as HTMLInputElement;
+			if (intensitySlider) intensitySlider.value = "50";
+
+			const sensitivityValue =
+				document.getElementById("sensitivity-value");
+			if (sensitivityValue) sensitivityValue.textContent = "50%";
+
+			const intensityValue = document.getElementById("intensity-value");
+			if (intensityValue) intensityValue.textContent = "50%";
+		}
+	}
+
+	/**
+	 * Start the audio visualizer with the given parameters
+	 */
+	private startAudioVisualizer(sensitivity: number, intensity: number): void {
+		if (!this.audioElement) return;
+
+		// Clean up any existing visualizer
+		this.stopAudioVisualizer();
+
+		// Create audio context and analyzer
+		this.audioContext = new (window.AudioContext ||
+			(window as any).webkitAudioContext)();
+		this.audioSource = this.audioContext.createMediaElementSource(
+			this.audioElement
+		);
+		this.audioAnalyser = this.audioContext.createAnalyser();
+
+		// Connect the audio nodes
+		this.audioSource.connect(this.audioAnalyser);
+		this.audioAnalyser.connect(this.audioContext.destination);
+
+		// Configure the analyzer
+		this.audioAnalyser.fftSize = 256;
+		const bufferLength = this.audioAnalyser.frequencyBinCount;
+		const dataArray = new Uint8Array(bufferLength);
+
+		// Start playing the audio
+		this.audioElement.play();
+		this.isVisualizerActive = true;
+
+		// Visualizer animation loop
+		const visualize = () => {
+			if (!this.isVisualizerActive || !this.audioAnalyser) {
+				return;
+			}
+
+			// Get frequency data
+			this.audioAnalyser.getByteFrequencyData(dataArray);
+
+			// Calculate average frequency
+			let sum = 0;
+			for (let i = 0; i < bufferLength; i++) {
+				sum += dataArray[i];
+			}
+			const average = sum / bufferLength;
+
+			// Apply sensitivity and intensity
+			const normalizedValue =
+				Math.min(1, (average / 255) * sensitivity) * intensity;
+
+			// Apply visualization effect to the model
+			if (this.viewer) {
+				this.viewer.applyAudioVisualization(normalizedValue);
+			}
+
+			// Continue the animation loop
+			this.visualizerAnimationFrame = requestAnimationFrame(visualize);
+		};
+
+		// Start the visualization loop
+		this.visualizerAnimationFrame = requestAnimationFrame(visualize);
+	}
+
+	/**
+	 * Stop the audio visualizer
+	 */
+	private stopAudioVisualizer(): void {
+		this.isVisualizerActive = false;
+
+		// Cancel animation frame
+		if (this.visualizerAnimationFrame !== null) {
+			cancelAnimationFrame(this.visualizerAnimationFrame);
+			this.visualizerAnimationFrame = null;
 		}
 
-		// Get parameter values
-		const intensitySlider = document.getElementById(
-			"intensity-slider"
-		) as HTMLInputElement;
-		const intensity = intensitySlider ? parseInt(intensitySlider.value) : 5;
+		// Clean up audio resources
+		if (this.audioSource) {
+			this.audioSource.disconnect();
+			this.audioSource = null;
+		}
 
-		// Get selected color theme (using the first theme as default)
-		const selectedTheme =
-			document.querySelector(".ring-2") ||
-			document.querySelector(".bg-gradient-to-r");
+		if (this.audioAnalyser) {
+			this.audioAnalyser.disconnect();
+			this.audioAnalyser = null;
+		}
 
-		console.log(
-			`Applying audio visualizer with file: ${this.audioFile.name}, intensity: ${intensity}`
-		);
+		if (this.audioContext && this.audioContext.state !== "closed") {
+			this.audioContext.close();
+			this.audioContext = null;
+		}
 
-		// Here we would implement the actual audio visualization
-		// For now, just show a success notification
-		this.showNotification(
-			`Audio visualizer applied with ${this.audioFile.name}`
-		);
+		if (this.audioElement) {
+			this.audioElement.pause();
+			this.audioElement.currentTime = 0;
+		}
+
+		// Reset any visualization effects
+		if (this.viewer) {
+			this.viewer.resetAudioVisualization();
+		}
 	}
 }

@@ -22,13 +22,16 @@ export class VoxelModelViewer {
 	private voxelsPerModel: Voxel[][] = [];
 	private voxels: Voxel[] = [];
 	private activeModelIndex = 0;
-	
+
 	// Mouse interaction properties
 	private raycaster: THREE.Raycaster = new THREE.Raycaster();
 	private mouse: THREE.Vector2 = new THREE.Vector2();
 	private hoveredVoxelIndex: number = -1;
 	private voxelOriginalPositions: Map<number, THREE.Vector3> = new Map();
-	private voxelHoverTweens: Map<number, gsap.core.Tween | gsap.core.Timeline> = new Map();
+	private voxelHoverTweens: Map<
+		number,
+		gsap.core.Tween | gsap.core.Timeline
+	> = new Map();
 	private isInteractionEnabled: boolean = true;
 
 	private params: AppParameters = {
@@ -38,6 +41,12 @@ export class VoxelModelViewer {
 		boxSize: 0.24,
 		boxRoundness: 0.03,
 	};
+
+	// Audio visualization properties
+	private isAudioVisualizationActive = false;
+	private baseScale = new THREE.Vector3(1, 1, 1);
+	private targetScale = new THREE.Vector3(1, 1, 1);
+	private currentAudioValue = 0;
 
 	constructor(params?: Partial<AppParameters>) {
 		if (params) {
@@ -100,14 +109,21 @@ export class VoxelModelViewer {
 		this.voxelOriginalPositions.clear(); // Clear for the new model
 		for (let i = 0; i < this.voxels.length; i++) {
 			if (this.voxels[i] && this.voxels[i].position) {
-				this.voxelOriginalPositions.set(i, this.voxels[i].position.clone());
+				this.voxelOriginalPositions.set(
+					i,
+					this.voxels[i].position.clone()
+				);
 			} else {
-				console.warn(`Voxel at index ${i} is undefined or has no position during setActiveModel.`);
+				console.warn(
+					`Voxel at index ${i} is undefined or has no position during setActiveModel.`
+				);
 			}
 		}
 
 		// Check if instancedMesh needs to be recreated or if it's just a model switch
-		const needsRecreation = !this.instancedMesh || this.instancedMesh.count !== this.voxels.length;
+		const needsRecreation =
+			!this.instancedMesh ||
+			this.instancedMesh.count !== this.voxels.length;
 
 		if (oldModelIdx === this.activeModelIndex && !needsRecreation) {
 			// If same model and count matches, likely just a refresh, ensure positions are reset
@@ -115,23 +131,25 @@ export class VoxelModelViewer {
 			this.forceResetAllVoxelPositions(); // Use the newly populated true originals
 		} else if (needsRecreation) {
 			this.recreateInstancedMesh(this.voxels.length);
-		} else if (oldModelIdx !== this.activeModelIndex) { // Corrected: newModelIdx to this.activeModelIndex
+		} else if (oldModelIdx !== this.activeModelIndex) {
+			// Corrected: newModelIdx to this.activeModelIndex
 			this.animateToModel(oldModelIdx, this.activeModelIndex);
 		} else {
-      // Fallback: if not animating and not recreating, still ensure positions are set from new model data
-      for (let i = 0; i < this.voxels.length; i++) {
-        if (this.voxels[i] && this.voxels[i].position) { // Added null check for this.voxels[i].position
-          this.dummy.position.copy(this.voxels[i].position);
-          this.dummy.updateMatrix();
-          if (this.instancedMesh) {
-            this.instancedMesh.setMatrixAt(i, this.dummy.matrix);
-          }
-        }
-      }
-      if (this.instancedMesh) {
-        this.instancedMesh.instanceMatrix.needsUpdate = true;
-      }
-    }
+			// Fallback: if not animating and not recreating, still ensure positions are set from new model data
+			for (let i = 0; i < this.voxels.length; i++) {
+				if (this.voxels[i] && this.voxels[i].position) {
+					// Added null check for this.voxels[i].position
+					this.dummy.position.copy(this.voxels[i].position);
+					this.dummy.updateMatrix();
+					if (this.instancedMesh) {
+						this.instancedMesh.setMatrixAt(i, this.dummy.matrix);
+					}
+				}
+			}
+			if (this.instancedMesh) {
+				this.instancedMesh.instanceMatrix.needsUpdate = true;
+			}
+		}
 
 		this.isInteractionEnabled = true; // Ensure interactions are enabled
 	}
@@ -271,42 +289,60 @@ export class VoxelModelViewer {
 
 		// Listen for theme changes on window
 		const themeChangeHandler = ((event: CustomEvent) => {
-			console.log('[VoxelModelViewer] Received themechange event on window:', event.detail);
-			const isDark = event.detail?.theme === 'dark';
-			console.log(`[VoxelModelViewer] Theme changed to: ${isDark ? 'dark' : 'light'}`);
+			console.log(
+				"[VoxelModelViewer] Received themechange event on window:",
+				event.detail
+			);
+			const isDark = event.detail?.theme === "dark";
+			console.log(
+				`[VoxelModelViewer] Theme changed to: ${
+					isDark ? "dark" : "light"
+				}`
+			);
 			this.updateBackgroundForTheme(isDark);
 		}) as EventListener;
 
 		window.addEventListener("themechange", themeChangeHandler);
-		console.log('[VoxelModelViewer] Added themechange event listener to window.');
+		console.log(
+			"[VoxelModelViewer] Added themechange event listener to window."
+		);
 	}
 
 	private updateBackgroundForTheme(isDark?: boolean): void {
-		console.log('[VoxelModelViewer] updateBackgroundForTheme called.');
+		console.log("[VoxelModelViewer] updateBackgroundForTheme called.");
 		if (!this.scene) {
-			console.error('[VoxelModelViewer] Scene not initialized in updateBackgroundForTheme.');
+			console.error(
+				"[VoxelModelViewer] Scene not initialized in updateBackgroundForTheme."
+			);
 			return;
 		}
 
 		// If isDark is not provided, detect from the DOM
 		if (isDark === undefined) {
 			isDark = document.documentElement.classList.contains("dark");
-			console.log('[VoxelModelViewer] Theme detection from DOM:', isDark ? 'dark' : 'light');
+			console.log(
+				"[VoxelModelViewer] Theme detection from DOM:",
+				isDark ? "dark" : "light"
+			);
 		}
 
 		// Set scene background color based on theme
 		if (isDark) {
 			// Dark mode - darker background
 			this.scene.background = new THREE.Color(0x111111);
-			console.log('[VoxelModelViewer] Setting dark background (0x111111).');
-			
+			console.log(
+				"[VoxelModelViewer] Setting dark background (0x111111)."
+			);
+
 			// Update lighting for dark mode
 			this.updateLightingForTheme(true);
 		} else {
 			// Light mode - pure white background (shadcn style)
 			this.scene.background = new THREE.Color(0xffffff); // Pure white (shadcn)
-			console.log('[VoxelModelViewer] Setting light mode background (0xffffff) - shadcn style.');
-			
+			console.log(
+				"[VoxelModelViewer] Setting light mode background (0xffffff) - shadcn style."
+			);
+
 			// Update lighting for light mode
 			this.updateLightingForTheme(false);
 		}
@@ -314,9 +350,13 @@ export class VoxelModelViewer {
 		// Force a render to show the changes immediately
 		if (this.renderer && this.camera) {
 			this.renderer.render(this.scene, this.camera);
-			console.log('[VoxelModelViewer] Scene rendered after theme update.');
+			console.log(
+				"[VoxelModelViewer] Scene rendered after theme update."
+			);
 		} else {
-			console.warn('[VoxelModelViewer] Renderer or camera not available for immediate render after theme update.');
+			console.warn(
+				"[VoxelModelViewer] Renderer or camera not available for immediate render after theme update."
+			);
 		}
 	}
 
@@ -351,16 +391,16 @@ export class VoxelModelViewer {
 
 		// Create ambient light
 		const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-		ambientLight.name = 'ambientLight';
+		ambientLight.name = "ambientLight";
 		this.scene.add(ambientLight);
 
 		// Create a group to hold the lights
 		this.lightHolder = new THREE.Group();
-		this.lightHolder.name = 'lightHolder';
+		this.lightHolder.name = "lightHolder";
 
 		// Main directional light
 		const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
-		mainLight.name = 'mainLight';
+		mainLight.name = "mainLight";
 		mainLight.position.set(10, 15, 10);
 		mainLight.castShadow = true;
 		mainLight.shadow.mapSize = new THREE.Vector2(1024, 1024);
@@ -369,7 +409,7 @@ export class VoxelModelViewer {
 
 		// Fill light
 		const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
-		fillLight.name = 'fillLight';
+		fillLight.name = "fillLight";
 		fillLight.position.set(-10, 5, -5);
 		this.lightHolder.add(fillLight);
 
@@ -389,12 +429,12 @@ export class VoxelModelViewer {
 			planeGeometry,
 			shadowPlaneMaterial
 		);
-		shadowPlaneMesh.name = 'shadowPlane';
+		shadowPlaneMesh.name = "shadowPlane";
 		shadowPlaneMesh.rotation.x = -Math.PI / 2;
 		shadowPlaneMesh.position.y = -5;
 		shadowPlaneMesh.receiveShadow = true;
 		this.scene.add(shadowPlaneMesh);
-		
+
 		// Initialize lighting based on current theme
 		this.updateLightingForTheme(isDark);
 	}
@@ -403,10 +443,18 @@ export class VoxelModelViewer {
 		if (!this.scene || !this.lightHolder) return;
 
 		// Find lights by name
-		const mainLight = this.lightHolder.children.find(child => child.name === 'mainLight') as THREE.DirectionalLight;
-		const fillLight = this.lightHolder.children.find(child => child.name === 'fillLight') as THREE.DirectionalLight;
-		const ambientLight = this.scene.children.find(child => child.name === 'ambientLight') as THREE.AmbientLight;
-		const shadowPlane = this.scene.children.find(child => child.name === 'shadowPlane') as THREE.Mesh;
+		const mainLight = this.lightHolder.children.find(
+			(child) => child.name === "mainLight"
+		) as THREE.DirectionalLight;
+		const fillLight = this.lightHolder.children.find(
+			(child) => child.name === "fillLight"
+		) as THREE.DirectionalLight;
+		const ambientLight = this.scene.children.find(
+			(child) => child.name === "ambientLight"
+		) as THREE.AmbientLight;
+		const shadowPlane = this.scene.children.find(
+			(child) => child.name === "shadowPlane"
+		) as THREE.Mesh;
 
 		if (isDark) {
 			// Dark theme lighting - more dramatic, higher contrast
@@ -424,7 +472,10 @@ export class VoxelModelViewer {
 			}
 
 			// Update shadow opacity
-			if (shadowPlane && shadowPlane.material instanceof THREE.ShadowMaterial) {
+			if (
+				shadowPlane &&
+				shadowPlane.material instanceof THREE.ShadowMaterial
+			) {
 				shadowPlane.material.opacity = 0.1;
 				shadowPlane.material.needsUpdate = true;
 			}
@@ -444,13 +495,16 @@ export class VoxelModelViewer {
 			}
 
 			// Update shadow opacity - subtle shadows for shadcn aesthetic
-			if (shadowPlane && shadowPlane.material instanceof THREE.ShadowMaterial) {
+			if (
+				shadowPlane &&
+				shadowPlane.material instanceof THREE.ShadowMaterial
+			) {
 				shadowPlane.material.opacity = 0.1; // More subtle shadow
 				shadowPlane.material.needsUpdate = true;
 			}
 		}
 
-		console.log(`Updated lighting for ${isDark ? 'dark' : 'light'} theme`);
+		console.log(`Updated lighting for ${isDark ? "dark" : "light"} theme`);
 	}
 
 	private setupGeometries(): void {
@@ -566,9 +620,9 @@ export class VoxelModelViewer {
 		if (!this.canvasElement) return;
 
 		// Mouse move event for hover effects
-		this.canvasElement.addEventListener('mousemove', (event) => {
+		this.canvasElement.addEventListener("mousemove", (event) => {
 			if (!this.canvasElement) return;
-			
+
 			// Calculate mouse position in normalized device coordinates (-1 to +1)
 			const rect = this.canvasElement.getBoundingClientRect();
 			this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -576,7 +630,7 @@ export class VoxelModelViewer {
 		});
 
 		// Mouse click event for selecting voxels
-		this.canvasElement.addEventListener('click', () => {
+		this.canvasElement.addEventListener("click", () => {
 			if (this.hoveredVoxelIndex !== -1) {
 				this.handleVoxelClick(this.hoveredVoxelIndex);
 			}
@@ -599,13 +653,16 @@ export class VoxelModelViewer {
 		if (intersects.length > 0) {
 			// The instanceId property contains the index of the intersected instance
 			const voxelIndex = intersects[0].instanceId;
-			
-			if (voxelIndex !== undefined && voxelIndex !== this.hoveredVoxelIndex) {
+
+			if (
+				voxelIndex !== undefined &&
+				voxelIndex !== this.hoveredVoxelIndex
+			) {
 				// Unhover previous voxel if there was one
 				if (this.hoveredVoxelIndex !== -1) {
 					this.handleVoxelUnhover(this.hoveredVoxelIndex);
 				}
-				
+
 				// Hover new voxel
 				this.hoveredVoxelIndex = voxelIndex;
 				this.handleVoxelHover(voxelIndex);
@@ -622,11 +679,12 @@ export class VoxelModelViewer {
 	 * @param index The index of the voxel to hover
 	 */
 	private handleVoxelHover(index: number): void {
-		if (!this.instancedMesh || index < 0 || index >= this.voxels.length) return;
+		if (!this.instancedMesh || index < 0 || index >= this.voxels.length)
+			return;
 
 		// Get the position of the hovered voxel
 		const hoveredPosition = this.voxels[index].position.clone();
-		
+
 		// Kill any existing hover tweens for all voxels
 		this.voxelHoverTweens.forEach((tween) => tween.kill());
 		this.voxelHoverTweens.clear();
@@ -634,7 +692,10 @@ export class VoxelModelViewer {
 		// Store original positions for all voxels if not already stored
 		if (this.voxelOriginalPositions.size === 0) {
 			for (let i = 0; i < this.voxels.length; i++) {
-				this.voxelOriginalPositions.set(i, this.voxels[i].position.clone());
+				this.voxelOriginalPositions.set(
+					i,
+					this.voxels[i].position.clone()
+				);
 			}
 		}
 
@@ -652,12 +713,16 @@ export class VoxelModelViewer {
 				// Update the matrix for this voxel with the new scale
 				if (this.instancedMesh) {
 					this.dummy.position.copy(this.voxels[index].position);
-					this.dummy.scale.set(scaleObj.scale, scaleObj.scale, scaleObj.scale);
+					this.dummy.scale.set(
+						scaleObj.scale,
+						scaleObj.scale,
+						scaleObj.scale
+					);
 					this.dummy.updateMatrix();
 					this.instancedMesh.setMatrixAt(index, this.dummy.matrix);
 					this.instancedMesh.instanceMatrix.needsUpdate = true;
 				}
-			}
+			},
 		});
 
 		// Store the tween for later reference
@@ -683,16 +748,17 @@ export class VoxelModelViewer {
 					.normalize();
 
 				// Calculate dispersion amount based on distance (closer = more dispersion)
-				const dispersionFactor = 1 - (distance / disperseRadius);
+				const dispersionFactor = 1 - distance / disperseRadius;
 				const dispersionAmount = maxDispersion * dispersionFactor;
 
 				// Get original position from our stored map
-				const originalPosition = this.voxelOriginalPositions.get(i) || voxelPos.clone();
+				const originalPosition =
+					this.voxelOriginalPositions.get(i) || voxelPos.clone();
 
 				// Calculate target position
-				const targetPosition = originalPosition.clone().add(
-					direction.multiplyScalar(dispersionAmount)
-				);
+				const targetPosition = originalPosition
+					.clone()
+					.add(direction.multiplyScalar(dispersionAmount));
 
 				// Create animation for this nearby voxel
 				const nearbyTween = gsap.timeline();
@@ -704,7 +770,7 @@ export class VoxelModelViewer {
 					z: targetPosition.z,
 					duration: 0.3,
 					ease: "power2.out",
-					onUpdate: () => this.updateMatrix(i)
+					onUpdate: () => this.updateMatrix(i),
 				});
 
 				// Store the tween for later reference
@@ -718,40 +784,42 @@ export class VoxelModelViewer {
 	 * @param index The index of the voxel to unhover
 	 */
 	private handleVoxelUnhover(index: number): void {
-		if (!this.instancedMesh || index < 0 || index >= this.voxels.length) return;
+		if (!this.instancedMesh || index < 0 || index >= this.voxels.length)
+			return;
 
 		// Kill any existing hover tweens for all voxels
 		this.voxelHoverTweens.forEach((tween) => tween.kill());
 		this.voxelHoverTweens.clear();
-		
+
 		// Create a master timeline to ensure all animations complete
 		const masterTimeline = gsap.timeline({
 			onComplete: () => {
 				// Final check to ensure all voxels are in their original positions
 				this.forceResetAllVoxelPositions();
-			}
+			},
 		});
-		
+
 		// Return all voxels to their original positions
 		for (let i = 0; i < this.voxels.length; i++) {
 			// Get the original position from our map, or use current position if not found
 			const originalPosition = this.voxelOriginalPositions.get(i);
-			
+
 			// Skip if we don't have an original position stored
 			if (!originalPosition) continue;
-			
+
 			const currentPosition = this.voxels[i].position;
-			
+
 			// Only animate if the positions are different (using a small threshold for floating point comparison)
-			const positionDifference = originalPosition.distanceTo(currentPosition);
+			const positionDifference =
+				originalPosition.distanceTo(currentPosition);
 			if (positionDifference > 0.001) {
 				// Create a return animation with slight randomization for a more natural feel
 				const returnDelay = Math.random() * 0.05; // Small random delay
 				const returnDuration = 0.3 + Math.random() * 0.1; // Slightly varied duration
-				
+
 				// Create individual timeline for this voxel
 				const voxelTimeline = gsap.timeline();
-				
+
 				// Return to original position with elastic effect
 				voxelTimeline.to(currentPosition, {
 					x: originalPosition.x,
@@ -760,18 +828,18 @@ export class VoxelModelViewer {
 					duration: returnDuration,
 					delay: returnDelay,
 					ease: "elastic.out(1, 0.7)", // Elastic effect for a bouncy return
-					onUpdate: () => this.updateMatrix(i)
+					onUpdate: () => this.updateMatrix(i),
 				});
-				
+
 				// Add this voxel's timeline to the master timeline
 				masterTimeline.add(voxelTimeline, 0);
 			}
 		}
-		
+
 		// Reset scale for the hovered voxel
 		if (index !== -1) {
 			const scaleObj = { scale: 1.2 }; // Assuming this was the hover scale
-			
+
 			const scaleTween = gsap.timeline();
 			scaleTween.to(scaleObj, {
 				scale: 1.0,
@@ -781,19 +849,26 @@ export class VoxelModelViewer {
 					// Update the matrix for this voxel with the new scale
 					if (this.instancedMesh) {
 						this.dummy.position.copy(this.voxels[index].position);
-						this.dummy.scale.set(scaleObj.scale, scaleObj.scale, scaleObj.scale);
+						this.dummy.scale.set(
+							scaleObj.scale,
+							scaleObj.scale,
+							scaleObj.scale
+						);
 						this.dummy.updateMatrix();
-						this.instancedMesh.setMatrixAt(index, this.dummy.matrix);
+						this.instancedMesh.setMatrixAt(
+							index,
+							this.dummy.matrix
+						);
 						this.instancedMesh.instanceMatrix.needsUpdate = true;
 					}
-				}
+				},
 			});
-			
+
 			// Add to master timeline
 			masterTimeline.add(scaleTween, 0);
 		}
 	}
-	
+
 	/**
 	 * Force reset all voxels to their original positions
 	 * This is a failsafe to ensure voxels always return to their original state
@@ -826,7 +901,8 @@ export class VoxelModelViewer {
 			const trueOriginalPosition = this.voxelOriginalPositions.get(i);
 			const voxelData = this.voxelsPerModel[this.activeModelIndex]?.[i];
 
-			if (this.voxels[i]) { // Check if voxel exists
+			if (this.voxels[i]) {
+				// Check if voxel exists
 				if (trueOriginalPosition) {
 					this.dummy.position.copy(trueOriginalPosition); // Use original position for dummy
 				} else {
@@ -854,13 +930,17 @@ export class VoxelModelViewer {
 		// console.log("Force reset all voxel positions and colors completed.");
 	}
 
-
 	/**
 	 * Handle click effect for a voxel - affects a group of nearby voxels
 	 * @param index The index of the voxel that was clicked
 	 */
 	private handleVoxelClick(index: number): void {
-		if (!this.instancedMesh || index < 0 || index >= this.voxels.length || !this.isInteractionEnabled) {
+		if (
+			!this.instancedMesh ||
+			index < 0 ||
+			index >= this.voxels.length ||
+			!this.isInteractionEnabled
+		) {
 			// console.log("Click handling skipped: Pre-conditions not met or interaction disabled.");
 			return;
 		}
@@ -868,16 +948,19 @@ export class VoxelModelViewer {
 		// console.log(`Handling click for voxel: ${index}`);
 		this.isInteractionEnabled = false; // Disable further interactions during this animation
 
-		const clickedVoxelTrueOriginalPos = this.voxelOriginalPositions.get(index);
+		const clickedVoxelTrueOriginalPos =
+			this.voxelOriginalPositions.get(index);
 		if (!clickedVoxelTrueOriginalPos) {
-			console.error("Clicked voxel has no true original position stored. Aborting click effect.");
+			console.error(
+				"Clicked voxel has no true original position stored. Aborting click effect."
+			);
 			this.isInteractionEnabled = true; // Re-enable before exiting
 			return;
 		}
 
 		const groupRadius = 2.0; // Radius for affecting nearby voxels
 		const affectedVoxelsIndices: number[] = [];
-		
+
 		// Store positions AT THE MOMENT OF CLICK for calculating explosion vectors
 		// These are temporary and not the 'true' original positions.
 		const positionsAtClickTime: Map<number, THREE.Vector3> = new Map();
@@ -886,9 +969,12 @@ export class VoxelModelViewer {
 			if (this.voxels[i] && this.voxels[i].position) {
 				positionsAtClickTime.set(i, this.voxels[i].position.clone()); // Current position of voxel i
 
-				const trueOriginalPosOfCurrentVoxel = this.voxelOriginalPositions.get(i);
+				const trueOriginalPosOfCurrentVoxel =
+					this.voxelOriginalPositions.get(i);
 				if (trueOriginalPosOfCurrentVoxel) {
-					const distance = trueOriginalPosOfCurrentVoxel.distanceTo(clickedVoxelTrueOriginalPos);
+					const distance = trueOriginalPosOfCurrentVoxel.distanceTo(
+						clickedVoxelTrueOriginalPos
+					);
 					if (distance <= groupRadius) {
 						affectedVoxelsIndices.push(i);
 					}
@@ -898,8 +984,8 @@ export class VoxelModelViewer {
 
 		// Kill any existing tweens that might conflict
 		// This is a broad approach; more targeted killing could be used if performance becomes an issue.
-		gsap.killTweensOf(this.voxels.map(v => v.position));
-		gsap.killTweensOf(this.voxels.map(v => v.color));
+		gsap.killTweensOf(this.voxels.map((v) => v.position));
+		gsap.killTweensOf(this.voxels.map((v) => v.color));
 		this.voxelHoverTweens.forEach((tween) => tween.kill());
 		this.voxelHoverTweens.clear();
 
@@ -908,41 +994,64 @@ export class VoxelModelViewer {
 				// console.log("Click master timeline onComplete: Forcing reset and re-enabling interactions.");
 				this.forceResetAllVoxelPositions(); // Ultimate failsafe to restore true original state
 				this.isInteractionEnabled = true; // Re-enable interactions
-			}
+			},
 		});
 
 		// STAGE 1: Explode outward and brighten
 		for (const voxelIdx of affectedVoxelsIndices) {
 			const voxel = this.voxels[voxelIdx];
 			const posAtClick = positionsAtClickTime.get(voxelIdx);
-			const trueOriginalModelColor = this.voxelsPerModel[this.activeModelIndex]?.[voxelIdx]?.color.clone() || new THREE.Color(0xffffff);
+			const trueOriginalModelColor =
+				this.voxelsPerModel[this.activeModelIndex]?.[
+					voxelIdx
+				]?.color.clone() || new THREE.Color(0xffffff);
 
 			if (!voxel || !posAtClick) continue; // Skip if voxel or its position at click time is missing
 
-			let direction = new THREE.Vector3().subVectors(posAtClick, clickedVoxelTrueOriginalPos).normalize();
-			if (voxelIdx === index || direction.lengthSq() < 0.001) { // Central voxel or coincident
-				direction.set(Math.random() * 2 - 1, 0.7 + Math.random() * 0.6, Math.random() * 2 - 1).normalize(); // Bias upward, more pronounced
+			let direction = new THREE.Vector3()
+				.subVectors(posAtClick, clickedVoxelTrueOriginalPos)
+				.normalize();
+			if (voxelIdx === index || direction.lengthSq() < 0.001) {
+				// Central voxel or coincident
+				direction
+					.set(
+						Math.random() * 2 - 1,
+						0.7 + Math.random() * 0.6,
+						Math.random() * 2 - 1
+					)
+					.normalize(); // Bias upward, more pronounced
 			}
 			const explosionStrength = 1.2 + Math.random() * 0.8; // Slightly stronger, more varied explosion
-			const targetExplodePos = new THREE.Vector3().addVectors(posAtClick, direction.multiplyScalar(explosionStrength));
+			const targetExplodePos = new THREE.Vector3().addVectors(
+				posAtClick,
+				direction.multiplyScalar(explosionStrength)
+			);
 
-			masterTimeline.to(voxel.position, {
-				x: targetExplodePos.x,
-				y: targetExplodePos.y,
-				z: targetExplodePos.z,
-				duration: 0.45, // Slightly longer explosion phase
-				ease: "circ.out", // Different ease for variety
-				onUpdate: () => this.updateMatrix(voxelIdx),
-			}, "explode");
+			masterTimeline.to(
+				voxel.position,
+				{
+					x: targetExplodePos.x,
+					y: targetExplodePos.y,
+					z: targetExplodePos.z,
+					duration: 0.45, // Slightly longer explosion phase
+					ease: "circ.out", // Different ease for variety
+					onUpdate: () => this.updateMatrix(voxelIdx),
+				},
+				"explode"
+			);
 
-			masterTimeline.to(voxel.color, {
-				r: Math.min(1, trueOriginalModelColor.r * 1.3 + 0.2),
-				g: Math.min(1, trueOriginalModelColor.g * 1.3 + 0.2),
-				b: Math.min(1, trueOriginalModelColor.b * 1.3 + 0.2),
-				duration: 0.25,
-				ease: "power1.out",
-				onUpdate: () => this.updateMatrix(voxelIdx), // Ensure color updates are reflected
-			}, "explode");
+			masterTimeline.to(
+				voxel.color,
+				{
+					r: Math.min(1, trueOriginalModelColor.r * 1.3 + 0.2),
+					g: Math.min(1, trueOriginalModelColor.g * 1.3 + 0.2),
+					b: Math.min(1, trueOriginalModelColor.b * 1.3 + 0.2),
+					duration: 0.25,
+					ease: "power1.out",
+					onUpdate: () => this.updateMatrix(voxelIdx), // Ensure color updates are reflected
+				},
+				"explode"
+			);
 		}
 
 		// STAGE 2: Pause (achieved by label offset for return tweens)
@@ -951,30 +1060,43 @@ export class VoxelModelViewer {
 		// STAGE 3: Return to TRUE original positions and colors
 		for (const voxelIdx of affectedVoxelsIndices) {
 			const voxel = this.voxels[voxelIdx];
-			const trueOriginalPosition = this.voxelOriginalPositions.get(voxelIdx);
-			const trueOriginalModelColor = this.voxelsPerModel[this.activeModelIndex]?.[voxelIdx]?.color.clone();
+			const trueOriginalPosition =
+				this.voxelOriginalPositions.get(voxelIdx);
+			const trueOriginalModelColor =
+				this.voxelsPerModel[this.activeModelIndex]?.[
+					voxelIdx
+				]?.color.clone();
 
-			if (!voxel || !trueOriginalPosition || !trueOriginalModelColor) continue; // Skip if essential data is missing
+			if (!voxel || !trueOriginalPosition || !trueOriginalModelColor)
+				continue; // Skip if essential data is missing
 
-			masterTimeline.to(voxel.position, {
-				x: trueOriginalPosition.x,
-				y: trueOriginalPosition.y,
-				z: trueOriginalPosition.z,
-				duration: 0.7, // Longer, smoother return
-				ease: "elastic.out(1, 0.55)", // Adjusted elastic effect
-				onUpdate: () => this.updateMatrix(voxelIdx),
-			}, "returnStart");
+			masterTimeline.to(
+				voxel.position,
+				{
+					x: trueOriginalPosition.x,
+					y: trueOriginalPosition.y,
+					z: trueOriginalPosition.z,
+					duration: 0.7, // Longer, smoother return
+					ease: "elastic.out(1, 0.55)", // Adjusted elastic effect
+					onUpdate: () => this.updateMatrix(voxelIdx),
+				},
+				"returnStart"
+			);
 
-			masterTimeline.to(voxel.color, {
-				r: trueOriginalModelColor.r,
-				g: trueOriginalModelColor.g,
-				b: trueOriginalModelColor.b,
-				duration: 0.4, // Color return duration
-				ease: "power2.inOut",
-				onUpdate: () => this.updateMatrix(voxelIdx), // Ensure color updates are reflected
-			}, "returnStart");
+			masterTimeline.to(
+				voxel.color,
+				{
+					r: trueOriginalModelColor.r,
+					g: trueOriginalModelColor.g,
+					b: trueOriginalModelColor.b,
+					duration: 0.4, // Color return duration
+					ease: "power2.inOut",
+					onUpdate: () => this.updateMatrix(voxelIdx), // Ensure color updates are reflected
+				},
+				"returnStart"
+			);
 		}
-		
+
 		// If no voxels were affected (e.g., clicking far from model), ensure interaction is re-enabled promptly.
 		if (affectedVoxelsIndices.length === 0) {
 			// console.log("No voxels affected by click, re-enabling interactions immediately.");
@@ -1203,7 +1325,7 @@ export class VoxelModelViewer {
 		let maxIndividualAnimationDuration = 0;
 
 		const shakeIntensity = 0.15; // Max displacement for a single shake component (e.g., 0.15 units)
-		const numShakeCycles = 3;    // Number of back-and-forth shake cycles
+		const numShakeCycles = 3; // Number of back-and-forth shake cycles
 		const shakeCycleDuration = 0.06; // Duration of one full shake cycle (e.g., to target and back slightly)
 		const returnToOriginDuration = 0.4; // Duration to return to original position
 		const maxStartDelay = 0.1; // Max random start delay for each voxel, creates a wave effect
@@ -1221,7 +1343,7 @@ export class VoxelModelViewer {
 				onUpdate: () => {
 					this.updateMatrix(i);
 				},
-				delay: startDelay
+				delay: startDelay,
 			});
 
 			// Add shake cycles
@@ -1236,15 +1358,21 @@ export class VoxelModelViewer {
 					y: originalPosition.y + shakeY,
 					z: originalPosition.z + shakeZ,
 					duration: shakeCycleDuration / 2,
-					ease: "power1.inOut"
+					ease: "power1.inOut",
 				});
 				// Return partially towards original or another random offset to create a jitter
 				tl.to(voxelInfo.position, {
-					x: originalPosition.x + shakeX * 0.25 * (Math.random() - 0.5),
-					y: originalPosition.y + shakeY * 0.25 * (Math.random() - 0.5),
-					z: originalPosition.z + shakeZ * 0.25 * (Math.random() - 0.5),
+					x:
+						originalPosition.x +
+						shakeX * 0.25 * (Math.random() - 0.5),
+					y:
+						originalPosition.y +
+						shakeY * 0.25 * (Math.random() - 0.5),
+					z:
+						originalPosition.z +
+						shakeZ * 0.25 * (Math.random() - 0.5),
 					duration: shakeCycleDuration / 2,
-					ease: "power1.inOut"
+					ease: "power1.inOut",
 				});
 				currentVoxelAnimationDuration += shakeCycleDuration;
 			}
@@ -1255,36 +1383,43 @@ export class VoxelModelViewer {
 				y: originalPosition.y,
 				z: originalPosition.z,
 				duration: returnToOriginDuration,
-				ease: "elastic.out(1, 0.65)" // Slightly less aggressive elastic return
+				ease: "elastic.out(1, 0.65)", // Slightly less aggressive elastic return
 			});
 			currentVoxelAnimationDuration += returnToOriginDuration;
 
-			if (currentVoxelAnimationDuration > maxIndividualAnimationDuration) {
+			if (
+				currentVoxelAnimationDuration > maxIndividualAnimationDuration
+			) {
 				maxIndividualAnimationDuration = currentVoxelAnimationDuration;
 			}
 		}
 
 		// Ensure instanceMatrix.needsUpdate is set throughout the animations
 		if (maxIndividualAnimationDuration > 0 && this.instancedMesh) {
-			this.matrixUpdateTween = gsap.to({}, {
-				duration: maxIndividualAnimationDuration,
-				onUpdate: () => {
-					if (this.instancedMesh) {
-						this.instancedMesh.instanceMatrix.needsUpdate = true;
-					}
-				},
-				onComplete: () => {
-					if (this.instancedMesh) {
-						for (let k = 0; k < this.instancedMesh.count; k++) {
-							if (this.voxels[k]) {
-								this.updateMatrix(k); // Ensure final positions are set
-							}
+			this.matrixUpdateTween = gsap.to(
+				{},
+				{
+					duration: maxIndividualAnimationDuration,
+					onUpdate: () => {
+						if (this.instancedMesh) {
+							this.instancedMesh.instanceMatrix.needsUpdate =
+								true;
 						}
-						this.instancedMesh.instanceMatrix.needsUpdate = true;
-					}
-					this.matrixUpdateTween = null; // Clear the reference
+					},
+					onComplete: () => {
+						if (this.instancedMesh) {
+							for (let k = 0; k < this.instancedMesh.count; k++) {
+								if (this.voxels[k]) {
+									this.updateMatrix(k); // Ensure final positions are set
+								}
+							}
+							this.instancedMesh.instanceMatrix.needsUpdate =
+								true;
+						}
+						this.matrixUpdateTween = null; // Clear the reference
+					},
 				}
-			});
+			);
 		}
 
 		this.showEffectNotification("Shake effect applied");
@@ -1320,20 +1455,28 @@ export class VoxelModelViewer {
 
 			// Calculate exploded position
 			let direction = originalPosition.clone();
-			if (direction.lengthSq() === 0) { // If original position is at origin
-				direction.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
+			if (direction.lengthSq() === 0) {
+				// If original position is at origin
+				direction.set(
+					Math.random() - 0.5,
+					Math.random() - 0.5,
+					Math.random() - 0.5
+				);
 			}
 			direction.normalize();
 
 			const explosionDistance = 3 + Math.random() * 4; // Explode out by 3 to 7 units
-			const explodedPosition = originalPosition.clone().add(direction.multiplyScalar(explosionDistance));
+			const explodedPosition = originalPosition
+				.clone()
+				.add(direction.multiplyScalar(explosionDistance));
 
 			const explodeDuration = 0.3 + Math.random() * 0.2;
 			const returnDelay = 0.1;
 			const returnDuration = 0.5 + Math.random() * 0.3;
 			const startDelay = Math.random() * 0.15;
 
-			const individualDuration = startDelay + explodeDuration + returnDelay + returnDuration;
+			const individualDuration =
+				startDelay + explodeDuration + returnDelay + returnDuration;
 			if (individualDuration > maxIndividualAnimationDuration) {
 				maxIndividualAnimationDuration = individualDuration;
 			}
@@ -1341,7 +1484,7 @@ export class VoxelModelViewer {
 			const tl = gsap.timeline({
 				onUpdate: () => {
 					this.updateMatrix(i);
-				}
+				},
 			});
 
 			tl.to(voxelInfo.position, {
@@ -1350,40 +1493,45 @@ export class VoxelModelViewer {
 				z: explodedPosition.z,
 				duration: explodeDuration,
 				ease: "power2.out",
-				delay: startDelay
-			})
-			.to(voxelInfo.position, { // Return to original
+				delay: startDelay,
+			}).to(voxelInfo.position, {
+				// Return to original
 				x: originalPosition.x,
 				y: originalPosition.y,
 				z: originalPosition.z,
 				duration: returnDuration,
 				ease: "elastic.out(1, 0.7)",
-				delay: returnDelay
+				delay: returnDelay,
 			});
 		}
 
 		// Ensure instanceMatrix.needsUpdate is set throughout the animations
 		if (maxIndividualAnimationDuration > 0 && this.instancedMesh) {
-			this.matrixUpdateTween = gsap.to({}, {
-				duration: maxIndividualAnimationDuration,
-				onUpdate: () => {
-					if (this.instancedMesh) {
-						this.instancedMesh.instanceMatrix.needsUpdate = true;
-					}
-				},
-				onComplete: () => {
-					// Final update to ensure all matrices are correct
-					if (this.instancedMesh) {
-						for (let k = 0; k < this.instancedMesh.count; k++) {
-							if (this.voxels[k]) {
-								this.updateMatrix(k);
-							}
+			this.matrixUpdateTween = gsap.to(
+				{},
+				{
+					duration: maxIndividualAnimationDuration,
+					onUpdate: () => {
+						if (this.instancedMesh) {
+							this.instancedMesh.instanceMatrix.needsUpdate =
+								true;
 						}
-						this.instancedMesh.instanceMatrix.needsUpdate = true;
-					}
-					this.matrixUpdateTween = null; // Clear the reference
+					},
+					onComplete: () => {
+						// Final update to ensure all matrices are correct
+						if (this.instancedMesh) {
+							for (let k = 0; k < this.instancedMesh.count; k++) {
+								if (this.voxels[k]) {
+									this.updateMatrix(k);
+								}
+							}
+							this.instancedMesh.instanceMatrix.needsUpdate =
+								true;
+						}
+						this.matrixUpdateTween = null; // Clear the reference
+					},
 				}
-			});
+			);
 		}
 
 		// Show a notification that the effect was applied
@@ -1410,7 +1558,8 @@ export class VoxelModelViewer {
 				<path d="M17 19h4"/>
 			</svg>
 		`;
-		if (notification) { // Check notification, not icon, for appending
+		if (notification) {
+			// Check notification, not icon, for appending
 			notification.appendChild(icon);
 		}
 
@@ -1418,11 +1567,13 @@ export class VoxelModelViewer {
 		const text = document.createElement("span");
 		text.className = "text-sm font-medium text-indigo-100";
 		text.textContent = message;
-		if (notification) { // Check notification for appending
+		if (notification) {
+			// Check notification for appending
 			notification.appendChild(text);
 		}
 
-		if (document.body) { // Check document.body for appending
+		if (document.body) {
+			// Check document.body for appending
 			document.body.appendChild(notification);
 		}
 
@@ -1497,6 +1648,91 @@ export class VoxelModelViewer {
 					}, 300);
 				}
 			}, 3000);
+		}
+	}
+
+	/**
+	 * Apply audio visualization effect based on audio data
+	 * @param value Normalized audio value between 0 and 1
+	 */
+	public applyAudioVisualization(value: number): void {
+		if (!this.isAudioVisualizationActive) {
+			// Store the original scale when starting visualization
+			if (this.instancedMesh) {
+				this.baseScale.copy(this.instancedMesh.scale);
+			}
+			this.isAudioVisualizationActive = true;
+		}
+
+		this.currentAudioValue = value;
+
+		// Apply the effect to the active model
+		if (this.instancedMesh) {
+			// Calculate target scale based on audio value
+			// Scale ranges from 1x to 1.3x based on audio intensity
+			const scaleFactor = 1 + value * 0.3;
+			this.targetScale.set(
+				this.baseScale.x * scaleFactor,
+				this.baseScale.y * scaleFactor,
+				this.baseScale.z * scaleFactor
+			);
+
+			// Smoothly interpolate to the target scale
+			this.instancedMesh.scale.lerp(this.targetScale, 0.3);
+
+			// Add some rotation based on audio intensity
+			this.instancedMesh.rotation.y += value * 0.03;
+
+			// Apply pulsing effect to voxels if available
+			if (this.voxels && this.voxels.length > 0) {
+				for (let i = 0; i < this.voxels.length; i++) {
+					const voxel = this.voxels[i];
+					if (voxel && voxel.position) {
+						// Pulse effect - different for each voxel based on position
+						const pulseAmount =
+							value *
+							0.2 *
+							(Math.sin(i * 0.1 + Date.now() * 0.001) * 0.5 +
+								0.5);
+						voxel.position.y += pulseAmount * 0.05;
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Reset any audio visualization effects
+	 */
+	public resetAudioVisualization(): void {
+		this.isAudioVisualizationActive = false;
+		this.currentAudioValue = 0;
+
+		// Reset the active model to its original scale
+		if (this.instancedMesh) {
+			gsap.to(this.instancedMesh.scale, {
+				x: this.baseScale.x,
+				y: this.baseScale.y,
+				z: this.baseScale.z,
+				duration: 0.5,
+				ease: "power2.out",
+			});
+
+			// Reset voxel positions if needed
+			if (this.voxels && this.voxels.length > 0) {
+				for (let i = 0; i < this.voxels.length; i++) {
+					const voxel = this.voxels[i];
+					if (voxel && voxel.position) {
+						gsap.to(voxel.position, {
+							x: this.voxelOriginalPositions.get(i)?.x || 0,
+							y: this.voxelOriginalPositions.get(i)?.y || 0,
+							z: this.voxelOriginalPositions.get(i)?.z || 0,
+							duration: 0.5,
+							ease: "power2.out",
+						});
+					}
+				}
+			}
 		}
 	}
 }
