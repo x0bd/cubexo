@@ -236,6 +236,144 @@
 				border-color: rgba(59, 130, 246, 0.5) !important;
 				box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
 			}
+
+			/* Audio Visualizer Panel */
+			.audio-panel {
+				position: fixed;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				width: 400px;
+				z-index: 100;
+				opacity: 0;
+				visibility: hidden;
+				transition: opacity 0.3s ease, visibility 0.3s ease;
+			}
+
+			.audio-panel.active {
+				opacity: 1;
+				visibility: visible;
+			}
+
+			/* Audio waveform visualization */
+			.waveform-placeholder {
+				height: 80px;
+				border-radius: 0.375rem;
+				background: rgba(39, 39, 42, 0.5);
+				position: relative;
+				overflow: hidden;
+			}
+
+			.waveform-placeholder::before {
+				content: "";
+				position: absolute;
+				top: 50%;
+				left: 0;
+				right: 0;
+				height: 2px;
+				background: rgba(255, 255, 255, 0.2);
+			}
+
+			.waveform-placeholder .wave {
+				position: absolute;
+				bottom: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 0 10px;
+			}
+
+			.waveform-placeholder .wave span {
+				width: 3px;
+				background: rgba(99, 102, 241, 0.6);
+				margin: 0 1px;
+				height: 5px;
+				border-radius: 1px;
+				animation: wave 1.5s infinite ease-in-out;
+			}
+
+			@keyframes wave {
+				0%,
+				100% {
+					height: 5px;
+				}
+				50% {
+					height: 30px;
+				}
+			}
+
+			.waveform-placeholder .wave span:nth-child(2n) {
+				animation-delay: 0.2s;
+			}
+
+			.waveform-placeholder .wave span:nth-child(3n) {
+				animation-delay: 0.4s;
+			}
+
+			.waveform-placeholder .wave span:nth-child(4n) {
+				animation-delay: 0.6s;
+			}
+
+			.waveform-placeholder .wave span:nth-child(5n) {
+				animation-delay: 0.8s;
+			}
+
+			/* File upload dropzone */
+			.file-dropzone {
+				border: 2px dashed rgba(99, 102, 241, 0.4);
+				border-radius: 0.5rem;
+				transition: all 0.2s ease;
+				background: rgba(39, 39, 42, 0.3);
+			}
+
+			.file-dropzone:hover {
+				border-color: rgba(99, 102, 241, 0.7);
+				background: rgba(39, 39, 42, 0.5);
+			}
+
+			/* Range slider styling */
+			.audio-slider {
+				-webkit-appearance: none;
+				width: 100%;
+				height: 4px;
+				border-radius: 2px;
+				background: rgba(82, 82, 91, 0.5);
+				outline: none;
+			}
+
+			.audio-slider::-webkit-slider-thumb {
+				-webkit-appearance: none;
+				appearance: none;
+				width: 16px;
+				height: 16px;
+				border-radius: 50%;
+				background: rgb(99, 102, 241);
+				cursor: pointer;
+				transition: all 0.2s ease;
+			}
+
+			.audio-slider::-webkit-slider-thumb:hover {
+				transform: scale(1.1);
+				box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+			}
+
+			.audio-slider::-moz-range-thumb {
+				width: 16px;
+				height: 16px;
+				border-radius: 50%;
+				background: rgb(99, 102, 241);
+				cursor: pointer;
+				border: none;
+				transition: all 0.2s ease;
+			}
+
+			.audio-slider::-moz-range-thumb:hover {
+				transform: scale(1.1);
+				box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+			}
 		</style>
 	</head>
 	<body
@@ -784,251 +922,6 @@
 				</div>
 			</div>
 
-			<!-- Audio Visualizer Modal -->
-			<div
-				id="audio-visualizer-modal"
-				class="fixed inset-0 z-50 flex items-center justify-center hidden"
-			>
-				<!-- Modal Backdrop -->
-				<div
-					class="absolute inset-0 bg-black/60 backdrop-blur-sm"
-				></div>
-
-				<!-- Modal Content -->
-				<div
-					class="relative w-[480px] glass-panel bg-zinc-900/90 border-zinc-700/50 rounded-xl shadow-2xl flex flex-col overflow-hidden"
-				>
-					<!-- Modal Header -->
-					<div
-						class="flex items-center justify-between px-4 py-3 border-b border-zinc-700/50"
-					>
-						<div class="flex items-center gap-2">
-							<span class="text-zinc-300">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="1.75"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									class="lucide lucide-waveform"
-								>
-									<path
-										d="M3 12h4c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2H3c-1.1 0-2-.9-2-2v-4c0-1.1.9-2 2-2Z"
-									/>
-									<path
-										d="M7 12V6c0-1.1.9-2 2-2h0a2 2 0 0 1 2 2v14"
-									/>
-									<path
-										d="M11 12h4c1.1 0 2 .9 2 2v4c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2v-4c0-1.1.9-2 2-2Z"
-									/>
-									<path
-										d="M15 12V6c0-1.1.9-2 2-2h0a2 2 0 0 1 2 2v14"
-									/>
-									<path d="M19 12h2" />
-								</svg>
-							</span>
-							<span class="text-sm font-medium text-zinc-200"
-								>AUDIO VISUALIZER</span
-							>
-						</div>
-						<button
-							id="close-audio-modal"
-							class="w-8 h-8 flex items-center justify-center rounded-md hover:bg-zinc-800/70 text-zinc-400 hover:text-zinc-200 transition-colors"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="18"
-								height="18"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.75"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								class="lucide lucide-x"
-							>
-								<path d="M18 6 6 18" />
-								<path d="m6 6 12 12" />
-							</svg>
-						</button>
-					</div>
-
-					<!-- Modal Body -->
-					<div class="p-4 space-y-5">
-						<!-- Audio Upload Section -->
-						<div class="space-y-2">
-							<div
-								class="text-xs text-zinc-300 tracking-wide mb-1"
-							>
-								AUDIO FILE
-							</div>
-							<div class="flex items-center gap-3">
-								<label
-									id="audio-upload-btn"
-									class="flex-1 flex items-center justify-between py-2.5 px-3.5 rounded-md bg-zinc-800/90 border border-zinc-700/50 hover:bg-zinc-700/90 text-zinc-200 transition-all cursor-pointer traf-button"
-								>
-									<span
-										id="audio-filename"
-										class="text-xs tracking-wide"
-										>SELECT AUDIO FILE</span
-									>
-									<input
-										type="file"
-										id="audio-file-input"
-										accept="audio/*"
-										hidden
-									/>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="1.75"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										class="lucide lucide-music"
-									>
-										<path d="M9 18V5l12-2v13" />
-										<circle cx="6" cy="18" r="3" />
-										<circle cx="18" cy="16" r="3" />
-									</svg>
-								</label>
-							</div>
-
-							<!-- Audio Preview -->
-							<div id="audio-preview" class="hidden">
-								<div
-									class="flex items-center justify-between py-2 px-3 rounded-md bg-zinc-800/50 border border-zinc-700/30"
-								>
-									<div class="flex items-center gap-2">
-										<button
-											id="play-pause-audio"
-											class="w-6 h-6 flex items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="12"
-												height="12"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												class="lucide lucide-play"
-											>
-												<polygon
-													points="5 3 19 12 5 21 5 3"
-												/>
-											</svg>
-										</button>
-										<div
-											class="text-xs text-zinc-300 truncate max-w-[280px]"
-											id="audio-name"
-										>
-											audio-file.mp3
-										</div>
-									</div>
-									<div
-										class="text-xs text-zinc-400"
-										id="audio-duration"
-									>
-										0:00
-									</div>
-								</div>
-
-								<!-- Waveform Visualization -->
-								<div
-									class="mt-2 h-16 bg-zinc-800/50 rounded-md border border-zinc-700/30 overflow-hidden"
-								>
-									<div
-										id="waveform"
-										class="w-full h-full"
-									></div>
-								</div>
-							</div>
-						</div>
-
-						<!-- Parameters -->
-						<div class="space-y-4">
-							<div
-								class="text-xs text-zinc-300 tracking-wide mb-1"
-							>
-								PARAMETERS
-							</div>
-
-							<!-- Sensitivity -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<label class="text-xs text-zinc-400"
-										>SENSITIVITY</label
-									>
-									<span
-										class="text-xs text-zinc-300"
-										id="sensitivity-value"
-										>50%</span
-									>
-								</div>
-								<input
-									type="range"
-									id="sensitivity-slider"
-									min="1"
-									max="100"
-									value="50"
-									class="w-full h-1.5 rounded-lg appearance-none cursor-pointer bg-zinc-700/50"
-								/>
-							</div>
-
-							<!-- Intensity -->
-							<div class="space-y-1.5">
-								<div class="flex items-center justify-between">
-									<label class="text-xs text-zinc-400"
-										>INTENSITY</label
-									>
-									<span
-										class="text-xs text-zinc-300"
-										id="intensity-value"
-										>50%</span
-									>
-								</div>
-								<input
-									type="range"
-									id="intensity-slider"
-									min="1"
-									max="100"
-									value="50"
-									class="w-full h-1.5 rounded-lg appearance-none cursor-pointer bg-zinc-700/50"
-								/>
-							</div>
-						</div>
-					</div>
-
-					<!-- Modal Footer -->
-					<div
-						class="flex items-center justify-end gap-3 px-4 py-3 border-t border-zinc-700/50"
-					>
-						<button
-							id="cancel-audio-visualizer"
-							class="py-2 px-4 rounded-md bg-zinc-800/90 border border-zinc-700/50 hover:bg-zinc-700/90 text-zinc-200 text-xs transition-all traf-button"
-						>
-							CANCEL
-						</button>
-						<button
-							id="start-audio-visualizer"
-							class="py-2 px-4 rounded-md bg-indigo-600/90 hover:bg-indigo-500/90 text-white border border-indigo-500/40 text-xs transition-all traf-button"
-						>
-							START VISUALIZER
-						</button>
-					</div>
-				</div>
-			</div>
-
 			<!-- Loading indicator -->
 			<div
 				id="loader"
@@ -1051,6 +944,197 @@
 					></circle>
 				</svg>
 				<span class="jp tracking-wide">LOADING MODELS</span>
+			</div>
+
+			<!-- Audio Visualizer Panel -->
+			<div
+				id="audio-panel"
+				class="audio-panel panel rounded-xl glass-panel bg-zinc-900/80 border-zinc-700/50 shadow-xl flex flex-col"
+			>
+				<div
+					class="panel-header flex items-center justify-between px-4 py-3 border-b border-zinc-700/50"
+				>
+					<div class="flex items-center gap-2">
+						<span class="text-zinc-300">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="18"
+								height="18"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.75"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="lucide lucide-waveform"
+							>
+								<path d="M22 12h-4l-3 8-3-16-3 8H3" />
+							</svg>
+						</span>
+						<span class="text-sm font-medium text-zinc-200"
+							>AUDIO VISUALIZER</span
+						>
+					</div>
+					<button
+						id="close-audio-panel"
+						class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-800/90 text-zinc-400 hover:text-zinc-200 transition-all"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.75"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							class="lucide lucide-x"
+						>
+							<line x1="18" y1="6" x2="6" y2="18" />
+							<line x1="6" y1="6" x2="18" y2="18" />
+						</svg>
+					</button>
+				</div>
+
+				<div class="panel-content px-4 py-4 space-y-5">
+					<!-- Audio visualization placeholder -->
+					<div class="waveform-placeholder">
+						<div class="wave">
+							<span></span><span></span><span></span><span></span
+							><span></span><span></span> <span></span
+							><span></span><span></span><span></span><span></span
+							><span></span> <span></span><span></span
+							><span></span><span></span><span></span
+							><span></span> <span></span><span></span
+							><span></span><span></span><span></span
+							><span></span> <span></span><span></span
+							><span></span><span></span><span></span
+							><span></span> <span></span><span></span
+							><span></span><span></span><span></span
+							><span></span> <span></span><span></span
+							><span></span><span></span><span></span
+							><span></span>
+						</div>
+					</div>
+
+					<!-- Audio file upload -->
+					<div class="property-group">
+						<div class="text-xs text-zinc-300 tracking-wide mb-2">
+							AUDIO FILE
+						</div>
+						<label
+							class="file-dropzone flex flex-col items-center justify-center gap-2 py-4 cursor-pointer"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.75"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="lucide lucide-music text-indigo-400"
+							>
+								<path d="M9 18V5l12-2v13" />
+								<circle cx="6" cy="18" r="3" />
+								<circle cx="18" cy="16" r="3" />
+							</svg>
+							<span class="text-xs text-zinc-300"
+								>Drop audio file or click to browse</span
+							>
+							<span class="text-[10px] text-zinc-500"
+								>MP3, WAV or OGG format</span
+							>
+							<input
+								type="file"
+								id="audio-file-input"
+								class="hidden"
+								accept="audio/*"
+							/>
+						</label>
+					</div>
+
+					<!-- Audio reactivity parameter -->
+					<div class="property-group">
+						<div class="flex items-center justify-between mb-2">
+							<div class="text-xs text-zinc-300 tracking-wide">
+								REACTIVITY
+							</div>
+							<span
+								id="reactivity-value"
+								class="text-xs text-zinc-300 geist-mono"
+								>50%</span
+							>
+						</div>
+						<input
+							type="range"
+							id="reactivity-slider"
+							class="audio-slider"
+							min="0"
+							max="100"
+							value="50"
+						/>
+						<div class="flex justify-between mt-1">
+							<span class="text-[10px] text-zinc-500"
+								>Subtle</span
+							>
+							<span class="text-[10px] text-zinc-500"
+								>Intense</span
+							>
+						</div>
+					</div>
+
+					<!-- Play controls -->
+					<div class="property-group">
+						<div class="grid grid-cols-2 gap-2">
+							<button
+								id="audio-start"
+								class="py-2 px-3 rounded-md bg-indigo-600/90 hover:bg-indigo-500/90 text-zinc-200 transition-all flex items-center justify-center gap-2 traf-button"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="16"
+									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.75"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									class="lucide lucide-play"
+								>
+									<polygon points="5 3 19 12 5 21 5 3" />
+								</svg>
+								<span class="text-xs">START</span>
+							</button>
+							<button
+								id="audio-stop"
+								disabled
+								class="py-2 px-3 rounded-md bg-zinc-800/90 border border-zinc-700/70 text-zinc-500 flex items-center justify-center gap-2 traf-button"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="16"
+									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.75"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									class="lucide lucide-stop-circle"
+								>
+									<circle cx="12" cy="12" r="10" />
+									<rect x="9" y="9" width="6" height="6" />
+								</svg>
+								<span class="text-xs">STOP</span>
+							</button>
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
 

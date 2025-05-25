@@ -7,6 +7,7 @@ import gsap from "gsap";
 import { ExportFormat } from "./utils/ModelExporter";
 import { ModelUploader } from "./utils/ModelUploader";
 import { ThemeManager } from "./utils/theme"; // Added import for ThemeManager
+import { AudioVisualizer } from "./utils/AudioVisualizer"; // Import the AudioVisualizer
 
 export class App {
 	private viewer: VoxelModelViewer;
@@ -15,18 +16,12 @@ export class App {
 	private voxelizer: Voxelizer;
 	private modelUploader: ModelUploader;
 	private themeManager: ThemeManager; // Declared themeManager property
+	private audioVisualizer: AudioVisualizer; // Declare AudioVisualizer property
 	private isInitialized = false;
 	private loaderElement: HTMLElement | null;
 	private activeModelIdx = 1; // Start with Chicken (index 1)
 	private userModels: { name: string; url: string; model: THREE.Group }[] =
 		[];
-	// Audio visualizer properties
-	private audioContext: AudioContext | null = null;
-	private audioElement: HTMLAudioElement | null = null;
-	private audioSource: MediaElementAudioSourceNode | null = null;
-	private audioAnalyser: AnalyserNode | null = null;
-	private isVisualizerActive = false;
-	private visualizerAnimationFrame: number | null = null;
 
 	constructor() {
 		// Log for debugging
@@ -40,12 +35,14 @@ export class App {
 		this.themeManager = new ThemeManager();
 		this.themeManager.init(); // Call init() to set up event listeners and initial theme
 		console.log("[App] ThemeManager initialized and started.");
+
 		// Initialize components
 		this.viewer = new VoxelModelViewer();
 		this.modelLoader = new ModelLoader();
 		this.voxelizer = new Voxelizer();
 		this.modelSelector = new ModelSelector();
 		this.modelUploader = new ModelUploader();
+		this.audioVisualizer = new AudioVisualizer(); // Initialize AudioVisualizer
 
 		// Setup export panel buttons
 		this.setupExportPanelButtons();
@@ -54,11 +51,14 @@ export class App {
 		this.setupThemeToggle();
 		this.setupUploadButton();
 
+		// Setup model uploader
+		this.setupModelUploader();
+
 		// Setup effect buttons
 		this.setupEffectButtons();
 
-		// Setup audio visualizer modal
-		this.setupAudioVisualizerModal();
+		// Listen for custom notification events
+		this.setupNotificationListener();
 	}
 
 	public async init(): Promise<void> {
@@ -76,6 +76,11 @@ export class App {
 			console.log(`Model selected: ${oldIndex} -> ${newIndex}`);
 			this.viewer.animateToModel(oldIndex, newIndex);
 			this.activeModelIdx = newIndex;
+		});
+
+		// Set audio data callback for the viewer
+		this.audioVisualizer.setCallback((audioData) => {
+			this.viewer.updateWithAudioData(audioData);
 		});
 
 		// Load models
@@ -224,8 +229,8 @@ export class App {
 		);
 		if (audioReactiveButton) {
 			audioReactiveButton.addEventListener("click", () => {
-				console.log("Opening audio visualizer modal");
-				this.openAudioVisualizerModal();
+				console.log("Opening audio visualizer panel");
+				this.audioVisualizer.showPanel();
 			});
 		}
 
@@ -248,6 +253,16 @@ export class App {
 				this.showNotification("Sharing coming soon");
 			});
 		}
+	}
+
+	/**
+	 * Set up listener for custom notification events
+	 */
+	private setupNotificationListener(): void {
+		window.addEventListener("show-notification", ((event: CustomEvent) => {
+			const { message, type } = event.detail;
+			this.showNotification(message, type);
+		}) as EventListener);
 	}
 
 	/**
@@ -544,305 +559,5 @@ export class App {
 				fileInput.click();
 			}
 		});
-	}
-
-	/**
-	 * Setup audio visualizer modal and controls
-	 */
-	private setupAudioVisualizerModal(): void {
-		// Get modal elements
-		const modal = document.getElementById("audio-visualizer-modal");
-		const closeBtn = document.getElementById("close-audio-modal");
-		const cancelBtn = document.getElementById("cancel-audio-visualizer");
-		const startBtn = document.getElementById("start-audio-visualizer");
-		const audioFileInput = document.getElementById(
-			"audio-file-input"
-		) as HTMLInputElement;
-		const audioFilename = document.getElementById("audio-filename");
-		const audioPreview = document.getElementById("audio-preview");
-		const audioName = document.getElementById("audio-name");
-		const audioDuration = document.getElementById("audio-duration");
-		const playPauseBtn = document.getElementById("play-pause-audio");
-		const sensitivitySlider = document.getElementById(
-			"sensitivity-slider"
-		) as HTMLInputElement;
-		const sensitivityValue = document.getElementById("sensitivity-value");
-		const intensitySlider = document.getElementById(
-			"intensity-slider"
-		) as HTMLInputElement;
-		const intensityValue = document.getElementById("intensity-value");
-
-		// Close modal handlers
-		const closeModal = () => {
-			if (modal) {
-				gsap.to(modal, {
-					opacity: 0,
-					duration: 0.2,
-					onComplete: () => {
-						if (modal) {
-							modal.classList.add("hidden");
-							modal.style.opacity = "1";
-						}
-					},
-				});
-			}
-
-			// Stop audio if playing
-			if (this.audioElement) {
-				this.audioElement.pause();
-				this.audioElement.currentTime = 0;
-			}
-		};
-
-		if (closeBtn) closeBtn.addEventListener("click", closeModal);
-		if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
-
-		// Audio file input handler
-		if (audioFileInput) {
-			audioFileInput.addEventListener("change", (event) => {
-				const input = event.target as HTMLInputElement;
-				const files = input.files;
-
-				if (files && files.length > 0) {
-					const file = files[0];
-
-					// Update the filename display
-					if (audioFilename) {
-						audioFilename.textContent =
-							file.name.length > 20
-								? file.name.substring(0, 17) + "..."
-								: file.name;
-					}
-
-					// Create audio element for preview
-					const audio = new Audio();
-					audio.src = URL.createObjectURL(file);
-
-					// When audio metadata is loaded
-					audio.addEventListener("loadedmetadata", () => {
-						if (audioName) audioName.textContent = file.name;
-
-						// Format and display duration
-						if (audioDuration) {
-							const minutes = Math.floor(audio.duration / 60);
-							const seconds = Math.floor(audio.duration % 60);
-							audioDuration.textContent = `${minutes}:${seconds
-								.toString()
-								.padStart(2, "0")}`;
-						}
-
-						// Show audio preview
-						if (audioPreview)
-							audioPreview.classList.remove("hidden");
-
-						// Store the audio element
-						this.audioElement = audio;
-					});
-
-					// Handle play/pause button
-					if (playPauseBtn) {
-						playPauseBtn.addEventListener("click", () => {
-							if (!this.audioElement) return;
-
-							if (this.audioElement.paused) {
-								this.audioElement.play();
-								playPauseBtn.innerHTML = `
-									<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pause">
-										<rect x="6" y="4" width="4" height="16"/>
-										<rect x="14" y="4" width="4" height="16"/>
-									</svg>
-								`;
-							} else {
-								this.audioElement.pause();
-								playPauseBtn.innerHTML = `
-									<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play">
-										<polygon points="5 3 19 12 5 21 5 3"/>
-									</svg>
-								`;
-							}
-						});
-					}
-				}
-			});
-		}
-
-		// Slider value updates
-		if (sensitivitySlider && sensitivityValue) {
-			sensitivitySlider.addEventListener("input", () => {
-				sensitivityValue.textContent = `${sensitivitySlider.value}%`;
-			});
-		}
-
-		if (intensitySlider && intensityValue) {
-			intensitySlider.addEventListener("input", () => {
-				intensityValue.textContent = `${intensitySlider.value}%`;
-			});
-		}
-
-		// Start visualizer button
-		if (startBtn) {
-			startBtn.addEventListener("click", () => {
-				if (!this.audioElement) {
-					this.showNotification(
-						"Please select an audio file first",
-						"error"
-					);
-					return;
-				}
-
-				// Get parameter values
-				const sensitivity = sensitivitySlider
-					? parseInt(sensitivitySlider.value) / 100
-					: 0.5;
-				const intensity = intensitySlider
-					? parseInt(intensitySlider.value) / 100
-					: 0.5;
-
-				// Start the audio visualizer
-				this.startAudioVisualizer(sensitivity, intensity);
-
-				// Close the modal
-				closeModal();
-
-				// Show success notification
-				this.showNotification("Audio visualizer started");
-			});
-		}
-	}
-
-	/**
-	 * Open the audio visualizer modal
-	 */
-	private openAudioVisualizerModal(): void {
-		const modal = document.getElementById("audio-visualizer-modal");
-		if (modal) {
-			modal.classList.remove("hidden");
-
-			// Reset the form
-			const audioFilename = document.getElementById("audio-filename");
-			if (audioFilename) audioFilename.textContent = "SELECT AUDIO FILE";
-
-			const audioPreview = document.getElementById("audio-preview");
-			if (audioPreview) audioPreview.classList.add("hidden");
-
-			const sensitivitySlider = document.getElementById(
-				"sensitivity-slider"
-			) as HTMLInputElement;
-			if (sensitivitySlider) sensitivitySlider.value = "50";
-
-			const intensitySlider = document.getElementById(
-				"intensity-slider"
-			) as HTMLInputElement;
-			if (intensitySlider) intensitySlider.value = "50";
-
-			const sensitivityValue =
-				document.getElementById("sensitivity-value");
-			if (sensitivityValue) sensitivityValue.textContent = "50%";
-
-			const intensityValue = document.getElementById("intensity-value");
-			if (intensityValue) intensityValue.textContent = "50%";
-		}
-	}
-
-	/**
-	 * Start the audio visualizer with the given parameters
-	 */
-	private startAudioVisualizer(sensitivity: number, intensity: number): void {
-		if (!this.audioElement) return;
-
-		// Clean up any existing visualizer
-		this.stopAudioVisualizer();
-
-		// Create audio context and analyzer
-		this.audioContext = new (window.AudioContext ||
-			(window as any).webkitAudioContext)();
-		this.audioSource = this.audioContext.createMediaElementSource(
-			this.audioElement
-		);
-		this.audioAnalyser = this.audioContext.createAnalyser();
-
-		// Connect the audio nodes
-		this.audioSource.connect(this.audioAnalyser);
-		this.audioAnalyser.connect(this.audioContext.destination);
-
-		// Configure the analyzer
-		this.audioAnalyser.fftSize = 256;
-		const bufferLength = this.audioAnalyser.frequencyBinCount;
-		const dataArray = new Uint8Array(bufferLength);
-
-		// Start playing the audio
-		this.audioElement.play();
-		this.isVisualizerActive = true;
-
-		// Visualizer animation loop
-		const visualize = () => {
-			if (!this.isVisualizerActive || !this.audioAnalyser) {
-				return;
-			}
-
-			// Get frequency data
-			this.audioAnalyser.getByteFrequencyData(dataArray);
-
-			// Calculate average frequency
-			let sum = 0;
-			for (let i = 0; i < bufferLength; i++) {
-				sum += dataArray[i];
-			}
-			const average = sum / bufferLength;
-
-			// Apply sensitivity and intensity
-			const normalizedValue =
-				Math.min(1, (average / 255) * sensitivity) * intensity;
-
-			// Apply visualization effect to the model
-			if (this.viewer) {
-				this.viewer.applyAudioVisualization(normalizedValue);
-			}
-
-			// Continue the animation loop
-			this.visualizerAnimationFrame = requestAnimationFrame(visualize);
-		};
-
-		// Start the visualization loop
-		this.visualizerAnimationFrame = requestAnimationFrame(visualize);
-	}
-
-	/**
-	 * Stop the audio visualizer
-	 */
-	private stopAudioVisualizer(): void {
-		this.isVisualizerActive = false;
-
-		// Cancel animation frame
-		if (this.visualizerAnimationFrame !== null) {
-			cancelAnimationFrame(this.visualizerAnimationFrame);
-			this.visualizerAnimationFrame = null;
-		}
-
-		// Clean up audio resources
-		if (this.audioSource) {
-			this.audioSource.disconnect();
-			this.audioSource = null;
-		}
-
-		if (this.audioAnalyser) {
-			this.audioAnalyser.disconnect();
-			this.audioAnalyser = null;
-		}
-
-		if (this.audioContext && this.audioContext.state !== "closed") {
-			this.audioContext.close();
-			this.audioContext = null;
-		}
-
-		if (this.audioElement) {
-			this.audioElement.pause();
-			this.audioElement.currentTime = 0;
-		}
-
-		// Reset any visualization effects
-		if (this.viewer) {
-			this.viewer.resetAudioVisualization();
-		}
 	}
 }

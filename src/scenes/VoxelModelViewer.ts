@@ -34,6 +34,11 @@ export class VoxelModelViewer {
 	> = new Map();
 	private isInteractionEnabled: boolean = true;
 
+	// Audio visualization properties
+	private isAudioVisualizationActive: boolean = false;
+	private audioData: number[] = [];
+	private audioAnimationId: number | null = null;
+
 	private params: AppParameters = {
 		modelPreviewSize: 2,
 		modelSize: 9,
@@ -41,12 +46,6 @@ export class VoxelModelViewer {
 		boxSize: 0.24,
 		boxRoundness: 0.03,
 	};
-
-	// Audio visualization properties
-	private isAudioVisualizationActive = false;
-	private baseScale = new THREE.Vector3(1, 1, 1);
-	private targetScale = new THREE.Vector3(1, 1, 1);
-	private currentAudioValue = 0;
 
 	constructor(params?: Partial<AppParameters>) {
 		if (params) {
@@ -1652,87 +1651,167 @@ export class VoxelModelViewer {
 	}
 
 	/**
-	 * Apply audio visualization effect based on audio data
-	 * @param value Normalized audio value between 0 and 1
+	 * Update the model visualization based on audio data
+	 * @param audioData Array of audio frequency data (0-255 values)
 	 */
-	public applyAudioVisualization(value: number): void {
-		if (!this.isAudioVisualizationActive) {
-			// Store the original scale when starting visualization
-			if (this.instancedMesh) {
-				this.baseScale.copy(this.instancedMesh.scale);
+	public updateWithAudioData(audioData: number[]): void {
+		// Store the audio data
+		this.audioData = audioData;
+
+		// Set flag to indicate audio visualization is active
+		const wasActive = this.isAudioVisualizationActive;
+		this.isAudioVisualizationActive = audioData.some((value) => value > 0);
+
+		// If audio visualization just started, cancel any ongoing hover effects
+		if (!wasActive && this.isAudioVisualizationActive) {
+			// Cancel any existing hover animations
+			this.voxelHoverTweens.forEach((tween) => {
+				tween.kill();
+			});
+			this.voxelHoverTweens.clear();
+
+			// Reset hovered voxel
+			if (this.hoveredVoxelIndex !== -1) {
+				this.handleVoxelUnhover(this.hoveredVoxelIndex);
+				this.hoveredVoxelIndex = -1;
 			}
-			this.isAudioVisualizationActive = true;
+
+			// Temporarily disable interaction while audio is active
+			this.isInteractionEnabled = false;
+		}
+		// If audio visualization just ended, restore interaction
+		else if (wasActive && !this.isAudioVisualizationActive) {
+			// Reset all voxels to their original positions
+			this.forceResetAllVoxelPositions();
+
+			// Re-enable interaction
+			this.isInteractionEnabled = true;
 		}
 
-		this.currentAudioValue = value;
-
-		// Apply the effect to the active model
-		if (this.instancedMesh) {
-			// Calculate target scale based on audio value
-			// Scale ranges from 1x to 1.3x based on audio intensity
-			const scaleFactor = 1 + value * 0.3;
-			this.targetScale.set(
-				this.baseScale.x * scaleFactor,
-				this.baseScale.y * scaleFactor,
-				this.baseScale.z * scaleFactor
-			);
-
-			// Smoothly interpolate to the target scale
-			this.instancedMesh.scale.lerp(this.targetScale, 0.3);
-
-			// Add some rotation based on audio intensity
-			this.instancedMesh.rotation.y += value * 0.03;
-
-			// Apply pulsing effect to voxels if available
-			if (this.voxels && this.voxels.length > 0) {
-				for (let i = 0; i < this.voxels.length; i++) {
-					const voxel = this.voxels[i];
-					if (voxel && voxel.position) {
-						// Pulse effect - different for each voxel based on position
-						const pulseAmount =
-							value *
-							0.2 *
-							(Math.sin(i * 0.1 + Date.now() * 0.001) * 0.5 +
-								0.5);
-						voxel.position.y += pulseAmount * 0.05;
-					}
-				}
-			}
+		// Apply audio data to voxels if audio is active
+		if (this.isAudioVisualizationActive) {
+			this.applyAudioDataToVoxels();
 		}
 	}
 
 	/**
-	 * Reset any audio visualization effects
+	 * Apply audio data to voxels for visualization
 	 */
-	public resetAudioVisualization(): void {
-		this.isAudioVisualizationActive = false;
-		this.currentAudioValue = 0;
+	private applyAudioDataToVoxels(): void {
+		if (
+			!this.isAudioVisualizationActive ||
+			!this.voxels.length ||
+			!this.audioData.length
+		)
+			return;
 
-		// Reset the active model to its original scale
-		if (this.instancedMesh) {
-			gsap.to(this.instancedMesh.scale, {
-				x: this.baseScale.x,
-				y: this.baseScale.y,
-				z: this.baseScale.z,
-				duration: 0.5,
-				ease: "power2.out",
-			});
+		// Cancel existing animation frame if any
+		if (this.audioAnimationId !== null) {
+			cancelAnimationFrame(this.audioAnimationId);
+			this.audioAnimationId = null;
+		}
 
-			// Reset voxel positions if needed
-			if (this.voxels && this.voxels.length > 0) {
-				for (let i = 0; i < this.voxels.length; i++) {
-					const voxel = this.voxels[i];
-					if (voxel && voxel.position) {
-						gsap.to(voxel.position, {
-							x: this.voxelOriginalPositions.get(i)?.x || 0,
-							y: this.voxelOriginalPositions.get(i)?.y || 0,
-							z: this.voxelOriginalPositions.get(i)?.z || 0,
-							duration: 0.5,
-							ease: "power2.out",
-						});
+		// Group voxels by their y-position to create a frequency-like visualization
+		const voxelsByHeight = new Map<number, number[]>();
+
+		// Round y positions to group similar heights
+		this.voxels.forEach((voxel, index) => {
+			const roundedY = Math.round(voxel.position.y * 10) / 10;
+			if (!voxelsByHeight.has(roundedY)) {
+				voxelsByHeight.set(roundedY, []);
+			}
+			voxelsByHeight.get(roundedY)?.push(index);
+		});
+
+		// Sort heights from bottom to top
+		const sortedHeights = Array.from(voxelsByHeight.keys()).sort(
+			(a, b) => a - b
+		);
+
+		// Calculate audio frequency bands based on number of height groups
+		const numBands = sortedHeights.length;
+		const bandSize = Math.ceil(this.audioData.length / numBands);
+
+		// Apply audio data to each height group
+		sortedHeights.forEach((height, heightIndex) => {
+			const voxelIndices = voxelsByHeight.get(height) || [];
+
+			// Calculate average audio value for this band
+			const bandStart = heightIndex * bandSize;
+			const bandEnd = Math.min(
+				bandStart + bandSize,
+				this.audioData.length
+			);
+			let bandSum = 0;
+
+			for (let i = bandStart; i < bandEnd; i++) {
+				bandSum += this.audioData[i] || 0;
+			}
+
+			const avgValue = bandSum / (bandEnd - bandStart);
+			const scaleFactor = avgValue / 255; // Normalize to 0-1
+
+			// Apply visualization effect to voxels in this height group
+			voxelIndices.forEach((voxelIndex) => {
+				if (voxelIndex >= 0 && voxelIndex < this.voxels.length) {
+					const voxel = this.voxels[voxelIndex];
+					const originalPos =
+						this.voxelOriginalPositions.get(voxelIndex);
+
+					if (originalPos) {
+						// Apply a pulse effect based on audio intensity
+						const pulseAmount = scaleFactor * 0.3; // Scale factor to control pulse intensity
+
+						// Create a slight outward movement from the center
+						const direction = new THREE.Vector3()
+							.copy(originalPos)
+							.normalize();
+
+						// New position = original + direction * pulse
+						const newPosition = new THREE.Vector3()
+							.copy(originalPos)
+							.add(direction.multiplyScalar(pulseAmount));
+
+						// Apply position
+						voxel.position.copy(newPosition);
+						this.updateMatrix(voxelIndex);
+
+						// Optionally change color based on audio intensity
+						const currentColor = voxel.color;
+						const intensityFactor = Math.min(1, scaleFactor * 1.5);
+
+						// Brighten the color based on audio intensity
+						currentColor.r = Math.min(
+							1,
+							currentColor.r + intensityFactor * 0.3
+						);
+						currentColor.g = Math.min(
+							1,
+							currentColor.g + intensityFactor * 0.3
+						);
+						currentColor.b = Math.min(
+							1,
+							currentColor.b + intensityFactor * 0.3
+						);
+
+						if (this.instancedMesh) {
+							this.instancedMesh.setColorAt(
+								voxelIndex,
+								currentColor
+							);
+							if (this.instancedMesh.instanceColor) {
+								this.instancedMesh.instanceColor.needsUpdate =
+									true;
+							}
+						}
 					}
 				}
-			}
+			});
+		});
+
+		// Update instance matrices
+		if (this.instancedMesh) {
+			this.instancedMesh.instanceMatrix.needsUpdate = true;
 		}
 	}
 }
