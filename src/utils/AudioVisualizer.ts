@@ -20,6 +20,25 @@ export class AudioVisualizer {
 	 * Set up event listeners for the audio visualizer UI
 	 */
 	private setupEventListeners(): void {
+		// Stop propagation on the entire audio panel
+		const audioPanel = document.getElementById("audio-panel");
+		if (audioPanel) {
+			audioPanel.addEventListener("click", (e: Event) => {
+				e.stopPropagation();
+			});
+
+			// Add keyboard event for Escape key
+			document.addEventListener("keydown", (e: KeyboardEvent) => {
+				if (
+					e.key === "Escape" &&
+					audioPanel.classList.contains("active")
+				) {
+					this.stop();
+					this.hidePanel();
+				}
+			});
+		}
+
 		// Audio file input
 		const audioFileInput = document.getElementById(
 			"audio-file-input"
@@ -50,19 +69,35 @@ export class AudioVisualizer {
 		// Start button
 		const startButton = document.getElementById("audio-start");
 		if (startButton) {
-			startButton.addEventListener("click", () => this.start());
+			startButton.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.start();
+			});
 		}
 
 		// Stop button
 		const stopButton = document.getElementById("audio-stop");
 		if (stopButton) {
-			stopButton.addEventListener("click", () => this.stop());
+			stopButton.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.stop();
+			});
 		}
 
 		// Close panel button
 		const closeButton = document.getElementById("close-audio-panel");
 		if (closeButton) {
-			closeButton.addEventListener("click", () => {
+			closeButton.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.stop();
+				this.hidePanel();
+			});
+		}
+
+		// Backdrop click handler for closing
+		const backdrop = document.getElementById("audio-backdrop");
+		if (backdrop) {
+			backdrop.addEventListener("click", () => {
 				this.stop();
 				this.hidePanel();
 			});
@@ -95,6 +130,20 @@ export class AudioVisualizer {
 					this.loadAudioFile(file);
 				}
 			});
+
+			// Make sure any click inside the dropzone doesn't propagate
+			dropzone.addEventListener("click", (e: Event) => {
+				e.preventDefault();
+				e.stopPropagation();
+
+				// Trigger the file input when clicking on the dropzone
+				const fileInput = document.getElementById(
+					"audio-file-input"
+				) as HTMLInputElement;
+				if (fileInput) {
+					fileInput.click();
+				}
+			});
 		}
 	}
 
@@ -115,6 +164,7 @@ export class AudioVisualizer {
 		// Check if file is an audio file
 		if (!file.type.startsWith("audio/")) {
 			console.error("Please upload an audio file");
+			this.showNotification("Please upload an audio file", "error");
 			return;
 		}
 
@@ -332,8 +382,22 @@ export class AudioVisualizer {
 	 */
 	public showPanel(): void {
 		const panel = document.getElementById("audio-panel");
+		const backdrop = document.getElementById("audio-backdrop");
+
 		if (panel) {
 			panel.classList.add("active");
+		}
+
+		if (backdrop) {
+			backdrop.classList.add("active");
+		}
+
+		// Reset the audio file input to ensure we can select the same file again
+		const fileInput = document.getElementById(
+			"audio-file-input"
+		) as HTMLInputElement;
+		if (fileInput) {
+			fileInput.value = "";
 		}
 	}
 
@@ -342,8 +406,14 @@ export class AudioVisualizer {
 	 */
 	public hidePanel(): void {
 		const panel = document.getElementById("audio-panel");
+		const backdrop = document.getElementById("audio-backdrop");
+
 		if (panel) {
 			panel.classList.remove("active");
+		}
+
+		if (backdrop) {
+			backdrop.classList.remove("active");
 		}
 	}
 

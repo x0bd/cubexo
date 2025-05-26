@@ -238,6 +238,24 @@
 			}
 
 			/* Audio Visualizer Panel */
+			.audio-backdrop {
+				position: fixed;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background-color: rgba(0, 0, 0, 0.5);
+				z-index: 99;
+				opacity: 0;
+				visibility: hidden;
+				transition: opacity 0.3s ease, visibility 0.3s ease;
+			}
+
+			.audio-backdrop.active {
+				opacity: 1;
+				visibility: visible;
+			}
+
 			.audio-panel {
 				position: fixed;
 				top: 50%;
@@ -248,11 +266,13 @@
 				opacity: 0;
 				visibility: hidden;
 				transition: opacity 0.3s ease, visibility 0.3s ease;
+				pointer-events: none;
 			}
 
 			.audio-panel.active {
 				opacity: 1;
 				visibility: visible;
+				pointer-events: auto;
 			}
 
 			/* Audio waveform visualization */
@@ -945,6 +965,9 @@
 				</svg>
 				<span class="jp tracking-wide">LOADING MODELS</span>
 			</div>
+
+			<!-- Audio Backdrop -->
+			<div id="audio-backdrop" class="audio-backdrop"></div>
 
 			<!-- Audio Visualizer Panel -->
 			<div
