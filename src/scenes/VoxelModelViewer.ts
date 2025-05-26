@@ -164,6 +164,35 @@ export class VoxelModelViewer {
 		// Store transition start time for performance tracking
 		const startTime = performance.now();
 
+		// Add detailed debugging info
+		console.log(
+			`===== TRANSITION DEBUG [${_oldModelIdx} → ${newModelIdx}] =====`
+		);
+
+		// Source and target model metrics
+		const sourceCount = this.voxels.length;
+		const targetCount = this.voxelsPerModel[newModelIdx]?.length || 0;
+
+		console.log(`Source model #${_oldModelIdx}: ${sourceCount} voxels`);
+		console.log(`Target model #${newModelIdx}: ${targetCount} voxels`);
+		console.log(`Voxel difference: ${targetCount - sourceCount} voxels`);
+
+		// Check for extreme size differences
+		const sizeDifferenceRatio =
+			Math.max(sourceCount, targetCount) /
+			Math.max(1, Math.min(sourceCount, targetCount));
+		console.log(
+			`Size difference ratio: ${sizeDifferenceRatio.toFixed(2)}x`
+		);
+
+		if (sizeDifferenceRatio > 3) {
+			console.warn(
+				`⚠️ Large size difference detected (${sizeDifferenceRatio.toFixed(
+					2
+				)}x) - this may cause performance issues`
+			);
+		}
+
 		// Cancel any existing animations to prevent conflicts
 		if (this.matrixUpdateTween) {
 			this.matrixUpdateTween.kill();
@@ -183,25 +212,52 @@ export class VoxelModelViewer {
 		}
 
 		// Calculate actual transition count for optimal performance
-		const sourceCount = this.voxels.length;
-		const targetCount = this.voxelsPerModel[newModelIdx]?.length || 0;
-
-		// Intelligently calculate max animations to maintain performance
-		// This keeps animations under 1000 regardless of model size
-		const maxAnimations = Math.min(500, Math.max(sourceCount, targetCount));
+		// Dynamically adjust max animations based on model sizes to avoid overwhelming GPU
+		const maxAnimations = Math.min(
+			// Limit larger models more aggressively
+			targetCount > 1000 ? 300 : 500,
+			Math.max(sourceCount, targetCount)
+		);
 		const animationRatio =
 			maxAnimations / Math.max(sourceCount, targetCount);
+
+		console.log(
+			`Animation optimization: Using ${maxAnimations} animations (${(
+				animationRatio * 100
+			).toFixed(1)}% of total)`
+		);
 
 		// Pre-process target model for more intelligent voxel mapping
 		const targetVoxels = this.voxelsPerModel[newModelIdx] || [];
 
+		// Memory usage estimate
+		const voxelMemoryEstimate =
+			(sourceCount * 50 + // Source model: ~50 bytes per voxel (position, color, etc.)
+				targetCount * 50 + // Target model: ~50 bytes per voxel
+				maxAnimations * 200) / // Animations: ~200 bytes per animation (GSAP overhead)
+			(1024 * 1024); // Convert to MB
+
+		console.log(
+			`Estimated memory usage for transition: ~${voxelMemoryEstimate.toFixed(
+				2
+			)}MB`
+		);
+
+		// Track actual animation counts
+		let positionAnimationsCreated = 0;
+		let colorAnimationsCreated = 0;
+
 		// Create spatial mapping of target voxels for better transitions
+		console.time("Building spatial index");
 		const targetVoxelsByRegion = new Map<string, Voxel[]>();
+		// Use a coarser grid for larger models to improve performance
+		const regionGridSize = targetCount > 1000 ? 2 : 1;
+
 		targetVoxels.forEach((voxel) => {
 			// Create a region key based on approximate position (divide space into sectors)
-			const regionX = Math.floor(voxel.position.x);
-			const regionY = Math.floor(voxel.position.y);
-			const regionZ = Math.floor(voxel.position.z);
+			const regionX = Math.floor(voxel.position.x / regionGridSize);
+			const regionY = Math.floor(voxel.position.y / regionGridSize);
+			const regionZ = Math.floor(voxel.position.z / regionGridSize);
 			const regionKey = `${regionX},${regionY},${regionZ}`;
 
 			if (!targetVoxelsByRegion.has(regionKey)) {
@@ -209,8 +265,10 @@ export class VoxelModelViewer {
 			}
 			targetVoxelsByRegion.get(regionKey)!.push(voxel);
 		});
+		console.timeEnd("Building spatial index");
 
 		// Create a color mapping for better color transitions
+		console.time("Building color index");
 		const targetColorGroups = new Map<string, Voxel[]>();
 		targetVoxels.forEach((voxel) => {
 			// Group by approximate color (reduced precision)
@@ -222,6 +280,11 @@ export class VoxelModelViewer {
 			}
 			targetColorGroups.get(colorKey)!.push(voxel);
 		});
+		console.timeEnd("Building color index");
+
+		console.log(
+			`Created ${targetVoxelsByRegion.size} spatial regions and ${targetColorGroups.size} color groups`
+		);
 
 		// Find closest target voxel for each source voxel
 		const targetMappings = new Map<
@@ -233,200 +296,294 @@ export class VoxelModelViewer {
 		const positionAnimations: gsap.core.Tween[] = [];
 		const colorAnimations: gsap.core.Tween[] = [];
 
-		// Process each voxel
-		for (let i = 0; i < this.voxels.length; i++) {
-			// Skip animations based on ratio to limit total count
-			if (Math.random() > animationRatio && i >= targetCount) {
-				continue;
-			}
+		// Process each voxel - this is the most compute-intensive part
+		console.time("Creating animations");
 
-			// Set up position and color targets
-			let targetPos: THREE.Vector3;
-			let targetColor: THREE.Color | null = null;
+		// For very large models, use a chunked approach to prevent browser freezing
+		// This is especially important for the chicken model which might be larger
+		const processVoxelsInChunks = sourceCount > 1000 || targetCount > 1000;
+		const chunkSize = 200; // Process 200 voxels at a time
 
-			// If there's a direct mapping voxel in the target model
-			if (i < targetCount) {
-				targetPos = targetVoxels[i].position;
-				targetColor = targetVoxels[i].color;
-			} else {
-				// Find a suitable target voxel using spatial mapping
-				const sourceVoxel = this.voxels[i];
-				const regionX = Math.floor(sourceVoxel.position.x);
-				const regionY = Math.floor(sourceVoxel.position.y);
-				const regionZ = Math.floor(sourceVoxel.position.z);
-				const regionKey = `${regionX},${regionY},${regionZ}`;
+		const processVoxelChunk = (startIdx: number, endIdx: number) => {
+			// Process a chunk of voxels
+			for (
+				let i = startIdx;
+				i < Math.min(endIdx, this.voxels.length);
+				i++
+			) {
+				// Skip animations based on ratio to limit total count
+				if (Math.random() > animationRatio && i >= targetCount) {
+					continue;
+				}
 
-				// Try to find voxels in the same region first
-				let candidateVoxels = targetVoxelsByRegion.get(regionKey) || [];
+				// Set up position and color targets
+				let targetPos: THREE.Vector3;
+				let targetColor: THREE.Color | null = null;
 
-				// If no voxels in this region, find the closest region that has voxels
-				if (candidateVoxels.length === 0) {
-					// Try adjacent regions
-					for (let dx = -1; dx <= 1; dx++) {
-						for (let dy = -1; dy <= 1; dy++) {
-							for (let dz = -1; dz <= 1; dz++) {
-								const nearbyKey = `${regionX + dx},${
-									regionY + dy
-								},${regionZ + dz}`;
-								const nearbyVoxels =
-									targetVoxelsByRegion.get(nearbyKey) || [];
-								if (nearbyVoxels.length > 0) {
-									candidateVoxels = nearbyVoxels;
-									break;
+				// If there's a direct mapping voxel in the target model
+				if (i < targetCount) {
+					targetPos = targetVoxels[i].position;
+					targetColor = targetVoxels[i].color;
+				} else {
+					// Find a suitable target voxel using spatial mapping
+					const sourceVoxel = this.voxels[i];
+					// Use the same region grid size as when building the index
+					const regionX = Math.floor(
+						sourceVoxel.position.x / regionGridSize
+					);
+					const regionY = Math.floor(
+						sourceVoxel.position.y / regionGridSize
+					);
+					const regionZ = Math.floor(
+						sourceVoxel.position.z / regionGridSize
+					);
+					const regionKey = `${regionX},${regionY},${regionZ}`;
+
+					// Try to find voxels in the same region first
+					let candidateVoxels =
+						targetVoxelsByRegion.get(regionKey) || [];
+
+					// If no voxels in this region, find the closest region that has voxels
+					if (candidateVoxels.length === 0) {
+						// Try adjacent regions
+						for (let dx = -1; dx <= 1; dx++) {
+							for (let dy = -1; dy <= 1; dy++) {
+								for (let dz = -1; dz <= 1; dz++) {
+									const nearbyKey = `${regionX + dx},${
+										regionY + dy
+									},${regionZ + dz}`;
+									const nearbyVoxels =
+										targetVoxelsByRegion.get(nearbyKey) ||
+										[];
+									if (nearbyVoxels.length > 0) {
+										candidateVoxels = nearbyVoxels;
+										break;
+									}
 								}
+								if (candidateVoxels.length > 0) break;
 							}
 							if (candidateVoxels.length > 0) break;
 						}
-						if (candidateVoxels.length > 0) break;
+					}
+
+					// If still no candidates, try color-based mapping
+					if (candidateVoxels.length === 0) {
+						const sourceColor = sourceVoxel.color;
+						const colorKey = `${Math.floor(
+							sourceColor.r * 5
+						)},${Math.floor(sourceColor.g * 5)},${Math.floor(
+							sourceColor.b * 5
+						)}`;
+						candidateVoxels = targetColorGroups.get(colorKey) || [];
+					}
+
+					// Last resort - use random voxel from target model
+					if (
+						candidateVoxels.length === 0 &&
+						targetVoxels.length > 0
+					) {
+						const randomIndex = Math.floor(
+							targetVoxels.length * Math.random()
+						);
+						candidateVoxels = [targetVoxels[randomIndex]];
+					}
+
+					// Use the candidate or default to origin
+					if (candidateVoxels.length > 0) {
+						const selectedVoxel =
+							candidateVoxels[
+								Math.floor(
+									Math.random() * candidateVoxels.length
+								)
+							];
+						targetPos = selectedVoxel.position;
+						targetColor = selectedVoxel.color;
+					} else {
+						// Fallback if no candidates found
+						targetPos = new THREE.Vector3(0, 0, 0);
 					}
 				}
 
-				// If still no candidates, try color-based mapping
-				if (candidateVoxels.length === 0) {
-					const sourceColor = sourceVoxel.color;
-					const colorKey = `${Math.floor(
-						sourceColor.r * 5
-					)},${Math.floor(sourceColor.g * 5)},${Math.floor(
-						sourceColor.b * 5
-					)}`;
-					candidateVoxels = targetColorGroups.get(colorKey) || [];
-				}
+				// Store the mapping for later use
+				targetMappings.set(i, {
+					position: targetPos,
+					color: targetColor || this.voxels[i].color,
+				});
 
-				// Last resort - use random voxel from target model
-				if (candidateVoxels.length === 0 && targetVoxels.length > 0) {
-					const randomIndex = Math.floor(
-						targetVoxels.length * Math.random()
-					);
-					candidateVoxels = [targetVoxels[randomIndex]];
-				}
+				// Create position animation with variable duration for natural feel
+				// Shorter duration for large models to prevent GPU overload
+				const duration =
+					targetCount > 1000
+						? 0.6 + 0.2 * Math.random() // Shorter for large models
+						: 0.8 + 0.4 * Math.random(); // Normal duration
+				const delay = 0.2 * Math.random();
 
-				// Use the candidate or default to origin
-				if (candidateVoxels.length > 0) {
-					const selectedVoxel =
-						candidateVoxels[
-							Math.floor(Math.random() * candidateVoxels.length)
-						];
-					targetPos = selectedVoxel.position;
-					targetColor = selectedVoxel.color;
-				} else {
-					// Fallback if no candidates found
-					targetPos = new THREE.Vector3(0, 0, 0);
-				}
-			}
-
-			// Store the mapping for later use
-			targetMappings.set(i, {
-				position: targetPos,
-				color: targetColor || this.voxels[i].color,
-			});
-
-			// Create position animation with variable duration for natural feel
-			const duration = 0.8 + 0.4 * Math.random();
-			const delay = 0.2 * Math.random();
-
-			// Position animation
-			const posAnim = gsap.to(this.voxels[i].position, {
-				delay,
-				duration,
-				x: targetPos.x,
-				y: targetPos.y,
-				z: targetPos.z,
-				ease: "back.out(2)",
-				onUpdate: () => {
-					this.updateMatrix(i);
-				},
-				paused: true,
-			});
-			positionAnimations.push(posAnim);
-
-			// Color animation if target color exists
-			if (targetColor) {
-				const colorAnim = gsap.to(this.voxels[i].color, {
-					delay: delay + duration * 0.5, // Start color change halfway through position animation
-					duration: duration * 0.5,
-					r: targetColor.r,
-					g: targetColor.g,
-					b: targetColor.b,
-					ease: "power1.in",
+				// Position animation
+				const posAnim = gsap.to(this.voxels[i].position, {
+					delay,
+					duration,
+					x: targetPos.x,
+					y: targetPos.y,
+					z: targetPos.z,
+					ease: "back.out(1.7)", // Reduce overshoot for large models
 					onUpdate: () => {
-						if (this.instancedMesh) {
-							this.instancedMesh.setColorAt(
-								i,
-								this.voxels[i].color
-							);
-							// Use flag instead of direct update
-							this.instanceColorNeedsUpdate = true;
-						}
+						this.updateMatrix(i);
 					},
 					paused: true,
 				});
-				colorAnimations.push(colorAnim);
+				positionAnimations.push(posAnim);
+				positionAnimationsCreated++;
+
+				// Color animation if target color exists
+				if (targetColor) {
+					const colorAnim = gsap.to(this.voxels[i].color, {
+						delay: delay + duration * 0.5, // Start color change halfway through position animation
+						duration: duration * 0.5,
+						r: targetColor.r,
+						g: targetColor.g,
+						b: targetColor.b,
+						ease: "power1.in",
+						onUpdate: () => {
+							if (this.instancedMesh) {
+								this.instancedMesh.setColorAt(
+									i,
+									this.voxels[i].color
+								);
+								// Use flag instead of direct update
+								this.instanceColorNeedsUpdate = true;
+							}
+						},
+						paused: true,
+					});
+					colorAnimations.push(colorAnim);
+					colorAnimationsCreated++;
+				}
 			}
-		}
 
-		// Batch matrix updates using a single tween for better performance
-		this.matrixUpdateTween = gsap.to(
-			{},
-			{
-				duration: 1.4,
-				onUpdate: () => {
-					if (this.instancedMesh) {
-						this.instancedMesh.instanceMatrix.needsUpdate = true;
-						if (this.instancedMesh.instanceColor) {
-							this.instancedMesh.instanceColor.needsUpdate = true;
+			// If we have more chunks to process, schedule the next chunk
+			if (processVoxelsInChunks && endIdx < this.voxels.length) {
+				const nextStartIdx = endIdx;
+				const nextEndIdx = endIdx + chunkSize;
+
+				// Use a short timeout to allow the browser to update the UI and prevent freezing
+				setTimeout(() => {
+					processVoxelChunk(nextStartIdx, nextEndIdx);
+				}, 0);
+			} else {
+				// All chunks processed, finish the setup
+				finishAnimationSetup();
+			}
+		};
+
+		// Function to finish animation setup after all chunks are processed
+		const finishAnimationSetup = () => {
+			console.timeEnd("Creating animations");
+			console.log(
+				`Created ${positionAnimationsCreated} position animations and ${colorAnimationsCreated} color animations`
+			);
+
+			// Check for animation creation issues
+			if (positionAnimationsCreated === 0) {
+				console.error(
+					"⚠️ No position animations were created! This may indicate a problem with the transition."
+				);
+			}
+
+			// Batch matrix updates using a single tween for better performance
+			console.time("Setting up matrix updates");
+			this.matrixUpdateTween = gsap.to(
+				{},
+				{
+					duration: 1.4,
+					onUpdate: () => {
+						if (this.instancedMesh) {
+							this.instancedMesh.instanceMatrix.needsUpdate =
+								true;
+							if (this.instancedMesh.instanceColor) {
+								this.instancedMesh.instanceColor.needsUpdate =
+									true;
+							}
 						}
-					}
-				},
-				onComplete: () => {
-					// Re-enable interaction
-					this.isInteractionEnabled = true;
+					},
+					onComplete: () => {
+						// Re-enable interaction
+						this.isInteractionEnabled = true;
 
-					// Log performance
-					const endTime = performance.now();
-					console.log(
-						`Model transition completed in ${(
-							endTime - startTime
-						).toFixed(2)}ms`
-					);
+						// Log performance
+						const endTime = performance.now();
+						const transitionTime = endTime - startTime;
+						console.log(
+							`Model transition completed in ${transitionTime.toFixed(
+								2
+							)}ms`
+						);
 
-					// Update original positions map for new model
-					this.voxelOriginalPositions.clear();
-					for (let i = 0; i < this.voxels.length; i++) {
-						if (this.voxels[i] && this.voxels[i].position) {
-							this.voxelOriginalPositions.set(
-								i,
-								this.voxels[i].position.clone()
+						// Performance warning
+						if (transitionTime > 500) {
+							console.warn(
+								`⚠️ Slow transition detected (${transitionTime.toFixed(
+									2
+								)}ms > 500ms)`
 							);
 						}
-					}
 
-					// Set active model index
-					this.activeModelIndex = newModelIdx;
-				},
+						// Update original positions map for new model
+						this.voxelOriginalPositions.clear();
+						for (let i = 0; i < this.voxels.length; i++) {
+							if (this.voxels[i] && this.voxels[i].position) {
+								this.voxelOriginalPositions.set(
+									i,
+									this.voxels[i].position.clone()
+								);
+							}
+						}
+
+						// Set active model index
+						this.activeModelIndex = newModelIdx;
+
+						console.log(
+							`===== TRANSITION COMPLETE [${_oldModelIdx} → ${newModelIdx}] =====`
+						);
+					},
+				}
+			);
+			console.timeEnd("Setting up matrix updates");
+
+			// Add rotation animation for visual interest - reduce rotation for large models
+			if (this.instancedMesh) {
+				gsap.to(this.instancedMesh.rotation, {
+					duration: 1.4,
+					y: "+=" + (targetCount > 1000 ? Math.PI * 0.5 : Math.PI),
+					ease: "power2.out",
+				});
 			}
-		);
 
-		// Add rotation animation for visual interest
-		if (this.instancedMesh) {
-			gsap.to(this.instancedMesh.rotation, {
-				duration: 1.4,
-				y: "+=" + Math.PI,
-				ease: "power2.out",
-			});
+			// Handle count difference between models
+			if (this.instancedMesh && this.voxelsPerModel[newModelIdx]) {
+				gsap.to(this.instancedMesh, {
+					duration: 0.6,
+					count: this.voxelsPerModel[newModelIdx].length,
+					ease: "power1.inOut",
+				});
+			}
+
+			// Play all animations in parallel for better performance
+			console.time("Playing animations");
+			positionAnimations.forEach((anim) => anim.play());
+			colorAnimations.forEach((anim) => anim.play());
+			console.timeEnd("Playing animations");
+		};
+
+		// Start processing voxels in chunks if needed
+		if (processVoxelsInChunks) {
+			console.log(
+				`Using chunked processing for large model (${sourceCount} source voxels, ${targetCount} target voxels)`
+			);
+			processVoxelChunk(0, chunkSize);
+		} else {
+			// For smaller models, process all at once
+			processVoxelChunk(0, this.voxels.length);
 		}
-
-		// Handle count difference between models
-		if (this.instancedMesh && this.voxelsPerModel[newModelIdx]) {
-			gsap.to(this.instancedMesh, {
-				duration: 0.6,
-				count: this.voxelsPerModel[newModelIdx].length,
-				ease: "power1.inOut",
-			});
-		}
-
-		// Play all animations in parallel for better performance
-		positionAnimations.forEach((anim) => anim.play());
-		colorAnimations.forEach((anim) => anim.play());
 	}
 
 	public startRenderLoop(): void {
@@ -816,7 +973,23 @@ export class VoxelModelViewer {
 	private setupInteraction(): void {
 		if (!this.canvasElement) return;
 
-		// Mouse move event for hover effects
+		// Track mouse state for drag detection
+		let isDragging = false;
+		let mouseDownX = 0;
+		let mouseDownY = 0;
+		const dragThreshold = 3; // Pixels of movement before considered dragging
+
+		// Mouse down event to detect start of potential drag
+		this.canvasElement.addEventListener("mousedown", (event) => {
+			if (!this.isInteractionEnabled) return;
+
+			// Store initial position
+			mouseDownX = event.clientX;
+			mouseDownY = event.clientY;
+			isDragging = false;
+		});
+
+		// Mouse move for hover effects and drag detection
 		this.canvasElement.addEventListener("mousemove", (event) => {
 			if (!this.canvasElement) return;
 
@@ -824,13 +997,45 @@ export class VoxelModelViewer {
 			const rect = this.canvasElement.getBoundingClientRect();
 			this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
 			this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+			// Detect if dragging based on movement distance
+			if (
+				!isDragging &&
+				(Math.abs(event.clientX - mouseDownX) > dragThreshold ||
+					Math.abs(event.clientY - mouseDownY) > dragThreshold)
+			) {
+				isDragging = true;
+			}
 		});
 
-		// Mouse click event for selecting voxels
-		this.canvasElement.addEventListener("click", () => {
-			if (this.hoveredVoxelIndex !== -1) {
+		// Mouse up event to detect clicks vs. drags
+		this.canvasElement.addEventListener("mouseup", (event) => {
+			if (!this.isInteractionEnabled) return;
+
+			// Only trigger click if not dragging and a voxel is hovered
+			if (!isDragging && this.hoveredVoxelIndex !== -1) {
 				this.handleVoxelClick(this.hoveredVoxelIndex);
 			}
+
+			// Reset drag state
+			isDragging = false;
+		});
+
+		// Add pointer classes to canvas
+		this.canvasElement.classList.add("cursor-grab");
+		this.canvasElement.addEventListener("mousedown", () => {
+			if (this.canvasElement)
+				this.canvasElement.classList.replace(
+					"cursor-grab",
+					"cursor-grabbing"
+				);
+		});
+		this.canvasElement.addEventListener("mouseup", () => {
+			if (this.canvasElement)
+				this.canvasElement.classList.replace(
+					"cursor-grabbing",
+					"cursor-grab"
+				);
 		});
 	}
 
