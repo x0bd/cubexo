@@ -12,6 +12,9 @@ export class ModelSelector {
 	private modelSelectedCallback:
 		| ((oldIndex: number, newIndex: number) => void)
 		| null = null;
+	private currentModelIndex = 0;
+	private isModelSwitchInProgress = false;
+	private modelSwitchDebounceTimeout: number | null = null;
 
 	constructor() {
 		this.selectorElement = document.getElementById("selector");
@@ -85,16 +88,20 @@ export class ModelSelector {
 				if (labelEl) {
 					// Extract just the base name without the prefix for display
 					let displayName = modelData.name;
-					if (displayName.startsWith('user-model-')) {
-						displayName = displayName.substring('user-model-'.length);
+					if (displayName.startsWith("user-model-")) {
+						displayName = displayName.substring(
+							"user-model-".length
+						);
 					}
 					labelEl.textContent = displayName;
 				}
 			}
 
 			// Log the model data for debugging
-			console.log(`Adding model preview for ${modelData.name} at index ${modelIdx}`);
-			
+			console.log(
+				`Adding model preview for ${modelData.name} at index ${modelIdx}`
+			);
+
 			this.addModelToScene(modelIdx, modelData.model, modelData.name);
 		}
 	}
@@ -277,30 +284,37 @@ export class ModelSelector {
 		}); */
 
 		// Log model information for debugging
-		console.log(`Processing model ${modelIdx} (${modelName || 'unnamed'})`);
+		console.log(`Processing model ${modelIdx} (${modelName || "unnamed"})`);
 		console.log(`Original model dimensions before scaling:`, clonedModel);
 
 		// Determine if this is a user-uploaded model (still needed for potential y-offset)
-		const isUserUploadedModel = modelName && modelName.includes("user-model") || 
-									 modelIdx >= 4; // Assuming first 4 models are built-in
+		const isUserUploadedModel =
+			(modelName && modelName.includes("user-model")) || modelIdx >= 4; // Assuming first 4 models are built-in
 
-		console.log(`Is user uploaded model (for y-offset): ${isUserUploadedModel}`);
+		console.log(
+			`Is user uploaded model (for y-offset): ${isUserUploadedModel}`
+		);
 
 		// Scale and center. Models should arrive pre-normalized (largest dimension ~1.0).
 		const box = new THREE.Box3().setFromObject(clonedModel);
 		const size = box.getSize(new THREE.Vector3());
 		const maxDimension = Math.max(size.x, size.y, size.z);
-		
-		console.log(`ModelSelector - Max dimension of (pre-normalized?) model: ${maxDimension}`);
+
+		console.log(
+			`ModelSelector - Max dimension of (pre-normalized?) model: ${maxDimension}`
+		);
 
 		// Target a consistent final largest dimension for the preview (e.g., 1.8 units)
 		const DESIRED_PREVIEW_DIMENSION = 1.8;
 		let finalScale = DESIRED_PREVIEW_DIMENSION;
-		if (maxDimension > 0) { // Avoid division by zero if model is empty or flat
+		if (maxDimension > 0) {
+			// Avoid division by zero if model is empty or flat
 			finalScale = DESIRED_PREVIEW_DIMENSION / maxDimension;
 		}
 
-		console.log(`ModelSelector - Applying final scale: ${finalScale} (target dim: ${DESIRED_PREVIEW_DIMENSION}, current maxDim: ${maxDimension})`);
+		console.log(
+			`ModelSelector - Applying final scale: ${finalScale} (target dim: ${DESIRED_PREVIEW_DIMENSION}, current maxDim: ${maxDimension})`
+		);
 
 		// Precisely center the model based on the new final scale
 		const center = box.getCenter(new THREE.Vector3());
@@ -309,7 +323,7 @@ export class ModelSelector {
 			-center.y * finalScale,
 			-center.z * finalScale
 		);
-		
+
 		// Apply the final scaling to all models
 		clonedModel.scale.set(finalScale, finalScale, finalScale);
 
@@ -324,7 +338,7 @@ export class ModelSelector {
 
 		console.log(`Final model position and scale:`, {
 			position: clonedModel.position,
-			scale: clonedModel.scale
+			scale: clonedModel.scale,
 		});
 
 		// Store model name in the element for export functionality
@@ -332,7 +346,7 @@ export class ModelSelector {
 			const element = scene.userData.element as HTMLElement;
 			if (element) {
 				element.dataset.modelName = modelName;
-				
+
 				// Add a special class for uploaded models to style them differently if needed
 				if (modelName.includes("user-model")) {
 					element.classList.add("user-uploaded-model");
@@ -472,5 +486,113 @@ export class ModelSelector {
 	public setActiveModelIndex(index: number): void {
 		this.activeModelIdx = index;
 		this.updateActivePreview();
+	}
+
+	public setupModelCycling(): void {
+		const leftButton = document.getElementById("model-prev");
+		const rightButton = document.getElementById("model-right");
+
+		if (leftButton && rightButton) {
+			leftButton.addEventListener("click", () => {
+				this.cycleModel(-1);
+			});
+
+			rightButton.addEventListener("click", () => {
+				this.cycleModel(1);
+			});
+		}
+	}
+
+	private cycleModel(direction: number): void {
+		// Prevent rapid cycling that could cause performance issues
+		if (this.isModelSwitchInProgress) {
+			return;
+		}
+
+		// Clear any pending model switches
+		if (this.modelSwitchDebounceTimeout !== null) {
+			window.clearTimeout(this.modelSwitchDebounceTimeout);
+			this.modelSwitchDebounceTimeout = null;
+		}
+
+		// Set loading state
+		this.isModelSwitchInProgress = true;
+		document.body.classList.add("model-loading");
+
+		// Get next model index with wrapping
+		const nextIndex =
+			(this.currentModelIndex + direction + this.previewScenes.length) %
+			this.previewScenes.length;
+
+		// Show loading indicator in UI
+		const currentPreview = document.querySelector(
+			`.model-preview[data-index="${this.currentModelIndex}"]`
+		);
+		if (currentPreview) {
+			currentPreview.classList.add("loading");
+		}
+
+		// Debounce the actual model switch to prevent multiple rapid changes
+		this.modelSwitchDebounceTimeout = window.setTimeout(() => {
+			// Update current index
+			this.currentModelIndex = nextIndex;
+
+			// Fetch and activate the model
+			const scene = this.previewScenes[nextIndex];
+
+			// Enable low detail mode during transition
+			if (this.renderer) {
+				// Trigger the model change
+				this.activeModelIdx = nextIndex;
+
+				// Update UI
+				this.updateActivePreview();
+
+				// Reset loading state after a short delay to ensure animation completes
+				window.setTimeout(() => {
+					this.isModelSwitchInProgress = false;
+					document.body.classList.remove("model-loading");
+
+					if (currentPreview) {
+						currentPreview.classList.remove("loading");
+					}
+				}, 1500); // Slightly longer than the animation duration
+			}
+		}, 100); // Short debounce to prevent multiple clicks
+	}
+
+	public setupModelPreviews(): void {
+		// Add loading indicator styles to document
+		const style = document.createElement("style");
+		style.innerHTML = `
+			.model-loading .model-preview {
+				opacity: 0.5;
+				transition: opacity 0.3s ease;
+			}
+			
+			.model-preview.loading {
+				position: relative;
+			}
+			
+			.model-preview.loading::after {
+				content: '';
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				width: 20px;
+				height: 20px;
+				margin: -10px 0 0 -10px;
+				border: 2px solid rgba(99, 102, 241, 0.3);
+				border-top-color: rgba(99, 102, 241, 0.8);
+				border-radius: 50%;
+				animation: model-loading-spin 0.8s linear infinite;
+				z-index: 10;
+			}
+			
+			@keyframes model-loading-spin {
+				to { transform: rotate(360deg); }
+			}
+		`;
+		document.head.appendChild(style);
 	}
 }

@@ -47,6 +47,10 @@ export class VoxelModelViewer {
 		boxRoundness: 0.03,
 	};
 
+	// Optimization flags
+	private instanceMatrixNeedsUpdate: boolean = false;
+	private instanceColorNeedsUpdate: boolean = false;
+
 	constructor(params?: Partial<AppParameters>) {
 		if (params) {
 			this.params = { ...this.params, ...params };
@@ -154,29 +158,195 @@ export class VoxelModelViewer {
 	}
 
 	public animateToModel(_oldModelIdx: number, newModelIdx: number): void {
-		// Animate voxels data
+		// Prevent interaction during transition
+		this.isInteractionEnabled = false;
+
+		// Store transition start time for performance tracking
+		const startTime = performance.now();
+
+		// Cancel any existing animations to prevent conflicts
+		if (this.matrixUpdateTween) {
+			this.matrixUpdateTween.kill();
+			this.matrixUpdateTween = null;
+		}
+
+		// Kill any existing hover tweens
+		this.voxelHoverTweens.forEach((tween) => {
+			tween.kill();
+		});
+		this.voxelHoverTweens.clear();
+
+		// Reset hovered voxel
+		if (this.hoveredVoxelIndex !== -1) {
+			this.handleVoxelUnhover(this.hoveredVoxelIndex);
+			this.hoveredVoxelIndex = -1;
+		}
+
+		// Calculate actual transition count for optimal performance
+		const sourceCount = this.voxels.length;
+		const targetCount = this.voxelsPerModel[newModelIdx]?.length || 0;
+
+		// Intelligently calculate max animations to maintain performance
+		// This keeps animations under 1000 regardless of model size
+		const maxAnimations = Math.min(500, Math.max(sourceCount, targetCount));
+		const animationRatio =
+			maxAnimations / Math.max(sourceCount, targetCount);
+
+		// Pre-process target model for more intelligent voxel mapping
+		const targetVoxels = this.voxelsPerModel[newModelIdx] || [];
+
+		// Create spatial mapping of target voxels for better transitions
+		const targetVoxelsByRegion = new Map<string, Voxel[]>();
+		targetVoxels.forEach((voxel) => {
+			// Create a region key based on approximate position (divide space into sectors)
+			const regionX = Math.floor(voxel.position.x);
+			const regionY = Math.floor(voxel.position.y);
+			const regionZ = Math.floor(voxel.position.z);
+			const regionKey = `${regionX},${regionY},${regionZ}`;
+
+			if (!targetVoxelsByRegion.has(regionKey)) {
+				targetVoxelsByRegion.set(regionKey, []);
+			}
+			targetVoxelsByRegion.get(regionKey)!.push(voxel);
+		});
+
+		// Create a color mapping for better color transitions
+		const targetColorGroups = new Map<string, Voxel[]>();
+		targetVoxels.forEach((voxel) => {
+			// Group by approximate color (reduced precision)
+			const colorKey = `${Math.floor(voxel.color.r * 5)},${Math.floor(
+				voxel.color.g * 5
+			)},${Math.floor(voxel.color.b * 5)}`;
+			if (!targetColorGroups.has(colorKey)) {
+				targetColorGroups.set(colorKey, []);
+			}
+			targetColorGroups.get(colorKey)!.push(voxel);
+		});
+
+		// Find closest target voxel for each source voxel
+		const targetMappings = new Map<
+			number,
+			{ position: THREE.Vector3; color: THREE.Color }
+		>();
+
+		// Batch animation setup to improve performance
+		const positionAnimations: gsap.core.Tween[] = [];
+		const colorAnimations: gsap.core.Tween[] = [];
+
+		// Process each voxel
 		for (let i = 0; i < this.voxels.length; i++) {
-			gsap.killTweensOf(this.voxels[i].color);
-			gsap.killTweensOf(this.voxels[i].position);
+			// Skip animations based on ratio to limit total count
+			if (Math.random() > animationRatio && i >= targetCount) {
+				continue;
+			}
 
-			// Increase duration for slower, more deliberate transitions
-			const duration = 1.0 + 0.8 * Math.pow(Math.random(), 6); // Increased from 0.5 + 0.5 to 1.0 + 0.8
+			// Set up position and color targets
 			let targetPos: THREE.Vector3;
+			let targetColor: THREE.Color | null = null;
 
-			// Move to new position if we have one;
-			// otherwise, move to a randomly selected existing position
-			//
-			// Animate to new color if it's determined
-			// otherwise, voxel will be just hidden by animation of instancedMesh.count
+			// If there's a direct mapping voxel in the target model
+			if (i < targetCount) {
+				targetPos = targetVoxels[i].position;
+				targetColor = targetVoxels[i].color;
+			} else {
+				// Find a suitable target voxel using spatial mapping
+				const sourceVoxel = this.voxels[i];
+				const regionX = Math.floor(sourceVoxel.position.x);
+				const regionY = Math.floor(sourceVoxel.position.y);
+				const regionZ = Math.floor(sourceVoxel.position.z);
+				const regionKey = `${regionX},${regionY},${regionZ}`;
 
-			if (this.voxelsPerModel[newModelIdx]?.[i]) {
-				targetPos = this.voxelsPerModel[newModelIdx][i].position;
-				gsap.to(this.voxels[i].color, {
-					delay: 0.9 * Math.random() * duration, // Increased from 0.7 to 0.9
-					duration: 0.2, // Increased from 0.05 to 0.2
-					r: this.voxelsPerModel[newModelIdx][i].color.r,
-					g: this.voxelsPerModel[newModelIdx][i].color.g,
-					b: this.voxelsPerModel[newModelIdx][i].color.b,
+				// Try to find voxels in the same region first
+				let candidateVoxels = targetVoxelsByRegion.get(regionKey) || [];
+
+				// If no voxels in this region, find the closest region that has voxels
+				if (candidateVoxels.length === 0) {
+					// Try adjacent regions
+					for (let dx = -1; dx <= 1; dx++) {
+						for (let dy = -1; dy <= 1; dy++) {
+							for (let dz = -1; dz <= 1; dz++) {
+								const nearbyKey = `${regionX + dx},${
+									regionY + dy
+								},${regionZ + dz}`;
+								const nearbyVoxels =
+									targetVoxelsByRegion.get(nearbyKey) || [];
+								if (nearbyVoxels.length > 0) {
+									candidateVoxels = nearbyVoxels;
+									break;
+								}
+							}
+							if (candidateVoxels.length > 0) break;
+						}
+						if (candidateVoxels.length > 0) break;
+					}
+				}
+
+				// If still no candidates, try color-based mapping
+				if (candidateVoxels.length === 0) {
+					const sourceColor = sourceVoxel.color;
+					const colorKey = `${Math.floor(
+						sourceColor.r * 5
+					)},${Math.floor(sourceColor.g * 5)},${Math.floor(
+						sourceColor.b * 5
+					)}`;
+					candidateVoxels = targetColorGroups.get(colorKey) || [];
+				}
+
+				// Last resort - use random voxel from target model
+				if (candidateVoxels.length === 0 && targetVoxels.length > 0) {
+					const randomIndex = Math.floor(
+						targetVoxels.length * Math.random()
+					);
+					candidateVoxels = [targetVoxels[randomIndex]];
+				}
+
+				// Use the candidate or default to origin
+				if (candidateVoxels.length > 0) {
+					const selectedVoxel =
+						candidateVoxels[
+							Math.floor(Math.random() * candidateVoxels.length)
+						];
+					targetPos = selectedVoxel.position;
+					targetColor = selectedVoxel.color;
+				} else {
+					// Fallback if no candidates found
+					targetPos = new THREE.Vector3(0, 0, 0);
+				}
+			}
+
+			// Store the mapping for later use
+			targetMappings.set(i, {
+				position: targetPos,
+				color: targetColor || this.voxels[i].color,
+			});
+
+			// Create position animation with variable duration for natural feel
+			const duration = 0.8 + 0.4 * Math.random();
+			const delay = 0.2 * Math.random();
+
+			// Position animation
+			const posAnim = gsap.to(this.voxels[i].position, {
+				delay,
+				duration,
+				x: targetPos.x,
+				y: targetPos.y,
+				z: targetPos.z,
+				ease: "back.out(2)",
+				onUpdate: () => {
+					this.updateMatrix(i);
+				},
+				paused: true,
+			});
+			positionAnimations.push(posAnim);
+
+			// Color animation if target color exists
+			if (targetColor) {
+				const colorAnim = gsap.to(this.voxels[i].color, {
+					delay: delay + duration * 0.5, // Start color change halfway through position animation
+					duration: duration * 0.5,
+					r: targetColor.r,
+					g: targetColor.g,
+					b: targetColor.b,
 					ease: "power1.in",
 					onUpdate: () => {
 						if (this.instancedMesh) {
@@ -184,63 +354,21 @@ export class VoxelModelViewer {
 								i,
 								this.voxels[i].color
 							);
-							if (this.instancedMesh.instanceColor) {
-								this.instancedMesh.instanceColor.needsUpdate =
-									true;
-							}
+							// Use flag instead of direct update
+							this.instanceColorNeedsUpdate = true;
 						}
 					},
+					paused: true,
 				});
-			} else {
-				// If no direct voxel exists at this index, use a random one from the target model
-				const targetModelVoxels = this.voxelsPerModel[newModelIdx];
-				if (targetModelVoxels && targetModelVoxels.length > 0) {
-					const randomIndex = Math.floor(
-						targetModelVoxels.length * Math.random()
-					);
-					targetPos = targetModelVoxels[randomIndex].position;
-				} else {
-					// Fallback if target model has no voxels
-					targetPos = new THREE.Vector3(0, 0, 0);
-				}
+				colorAnimations.push(colorAnim);
 			}
-
-			// Move to new position with longer duration
-			gsap.to(this.voxels[i].position, {
-				delay: 0.4 * Math.random(), // Increased from 0.2 to 0.4
-				duration: duration,
-				x: targetPos.x,
-				y: targetPos.y,
-				z: targetPos.z,
-				ease: "back.out(3)",
-				onUpdate: () => {
-					this.updateMatrix(i);
-				},
-			});
 		}
 
-		// Increase the model rotation during transition
-		if (this.instancedMesh) {
-			gsap.to(this.instancedMesh.rotation, {
-				duration: 2.0, // Increased from 1.2 to 2.0
-				y: "+=" + 1.3 * Math.PI,
-				ease: "power2.out",
-			});
-		}
-
-		// Show the right number of voxels with longer transition
-		if (this.instancedMesh && this.voxelsPerModel[newModelIdx]) {
-			gsap.to(this.instancedMesh, {
-				duration: 0.8, // Increased from 0.4 to 0.8
-				count: this.voxelsPerModel[newModelIdx].length,
-			});
-		}
-
-		// Update the instanced mesh accordingly to voxels data
-		gsap.to(
+		// Batch matrix updates using a single tween for better performance
+		this.matrixUpdateTween = gsap.to(
 			{},
 			{
-				duration: 2.2, // Increased from 1.0 to 2.2 for longer overall transition
+				duration: 1.4,
 				onUpdate: () => {
 					if (this.instancedMesh) {
 						this.instancedMesh.instanceMatrix.needsUpdate = true;
@@ -249,11 +377,56 @@ export class VoxelModelViewer {
 						}
 					}
 				},
+				onComplete: () => {
+					// Re-enable interaction
+					this.isInteractionEnabled = true;
+
+					// Log performance
+					const endTime = performance.now();
+					console.log(
+						`Model transition completed in ${(
+							endTime - startTime
+						).toFixed(2)}ms`
+					);
+
+					// Update original positions map for new model
+					this.voxelOriginalPositions.clear();
+					for (let i = 0; i < this.voxels.length; i++) {
+						if (this.voxels[i] && this.voxels[i].position) {
+							this.voxelOriginalPositions.set(
+								i,
+								this.voxels[i].position.clone()
+							);
+						}
+					}
+
+					// Set active model index
+					this.activeModelIndex = newModelIdx;
+				},
 			}
 		);
 
-		// Set the active model index
-		this.activeModelIndex = newModelIdx;
+		// Add rotation animation for visual interest
+		if (this.instancedMesh) {
+			gsap.to(this.instancedMesh.rotation, {
+				duration: 1.4,
+				y: "+=" + Math.PI,
+				ease: "power2.out",
+			});
+		}
+
+		// Handle count difference between models
+		if (this.instancedMesh && this.voxelsPerModel[newModelIdx]) {
+			gsap.to(this.instancedMesh, {
+				duration: 0.6,
+				count: this.voxelsPerModel[newModelIdx].length,
+				ease: "power1.inOut",
+			});
+		}
+
+		// Play all animations in parallel for better performance
+		positionAnimations.forEach((anim) => anim.play());
+		colorAnimations.forEach((anim) => anim.play());
 	}
 
 	public startRenderLoop(): void {
@@ -523,6 +696,13 @@ export class VoxelModelViewer {
 			flatShading: false,
 			envMapIntensity: 1.0, // Better environment reflection
 		});
+
+		// Pre-allocate dummy object for matrix updates
+		this.dummy = new THREE.Object3D();
+
+		// Add optimization flag for batched updates
+		this.instanceMatrixNeedsUpdate = false;
+		this.instanceColorNeedsUpdate = false;
 	}
 
 	public recreateInstancedMesh(count: number): void {
@@ -576,12 +756,14 @@ export class VoxelModelViewer {
 	}
 
 	private updateMatrix(index: number): void {
-		if (!this.instancedMesh) return;
+		if (this.instancedMesh && index >= 0 && index < this.voxels.length) {
+			this.dummy.position.copy(this.voxels[index].position);
+			this.dummy.updateMatrix();
+			this.instancedMesh.setMatrixAt(index, this.dummy.matrix);
 
-		this.dummy.position.copy(this.voxels[index].position);
-		this.dummy.updateMatrix();
-		this.instancedMesh.setMatrixAt(index, this.dummy.matrix);
-		this.instancedMesh.instanceMatrix.needsUpdate = true;
+			// Flag for batch update instead of immediate update
+			this.instanceMatrixNeedsUpdate = true;
+		}
 	}
 
 	private render = (): void => {
@@ -610,6 +792,22 @@ export class VoxelModelViewer {
 
 		// Continue animation loop
 		requestAnimationFrame(this.render);
+
+		// Batch update instance matrices if needed
+		if (this.instancedMesh) {
+			if (this.instanceMatrixNeedsUpdate) {
+				this.instancedMesh.instanceMatrix.needsUpdate = true;
+				this.instanceMatrixNeedsUpdate = false;
+			}
+
+			if (
+				this.instanceColorNeedsUpdate &&
+				this.instancedMesh.instanceColor
+			) {
+				this.instancedMesh.instanceColor.needsUpdate = true;
+				this.instanceColorNeedsUpdate = false;
+			}
+		}
 	};
 
 	/**
@@ -776,6 +974,13 @@ export class VoxelModelViewer {
 				this.voxelHoverTweens.set(i, nearbyTween);
 			}
 		}
+
+		// Update colors for hover effect
+		if (this.instancedMesh) {
+			this.instancedMesh.setColorAt(index, this.voxels[index].color);
+			// Use flag instead of direct update
+			this.instanceColorNeedsUpdate = true;
+		}
 	}
 
 	/**
@@ -865,6 +1070,13 @@ export class VoxelModelViewer {
 
 			// Add to master timeline
 			masterTimeline.add(scaleTween, 0);
+		}
+
+		// Reset color
+		if (this.instancedMesh) {
+			this.instancedMesh.setColorAt(index, this.voxels[index].color);
+			// Use flag instead of direct update
+			this.instanceColorNeedsUpdate = true;
 		}
 	}
 

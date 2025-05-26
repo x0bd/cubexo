@@ -59,6 +59,18 @@ export class App {
 
 		// Listen for custom notification events
 		this.setupNotificationListener();
+
+		// Setup model selector
+		this.modelSelector.init((oldIdx, newIdx) => {
+			// Set active model in the model viewer
+			if (this.viewer) {
+				this.viewer.setActiveModel(newIdx);
+			}
+		});
+
+		// Set up model cycling buttons
+		this.modelSelector.setupModelCycling();
+		this.modelSelector.setupModelPreviews();
 	}
 
 	public async init(): Promise<void> {
