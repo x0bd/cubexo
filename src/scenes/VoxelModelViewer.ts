@@ -20,7 +20,7 @@ export class VoxelModelViewer {
 
 	private canvasElement: HTMLCanvasElement | null = null;
 	private voxelsPerModel: Voxel[][] = [];
-	private voxels: Voxel[] = [];
+	private liveVoxels: Voxel[] = []; // NEW: Represents the current state of all voxels in instancedMesh
 	private activeModelIndex = 0;
 
 	// Mouse interaction properties
@@ -86,634 +86,304 @@ export class VoxelModelViewer {
 	}
 
 	public addVoxelsForModel(modelIdx: number, modelVoxels: Voxel[]): void {
-		// Store voxels for this model
+		// Store voxels definition for this model
 		this.voxelsPerModel[modelIdx] = modelVoxels;
 
-		// Update the mesh if needed
-		const numberOfInstances = Math.max(
-			...this.voxelsPerModel.map((m) => m.length)
+		// Update the mesh and liveVoxels array if needed, based on the largest model so far
+		const maxVoxelCountAcrossAllModels = Math.max(
+			this.instancedMesh?.count || 0, // Current capacity
+			...this.voxelsPerModel.filter((m) => m).map((m) => m.length) // Max defined
 		);
-		if (numberOfInstances > (this.instancedMesh?.count || 0)) {
-			this.recreateInstancedMesh(numberOfInstances);
+
+		if (
+			!this.instancedMesh ||
+			maxVoxelCountAcrossAllModels > this.instancedMesh.count
+		) {
+			console.log(
+				`Recreating instanced mesh and liveVoxels. Old count: ${
+					this.instancedMesh?.count || 0
+				}, New potential max count: ${maxVoxelCountAcrossAllModels}`
+			);
+			this.recreateInstancedMesh(maxVoxelCountAcrossAllModels);
 		}
 	}
 
-	public setActiveModel(modelIdx: number): void {
-		if (modelIdx < 0 || modelIdx >= this.voxelsPerModel.length) {
-			console.warn("Invalid model index.");
+	public setActiveModel(newModelIdx: number): void {
+		if (
+			newModelIdx < 0 ||
+			newModelIdx >= this.voxelsPerModel.length ||
+			!this.voxelsPerModel[newModelIdx]
+		) {
+			console.warn(
+				"Invalid model index or model data not loaded yet for index:",
+				newModelIdx
+			);
+			// Optionally, re-enable interaction if we bail early
+			// this.isInteractionEnabled = true;
 			return;
 		}
 
+		// Prevent interaction during model switch setup AND animation
+		// this.isInteractionEnabled = false; // Moved to animateToModel start
+
 		const oldModelIdx = this.activeModelIndex;
-		this.activeModelIndex = modelIdx;
-		this.voxels = this.voxelsPerModel[this.activeModelIndex];
 
-		// Populate/Update voxelOriginalPositions with the true resting positions for the new model
-		this.voxelOriginalPositions.clear(); // Clear for the new model
-		for (let i = 0; i < this.voxels.length; i++) {
-			if (this.voxels[i] && this.voxels[i].position) {
-				this.voxelOriginalPositions.set(
-					i,
-					this.voxels[i].position.clone()
-				);
-			} else {
-				console.warn(
-					`Voxel at index ${i} is undefined or has no position during setActiveModel.`
-				);
-			}
-		}
-
-		// Check if instancedMesh needs to be recreated or if it's just a model switch
-		const needsRecreation =
-			!this.instancedMesh ||
-			this.instancedMesh.count !== this.voxels.length;
-
-		if (oldModelIdx === this.activeModelIndex && !needsRecreation) {
-			// If same model and count matches, likely just a refresh, ensure positions are reset
-			// This might happen if setActiveModel is called again for the current model
-			this.forceResetAllVoxelPositions(); // Use the newly populated true originals
-		} else if (needsRecreation) {
-			this.recreateInstancedMesh(this.voxels.length);
-		} else if (oldModelIdx !== this.activeModelIndex) {
-			// Corrected: newModelIdx to this.activeModelIndex
-			this.animateToModel(oldModelIdx, this.activeModelIndex);
-		} else {
-			// Fallback: if not animating and not recreating, still ensure positions are set from new model data
-			for (let i = 0; i < this.voxels.length; i++) {
-				if (this.voxels[i] && this.voxels[i].position) {
-					// Added null check for this.voxels[i].position
-					this.dummy.position.copy(this.voxels[i].position);
-					this.dummy.updateMatrix();
-					if (this.instancedMesh) {
-						this.instancedMesh.setMatrixAt(i, this.dummy.matrix);
-					}
-				}
-			}
-			if (this.instancedMesh) {
-				this.instancedMesh.instanceMatrix.needsUpdate = true;
-			}
-		}
-
-		this.isInteractionEnabled = true; // Ensure interactions are enabled
+		// Call animateToModel. activeModelIndex and liveVoxels truncation (if target is smaller)
+		// will be handled in the onComplete callback of the animation.
+		this.animateToModel(oldModelIdx, newModelIdx);
 	}
 
 	public animateToModel(_oldModelIdx: number, newModelIdx: number): void {
-		// Prevent interaction during transition
 		this.isInteractionEnabled = false;
-
-		// Store transition start time for performance tracking
 		const startTime = performance.now();
 
-		// Add detailed debugging info
+		const modelNameForLogging =
+			this.voxelsPerModel[newModelIdx]?.length > 0
+				? `modelData (name unknown, index ${newModelIdx})`
+				: `UNKNOWN MODEL (index ${newModelIdx})`; // Placeholder for actual name if available
 		console.log(
-			`===== TRANSITION DEBUG [${_oldModelIdx} → ${newModelIdx}] =====`
+			`===== ANIMATE TO MODEL [${_oldModelIdx} → ${newModelIdx}] Name: ${modelNameForLogging} =====`
 		);
 
-		// Source and target model metrics
-		const sourceCount = this.voxels.length;
-		const targetCount = this.voxelsPerModel[newModelIdx]?.length || 0;
+		const targetModelDefinition = this.voxelsPerModel[newModelIdx];
 
-		console.log(`Source model #${_oldModelIdx}: ${sourceCount} voxels`);
-		console.log(`Target model #${newModelIdx}: ${targetCount} voxels`);
-		console.log(`Voxel difference: ${targetCount - sourceCount} voxels`);
-
-		// Check for extreme size differences
-		const sizeDifferenceRatio =
-			Math.max(sourceCount, targetCount) /
-			Math.max(1, Math.min(sourceCount, targetCount));
-		console.log(
-			`Size difference ratio: ${sizeDifferenceRatio.toFixed(2)}x`
-		);
-
-		// Cancel any existing animations to prevent conflicts
-		if (this.matrixUpdateTween) {
-			this.matrixUpdateTween.kill();
-			this.matrixUpdateTween = null;
+		// CRUCIAL CHECK: Validate target model data
+		if (!targetModelDefinition) {
+			console.error(
+				`CRITICAL: Target model definition for index ${newModelIdx} is UNDEFINED. Cannot animate.`
+			);
+			this.isInteractionEnabled = true;
+			// Optionally, hide all voxels if target is undefined
+			if (this.instancedMesh) this.instancedMesh.count = 0;
+			return;
 		}
 
-		// Kill any existing hover tweens
-		this.voxelHoverTweens.forEach((tween) => {
-			tween.kill();
-		});
-		this.voxelHoverTweens.clear();
+		const targetModelVoxelCount = targetModelDefinition.length;
+		if (targetModelVoxelCount === 0) {
+			console.warn(
+				`WARNING: Target model definition for index ${newModelIdx} (${modelNameForLogging}) is EMPTY (0 voxels). Model will appear empty.`
+			);
+			// No voxels to animate to, so just hide all existing liveVoxels by setting count to 0.
+			// Individual animations for liveVoxels will still run to move them (e.g., off-screen), then instancedMesh.count makes them disappear.
+		} else {
+			// Log a sample of the chicken model's data if it's the one being targeted
+			// Assuming chicken might be index 1 or if its name can be identified.
+			// For now, let's log if the count is unusual or a specific known problematic index.
+			// This is a placeholder for more specific chicken detection if its name/ID becomes available here.
+			if (
+				newModelIdx === 1 ||
+				(targetModelVoxelCount < 10 && targetModelVoxelCount > 0)
+			) {
+				// Example: index 1 is chicken, or very few voxels
+				console.log(
+					`Sample Voxel Data for ${modelNameForLogging} (first 5 of ${targetModelVoxelCount}):`
+				);
+				for (let k = 0; k < Math.min(5, targetModelVoxelCount); k++) {
+					console.log(
+						`  Voxel ${k}: P(x:${targetModelDefinition[
+							k
+						].position.x.toFixed(2)}, y:${targetModelDefinition[
+							k
+						].position.y.toFixed(2)}, z:${targetModelDefinition[
+							k
+						].position.z.toFixed(2)}), C(r:${targetModelDefinition[
+							k
+						].color.r.toFixed(2)}, g:${targetModelDefinition[
+							k
+						].color.g.toFixed(2)}, b:${targetModelDefinition[
+							k
+						].color.b.toFixed(2)})`
+					);
+				}
+			}
+		}
 
-		// Reset hovered voxel
+		const sourceLiveVoxelCount = this.liveVoxels.length;
+		console.log(
+			`Live voxels (instancedMesh capacity): ${sourceLiveVoxelCount}`
+		);
+		console.log(
+			`Target model '${newModelIdx}' (${modelNameForLogging}) actual voxel count: ${targetModelVoxelCount}`
+		);
+
+		if (this.matrixUpdateTween) this.matrixUpdateTween.kill();
+		this.voxelHoverTweens.forEach((tween) => tween.kill());
+		this.voxelHoverTweens.clear();
 		if (this.hoveredVoxelIndex !== -1) {
 			this.handleVoxelUnhover(this.hoveredVoxelIndex);
 			this.hoveredVoxelIndex = -1;
 		}
 
-		// ***********************************
-		// IMPORTANT: Use simplified algorithm for large models (like chicken)
-		// ***********************************
-		const isLargeModel =
-			targetCount > 700 || sourceCount > 700 || sizeDifferenceRatio > 1.5;
+		const sizeDifferenceRatio =
+			Math.max(sourceLiveVoxelCount, targetModelVoxelCount) /
+			Math.max(1, Math.min(sourceLiveVoxelCount, targetModelVoxelCount));
+		const isPotentiallyProblematic =
+			targetModelVoxelCount > 700 ||
+			sourceLiveVoxelCount > 700 ||
+			sizeDifferenceRatio > 1.5 ||
+			targetModelVoxelCount === 0;
 
-		if (isLargeModel) {
-			console.log(
-				"⚠️ Large model detected! Using simplified transition algorithm"
-			);
-
-			// Get target model data
-			const targetVoxels = this.voxelsPerModel[newModelIdx] || [];
-
-			// Direct approach similar to main.js for better performance on large models
-			for (let i = 0; i < this.voxels.length; i++) {
-				// Kill any existing animations for this voxel
-				gsap.killTweensOf(this.voxels[i].position);
-				gsap.killTweensOf(this.voxels[i].color);
-
-				let targetPos: THREE.Vector3;
-
-				// If there's a direct mapping voxel in the target model
-				if (i < targetVoxels.length) {
-					targetPos = targetVoxels[i].position;
-
-					// Animate color change - simplified approach
-					gsap.to(this.voxels[i].color, {
-						delay: Math.random() * 0.3,
-						duration: 0.2,
-						r: targetVoxels[i].color.r,
-						g: targetVoxels[i].color.g,
-						b: targetVoxels[i].color.b,
-						ease: "power1.in",
-						onUpdate: () => {
-							if (this.instancedMesh) {
-								this.instancedMesh.setColorAt(
-									i,
-									this.voxels[i].color
-								);
-								this.instanceColorNeedsUpdate = true;
-							}
-						},
-					});
-				} else {
-					// Pick a random voxel from the target model (exactly like main.js)
-					const randomIndex = Math.floor(
-						targetVoxels.length * Math.random()
-					);
-					targetPos = targetVoxels[randomIndex].position;
-				}
-
-				// Position animation - simplified approach with shorter duration
-				gsap.to(this.voxels[i].position, {
-					delay: Math.random() * 0.2,
-					duration: 0.5 + Math.random() * 0.3,
-					x: targetPos.x,
-					y: targetPos.y,
-					z: targetPos.z,
-					ease: "back.out(1.7)",
-					onUpdate: () => {
-						this.updateMatrix(i);
-					},
-				});
-			}
-
-			// Add rotation animation (simplified)
-			if (this.instancedMesh) {
-				gsap.to(this.instancedMesh.rotation, {
-					duration: 1.0,
-					y: "+=" + Math.PI,
-					ease: "power2.out",
-				});
-			}
-
-			// Handle count difference between models
-			if (this.instancedMesh && this.voxelsPerModel[newModelIdx]) {
-				gsap.to(this.instancedMesh, {
-					duration: 0.5,
-					count: this.voxelsPerModel[newModelIdx].length,
-					ease: "power1.inOut",
-				});
-			}
-
-			// Update matrices with simplified tween
-			this.matrixUpdateTween = gsap.to(
-				{},
-				{
-					duration: 1.0,
-					onUpdate: () => {
-						if (this.instancedMesh) {
-							this.instancedMesh.instanceMatrix.needsUpdate =
-								true;
-							if (this.instancedMesh.instanceColor) {
-								this.instancedMesh.instanceColor.needsUpdate =
-									true;
-							}
-						}
-					},
-					onComplete: () => {
-						// Re-enable interaction
-						this.isInteractionEnabled = true;
-
-						// Log performance
-						const endTime = performance.now();
-						const transitionTime = endTime - startTime;
-						console.log(
-							`Model transition completed in ${transitionTime.toFixed(
-								2
-							)}ms`
-						);
-
-						// Update original positions map for new model
-						this.voxelOriginalPositions.clear();
-						for (let i = 0; i < this.voxels.length; i++) {
-							if (this.voxels[i] && this.voxels[i].position) {
-								this.voxelOriginalPositions.set(
-									i,
-									this.voxels[i].position.clone()
-								);
-							}
-						}
-
-						// Set active model index
-						this.activeModelIndex = newModelIdx;
-
-						console.log(
-							`===== TRANSITION COMPLETE [${_oldModelIdx} → ${newModelIdx}] =====`
-						);
-					},
-				}
-			);
-
-			return;
-		}
-
-		// For smaller models, use the optimized approach
-
-		// Calculate actual transition count for optimal performance
-		// Dynamically adjust max animations based on model sizes to avoid overwhelming GPU
-		const maxAnimations = Math.min(
-			// Limit larger models more aggressively
-			targetCount > 1000 ? 300 : 500,
-			Math.max(sourceCount, targetCount)
-		);
-		const animationRatio =
-			maxAnimations / Math.max(sourceCount, targetCount);
-
+		// ALWAYS USE SIMPLIFIED PATH FOR NOW TO DEBUG CHICKEN
 		console.log(
-			`Animation optimization: Using ${maxAnimations} animations (${(
-				animationRatio * 100
-			).toFixed(1)}% of total)`
+			"NOTICE: Using SIMPLIFIED transition logic for ALL models to debug chicken."
 		);
 
-		// Pre-process target model for more intelligent voxel mapping
-		const targetVoxels = this.voxelsPerModel[newModelIdx] || [];
-
-		// Memory usage estimate
-		const voxelMemoryEstimate =
-			(sourceCount * 50 + // Source model: ~50 bytes per voxel (position, color, etc.)
-				targetCount * 50 + // Target model: ~50 bytes per voxel
-				maxAnimations * 200) / // Animations: ~200 bytes per animation (GSAP overhead)
-			(1024 * 1024); // Convert to MB
-
-		console.log(
-			`Estimated memory usage for transition: ~${voxelMemoryEstimate.toFixed(
-				2
-			)}MB`
-		);
-
-		// Track actual animation counts
-		let positionAnimationsCreated = 0;
-		let colorAnimationsCreated = 0;
-
-		// Create spatial mapping of target voxels for better transitions
-		console.time("Building spatial index");
-		const targetVoxelsByRegion = new Map<string, Voxel[]>();
-		// Use a coarser grid for larger models to improve performance
-		const regionGridSize = targetCount > 1000 ? 2 : 1;
-
-		targetVoxels.forEach((voxel) => {
-			// Create a region key based on approximate position (divide space into sectors)
-			const regionX = Math.floor(voxel.position.x / regionGridSize);
-			const regionY = Math.floor(voxel.position.y / regionGridSize);
-			const regionZ = Math.floor(voxel.position.z / regionGridSize);
-			const regionKey = `${regionX},${regionY},${regionZ}`;
-
-			if (!targetVoxelsByRegion.has(regionKey)) {
-				targetVoxelsByRegion.set(regionKey, []);
-			}
-			targetVoxelsByRegion.get(regionKey)!.push(voxel);
-		});
-		console.timeEnd("Building spatial index");
-
-		// Create a color mapping for better color transitions
-		console.time("Building color index");
-		const targetColorGroups = new Map<string, Voxel[]>();
-		targetVoxels.forEach((voxel) => {
-			// Group by approximate color (reduced precision)
-			const colorKey = `${Math.floor(voxel.color.r * 5)},${Math.floor(
-				voxel.color.g * 5
-			)},${Math.floor(voxel.color.b * 5)}`;
-			if (!targetColorGroups.has(colorKey)) {
-				targetColorGroups.set(colorKey, []);
-			}
-			targetColorGroups.get(colorKey)!.push(voxel);
-		});
-		console.timeEnd("Building color index");
-
-		console.log(
-			`Created ${targetVoxelsByRegion.size} spatial regions and ${targetColorGroups.size} color groups`
-		);
-
-		// Find closest target voxel for each source voxel
-		const targetMappings = new Map<
-			number,
-			{ position: THREE.Vector3; color: THREE.Color }
-		>();
-
-		// Batch animation setup to improve performance
-		const positionAnimations: gsap.core.Tween[] = [];
-		const colorAnimations: gsap.core.Tween[] = [];
-
-		// Process each voxel - this is the most compute-intensive part
-		console.time("Creating animations");
-
-		// For very large models, use a chunked approach to prevent browser freezing
-		// This is especially important for the chicken model which might be larger
-		const processVoxelsInChunks = sourceCount > 1000 || targetCount > 1000;
-		const chunkSize = 200; // Process 200 voxels at a time
-
-		const processVoxelChunk = (startIdx: number, endIdx: number) => {
-			// Process a chunk of voxels
-			for (
-				let i = startIdx;
-				i < Math.min(endIdx, this.voxels.length);
-				i++
-			) {
-				// Skip animations based on ratio to limit total count
-				if (Math.random() > animationRatio && i >= targetCount) {
-					continue;
-				}
-
-				// Set up position and color targets
-				let targetPos: THREE.Vector3;
-				let targetColor: THREE.Color | null = null;
-
-				// If there's a direct mapping voxel in the target model
-				if (i < targetCount) {
-					targetPos = targetVoxels[i].position;
-					targetColor = targetVoxels[i].color;
-				} else {
-					// Find a suitable target voxel using spatial mapping
-					const sourceVoxel = this.voxels[i];
-					// Use the same region grid size as when building the index
-					const regionX = Math.floor(
-						sourceVoxel.position.x / regionGridSize
-					);
-					const regionY = Math.floor(
-						sourceVoxel.position.y / regionGridSize
-					);
-					const regionZ = Math.floor(
-						sourceVoxel.position.z / regionGridSize
-					);
-					const regionKey = `${regionX},${regionY},${regionZ}`;
-
-					// Try to find voxels in the same region first
-					let candidateVoxels =
-						targetVoxelsByRegion.get(regionKey) || [];
-
-					// If no voxels in this region, find the closest region that has voxels
-					if (candidateVoxels.length === 0) {
-						// Try adjacent regions
-						for (let dx = -1; dx <= 1; dx++) {
-							for (let dy = -1; dy <= 1; dy++) {
-								for (let dz = -1; dz <= 1; dz++) {
-									const nearbyKey = `${regionX + dx},${
-										regionY + dy
-									},${regionZ + dz}`;
-									const nearbyVoxels =
-										targetVoxelsByRegion.get(nearbyKey) ||
-										[];
-									if (nearbyVoxels.length > 0) {
-										candidateVoxels = nearbyVoxels;
-										break;
-									}
-								}
-								if (candidateVoxels.length > 0) break;
-							}
-							if (candidateVoxels.length > 0) break;
-						}
-					}
-
-					// If still no candidates, try color-based mapping
-					if (candidateVoxels.length === 0) {
-						const sourceColor = sourceVoxel.color;
-						const colorKey = `${Math.floor(
-							sourceColor.r * 5
-						)},${Math.floor(sourceColor.g * 5)},${Math.floor(
-							sourceColor.b * 5
-						)}`;
-						candidateVoxels = targetColorGroups.get(colorKey) || [];
-					}
-
-					// Last resort - use random voxel from target model
-					if (
-						candidateVoxels.length === 0 &&
-						targetVoxels.length > 0
-					) {
-						const randomIndex = Math.floor(
-							targetVoxels.length * Math.random()
-						);
-						candidateVoxels = [targetVoxels[randomIndex]];
-					}
-
-					// Use the candidate or default to origin
-					if (candidateVoxels.length > 0) {
-						const selectedVoxel =
-							candidateVoxels[
-								Math.floor(
-									Math.random() * candidateVoxels.length
-								)
-							];
-						targetPos = selectedVoxel.position;
-						targetColor = selectedVoxel.color;
-					} else {
-						// Fallback if no candidates found
-						targetPos = new THREE.Vector3(0, 0, 0);
-					}
-				}
-
-				// Store the mapping for later use
-				targetMappings.set(i, {
-					position: targetPos,
-					color: targetColor || this.voxels[i].color,
-				});
-
-				// Create position animation with variable duration for natural feel
-				// Shorter duration for large models to prevent GPU overload
-				const duration =
-					targetCount > 1000
-						? 0.6 + 0.2 * Math.random() // Shorter for large models
-						: 0.8 + 0.4 * Math.random(); // Normal duration
-				const delay = 0.2 * Math.random();
-
-				// Position animation
-				const posAnim = gsap.to(this.voxels[i].position, {
-					delay,
-					duration,
-					x: targetPos.x,
-					y: targetPos.y,
-					z: targetPos.z,
-					ease: "back.out(1.7)", // Reduce overshoot for large models
-					onUpdate: () => {
-						this.updateMatrix(i);
-					},
-					paused: true,
-				});
-				positionAnimations.push(posAnim);
-				positionAnimationsCreated++;
-
-				// Color animation if target color exists
-				if (targetColor) {
-					const colorAnim = gsap.to(this.voxels[i].color, {
-						delay: delay + duration * 0.5, // Start color change halfway through position animation
-						duration: duration * 0.5,
-						r: targetColor.r,
-						g: targetColor.g,
-						b: targetColor.b,
-						ease: "power1.in",
-						onUpdate: () => {
-							if (this.instancedMesh) {
-								this.instancedMesh.setColorAt(
-									i,
-									this.voxels[i].color
-								);
-								// Use flag instead of direct update
-								this.instanceColorNeedsUpdate = true;
-							}
-						},
-						paused: true,
-					});
-					colorAnimations.push(colorAnim);
-					colorAnimationsCreated++;
-				}
-			}
-
-			// If we have more chunks to process, schedule the next chunk
-			if (processVoxelsInChunks && endIdx < this.voxels.length) {
-				const nextStartIdx = endIdx;
-				const nextEndIdx = endIdx + chunkSize;
-
-				// Use a short timeout to allow the browser to update the UI and prevent freezing
-				setTimeout(() => {
-					processVoxelChunk(nextStartIdx, nextEndIdx);
-				}, 0);
-			} else {
-				// All chunks processed, finish the setup
-				finishAnimationSetup();
-			}
-		};
-
-		// Function to finish animation setup after all chunks are processed
-		const finishAnimationSetup = () => {
-			console.timeEnd("Creating animations");
-			console.log(
-				`Created ${positionAnimationsCreated} position animations and ${colorAnimationsCreated} color animations`
-			);
-
-			// Check for animation creation issues
-			if (positionAnimationsCreated === 0) {
-				console.error(
-					"⚠️ No position animations were created! This may indicate a problem with the transition."
+		for (let i = 0; i < sourceLiveVoxelCount; i++) {
+			if (!this.liveVoxels[i]) {
+				// This case should ideally not happen if liveVoxels is always maintained correctly
+				console.warn(
+					`animateToModel: liveVoxels[${i}] is undefined. Skipping.`
 				);
+				continue;
+			}
+			gsap.killTweensOf(this.liveVoxels[i].position);
+			gsap.killTweensOf(this.liveVoxels[i].color);
+
+			let targetPos: THREE.Vector3;
+			let targetCol: THREE.Color;
+
+			if (i < targetModelVoxelCount) {
+				targetPos = targetModelDefinition[i].position;
+				targetCol = targetModelDefinition[i].color;
+			} else {
+				// This liveVoxel is "extra" (instancedMesh capacity > targetModel actual count)
+				if (targetModelVoxelCount > 0) {
+					const randomTargetIdx = Math.floor(
+						Math.random() * targetModelVoxelCount
+					);
+					targetPos = targetModelDefinition[randomTargetIdx].position
+						.clone()
+						.add(
+							new THREE.Vector3(
+								Math.random() - 0.5,
+								Math.random() - 0.5,
+								Math.random() - 0.5
+							).multiplyScalar(0.1)
+						);
+					targetCol = targetModelDefinition[randomTargetIdx].color;
+				} else {
+					// Target model is empty, so nowhere for "extra" voxels to go. Send them far away.
+					targetPos = new THREE.Vector3(
+						(Math.random() - 0.5) * 50,
+						(Math.random() - 0.5) * 50,
+						(Math.random() - 0.5) * 50
+					); // Scatter them far
+					targetCol = this.liveVoxels[i].color
+						.clone()
+						.lerp(new THREE.Color(0x333333), 0.5); // Fade to dark grey
+				}
 			}
 
-			// Batch matrix updates using a single tween for better performance
-			console.time("Setting up matrix updates");
-			this.matrixUpdateTween = gsap.to(
-				{},
-				{
-					duration: 1.4,
-					onUpdate: () => {
-						if (this.instancedMesh) {
-							this.instancedMesh.instanceMatrix.needsUpdate =
-								true;
-							if (this.instancedMesh.instanceColor) {
-								this.instancedMesh.instanceColor.needsUpdate =
-									true;
-							}
-						}
-					},
-					onComplete: () => {
-						// Re-enable interaction
-						this.isInteractionEnabled = true;
+			if (!targetPos || !targetCol) {
+				console.error(
+					`Error in animateToModel: targetPos or targetCol is undefined for liveVoxel index ${i}. Skipping animation for this voxel.`
+				);
+				console.log(
+					`Details: i=${i}, targetModelVoxelCount=${targetModelVoxelCount}`
+				);
+				if (i >= targetModelVoxelCount && targetModelVoxelCount === 0) {
+					console.log(
+						"Reason: Target model is empty, and this is an extra live voxel."
+					);
+				}
+				continue;
+			}
 
-						// Log performance
-						const endTime = performance.now();
-						const transitionTime = endTime - startTime;
-						console.log(
-							`Model transition completed in ${transitionTime.toFixed(
-								2
-							)}ms`
+			gsap.to(this.liveVoxels[i].position, {
+				delay: Math.random() * 0.15,
+				duration: 0.45 + Math.random() * 0.25,
+				x: targetPos.x,
+				y: targetPos.y,
+				z: targetPos.z,
+				ease: "back.out(1.5)",
+				onUpdate: () => this.updateMatrix(i),
+			});
+
+			gsap.to(this.liveVoxels[i].color, {
+				delay: Math.random() * 0.15 + 0.1,
+				duration: 0.25,
+				r: targetCol.r,
+				g: targetCol.g,
+				b: targetCol.b,
+				ease: "power1.in",
+				onUpdate: () => {
+					if (this.instancedMesh && this.liveVoxels[i]) {
+						this.instancedMesh.setColorAt(
+							i,
+							this.liveVoxels[i].color
 						);
+						this.instanceColorNeedsUpdate = true;
+					}
+				},
+			});
+		}
 
-						// Performance warning
-						if (transitionTime > 500) {
-							console.warn(
-								`⚠️ Slow transition detected (${transitionTime.toFixed(
-									2
-								)}ms > 500ms)`
-							);
-						}
+		// Common GSAP animations for mesh properties
+		if (this.instancedMesh) {
+			gsap.to(this.instancedMesh.rotation, {
+				duration: 1.2,
+				y:
+					"+=" +
+					(isPotentiallyProblematic ? Math.PI * 0.75 : Math.PI * 1.1),
+				ease: "power2.out",
+			});
 
-						// Update original positions map for new model
-						this.voxelOriginalPositions.clear();
-						for (let i = 0; i < this.voxels.length; i++) {
-							if (this.voxels[i] && this.voxels[i].position) {
+			gsap.to(this.instancedMesh, {
+				duration: 0.6,
+				count: targetModelVoxelCount, // Crucial: Set to the actual number of voxels in the target model
+				ease: "power1.inOut",
+			});
+		}
+
+		this.matrixUpdateTween = gsap.to(
+			{},
+			{
+				duration: 1.4,
+				onUpdate: () => {
+					if (this.instancedMesh) {
+						this.instancedMesh.instanceMatrix.needsUpdate = true;
+						if (this.instancedMesh.instanceColor)
+							this.instancedMesh.instanceColor.needsUpdate = true;
+					}
+				},
+				onComplete: () => {
+					console.log("Master tween onComplete: Finalizing state.");
+					this.activeModelIndex = newModelIdx;
+					this.isInteractionEnabled = true;
+
+					this.voxelOriginalPositions.clear();
+					if (targetModelVoxelCount > 0) {
+						// Only rebuild if target has voxels
+						for (let i = 0; i < targetModelVoxelCount; i++) {
+							if (
+								targetModelDefinition[i] &&
+								targetModelDefinition[i].position
+							) {
 								this.voxelOriginalPositions.set(
 									i,
-									this.voxels[i].position.clone()
+									targetModelDefinition[i].position.clone()
 								);
 							}
 						}
+					}
 
-						// Set active model index
-						this.activeModelIndex = newModelIdx;
+					if (this.instancedMesh)
+						this.instancedMesh.count = targetModelVoxelCount;
+					this.instanceMatrixNeedsUpdate = true;
+					this.instanceColorNeedsUpdate = true;
 
-						console.log(
-							`===== TRANSITION COMPLETE [${_oldModelIdx} → ${newModelIdx}] =====`
-						);
-					},
-				}
-			);
-			console.timeEnd("Setting up matrix updates");
-
-			// Add rotation animation for visual interest - reduce rotation for large models
-			if (this.instancedMesh) {
-				gsap.to(this.instancedMesh.rotation, {
-					duration: 1.4,
-					y: "+=" + (targetCount > 1000 ? Math.PI * 0.5 : Math.PI),
-					ease: "power2.out",
-				});
+					const endTime = performance.now();
+					console.log(
+						`Transition to model ${newModelIdx} (${modelNameForLogging}) completed in ${(
+							endTime - startTime
+						).toFixed(2)}ms`
+					);
+					console.log(
+						`===== TRANSITION COMPLETE [${_oldModelIdx} → ${newModelIdx}] =====`
+					);
+				},
 			}
-
-			// Handle count difference between models
-			if (this.instancedMesh && this.voxelsPerModel[newModelIdx]) {
-				gsap.to(this.instancedMesh, {
-					duration: 0.6,
-					count: this.voxelsPerModel[newModelIdx].length,
-					ease: "power1.inOut",
-				});
-			}
-
-			// Play all animations in parallel for better performance
-			console.time("Playing animations");
-			positionAnimations.forEach((anim) => anim.play());
-			colorAnimations.forEach((anim) => anim.play());
-			console.timeEnd("Playing animations");
-		};
-
-		// Start processing voxels in chunks if needed
-		if (processVoxelsInChunks) {
-			console.log(
-				`Using chunked processing for large model (${sourceCount} source voxels, ${targetCount} target voxels)`
-			);
-			processVoxelChunk(0, chunkSize);
-		} else {
-			// For smaller models, process all at once
-			processVoxelChunk(0, this.voxels.length);
-		}
+		);
 	}
 
 	public startRenderLoop(): void {
@@ -993,62 +663,129 @@ export class VoxelModelViewer {
 	}
 
 	public recreateInstancedMesh(count: number): void {
-		if (!this.scene || !this.voxelGeometry || !this.voxelMaterial) return;
-
-		// Remove existing instanced mesh if it exists
+		console.log(`recreateInstancedMesh called with count: ${count}`);
+		// Dispose of old mesh if it exists
 		if (this.instancedMesh) {
-			this.scene.remove(this.instancedMesh);
+			this.scene?.remove(this.instancedMesh);
+			this.instancedMesh.dispose();
+			this.instancedMesh = null;
 		}
+		if (this.voxelGeometry && this.voxelMaterial) {
+			// Initialize this.liveVoxels array to the new count
+			this.liveVoxels = [];
+			const defaultColor = new THREE.Color(0x808080); // Grey for unassigned voxels
 
-		// Re-initialize the voxel array with random colors and positions
-		this.voxels = [];
-		for (let i = 0; i < count; i++) {
-			const randomCoordinate = () => {
-				let v = Math.random() - 0.5;
-				v -= v % this.params.gridSize;
-				return v;
-			};
-			this.voxels.push({
-				position: new THREE.Vector3(
-					randomCoordinate(),
-					randomCoordinate(),
-					randomCoordinate()
-				),
-				// Default white color - will be overridden by actual model colors
-				color: new THREE.Color(1, 1, 1),
-			});
+			for (let i = 0; i < count; i++) {
+				// Initialize with a default state, e.g., random or centered
+				// This state is temporary until a model is actively displayed or animated to.
+				const randomOffset = () =>
+					(Math.random() - 0.5) * this.params.modelSize * 0.1;
+				const initialPosition = new THREE.Vector3(
+					randomOffset(),
+					this.params.modelSize * 0.5 + randomOffset(),
+					randomOffset()
+				);
+
+				this.liveVoxels.push({
+					position: initialPosition,
+					// Ensure color is a new instance
+					color: defaultColor
+						.clone()
+						.offsetHSL(
+							Math.random() * 0.1 - 0.05,
+							Math.random() * 0.1 - 0.05,
+							Math.random() * 0.1 - 0.05
+						),
+				});
+			}
+			console.log(
+				`Initialized liveVoxels with ${this.liveVoxels.length} instances.`
+			);
+
+			this.instancedMesh = new THREE.InstancedMesh(
+				this.voxelGeometry,
+				this.voxelMaterial,
+				count
+			);
+			this.instancedMesh.castShadow = true;
+			this.instancedMesh.receiveShadow = true;
+
+			// Populate instancedMesh from the newly created liveVoxels
+			for (let i = 0; i < count; i++) {
+				if (this.liveVoxels[i]) {
+					this.dummy.position.copy(this.liveVoxels[i].position);
+					this.dummy.updateMatrix();
+					this.instancedMesh.setMatrixAt(i, this.dummy.matrix);
+					this.instancedMesh.setColorAt(i, this.liveVoxels[i].color);
+				} else {
+					// Should not happen if liveVoxels is initialized correctly
+					console.warn(
+						`liveVoxels[${i}] is undefined during recreateInstancedMesh`
+					);
+				}
+			}
+
+			if (this.instancedMesh.instanceMatrix)
+				this.instancedMesh.instanceMatrix.needsUpdate = true;
+			if (this.instancedMesh.instanceColor)
+				this.instancedMesh.instanceColor.needsUpdate = true;
+
+			this.scene?.add(this.instancedMesh);
+			console.log(
+				`Added new instancedMesh to scene with count: ${this.instancedMesh.count}`
+			);
+
+			// After recreating, if there's an active model, immediately snap to its state
+			// This ensures that if recreate was called due to a new larger model being added
+			// (but not yet displayed), the currently displayed model still looks correct.
+			// However, the very first model display is handled by animateToModel after load.
+			if (
+				this.voxelsPerModel[this.activeModelIndex] &&
+				this.voxelsPerModel[this.activeModelIndex].length > 0
+			) {
+				const activeModelData =
+					this.voxelsPerModel[this.activeModelIndex];
+				const activeModelCount = activeModelData.length;
+
+				for (let i = 0; i < this.liveVoxels.length; i++) {
+					if (i < activeModelCount) {
+						this.liveVoxels[i].position.copy(
+							activeModelData[i].position
+						);
+						this.liveVoxels[i].color.copy(activeModelData[i].color);
+					} else {
+						// For "extra" liveVoxels beyond the current active model's count,
+						// move them off-screen or to a neutral state if not already random.
+						// For now, their random init state is fine.
+					}
+					this.updateMatrix(i);
+					this.instancedMesh.setColorAt(i, this.liveVoxels[i].color);
+				}
+				this.instancedMesh.count = activeModelCount;
+				this.instanceMatrixNeedsUpdate = true;
+				this.instanceColorNeedsUpdate = true;
+				console.log(
+					`Snapped instancedMesh to active model #${this.activeModelIndex} state after recreation.`
+				);
+			}
+		} else {
+			console.error(
+				"Voxel geometry or material not initialized before creating instanced mesh."
+			);
 		}
-
-		// Create a new instanced mesh object
-		this.instancedMesh = new THREE.InstancedMesh(
-			this.voxelGeometry,
-			this.voxelMaterial,
-			count
-		);
-		this.instancedMesh.castShadow = true;
-		this.instancedMesh.receiveShadow = true;
-
-		// Assign voxels data to the instanced mesh
-		for (let i = 0; i < count; i++) {
-			this.instancedMesh.setColorAt(i, this.voxels[i].color);
-			this.updateMatrix(i);
-		}
-		this.instancedMesh.instanceMatrix.needsUpdate = true;
-		if (this.instancedMesh.instanceColor) {
-			this.instancedMesh.instanceColor.needsUpdate = true;
-		}
-
-		// Add a new mesh to the scene
-		this.scene.add(this.instancedMesh);
 	}
 
 	private updateMatrix(index: number): void {
-		if (this.instancedMesh && index >= 0 && index < this.voxels.length) {
-			this.dummy.position.copy(this.voxels[index].position);
+		if (
+			this.instancedMesh &&
+			index >= 0 &&
+			index < this.liveVoxels.length &&
+			this.liveVoxels[index]
+		) {
+			// Check liveVoxels[index]
+			this.dummy.position.copy(this.liveVoxels[index].position);
 			this.dummy.updateMatrix();
 			this.instancedMesh.setMatrixAt(index, this.dummy.matrix);
-
-			// Flag for batch update instead of immediate update
 			this.instanceMatrixNeedsUpdate = true;
 		}
 	}
@@ -1211,11 +948,11 @@ export class VoxelModelViewer {
 	 * @param index The index of the voxel to hover
 	 */
 	private handleVoxelHover(index: number): void {
-		if (!this.instancedMesh || index < 0 || index >= this.voxels.length)
+		if (!this.instancedMesh || index < 0 || index >= this.liveVoxels.length)
 			return;
 
 		// Get the position of the hovered voxel
-		const hoveredPosition = this.voxels[index].position.clone();
+		const hoveredPosition = this.liveVoxels[index].position.clone();
 
 		// Kill any existing hover tweens for all voxels
 		this.voxelHoverTweens.forEach((tween) => tween.kill());
@@ -1223,10 +960,10 @@ export class VoxelModelViewer {
 
 		// Store original positions for all voxels if not already stored
 		if (this.voxelOriginalPositions.size === 0) {
-			for (let i = 0; i < this.voxels.length; i++) {
+			for (let i = 0; i < this.liveVoxels.length; i++) {
 				this.voxelOriginalPositions.set(
 					i,
-					this.voxels[i].position.clone()
+					this.liveVoxels[i].position.clone()
 				);
 			}
 		}
@@ -1244,7 +981,7 @@ export class VoxelModelViewer {
 			onUpdate: () => {
 				// Update the matrix for this voxel with the new scale
 				if (this.instancedMesh) {
-					this.dummy.position.copy(this.voxels[index].position);
+					this.dummy.position.copy(this.liveVoxels[index].position);
 					this.dummy.scale.set(
 						scaleObj.scale,
 						scaleObj.scale,
@@ -1265,11 +1002,11 @@ export class VoxelModelViewer {
 		const maxDispersion = 0.5; // Maximum distance to push voxels away
 
 		// Process each voxel to see if it's nearby
-		for (let i = 0; i < this.voxels.length; i++) {
+		for (let i = 0; i < this.liveVoxels.length; i++) {
 			// Skip the hovered voxel itself
 			if (i === index) continue;
 
-			const voxelPos = this.voxels[i].position;
+			const voxelPos = this.liveVoxels[i].position;
 			const distance = voxelPos.distanceTo(hoveredPosition);
 
 			// If this voxel is within our disperse radius
@@ -1296,7 +1033,7 @@ export class VoxelModelViewer {
 				const nearbyTween = gsap.timeline();
 
 				// Disperse outward
-				nearbyTween.to(voxelPos, {
+				nearbyTween.to(this.liveVoxels[i].position, {
 					x: targetPosition.x,
 					y: targetPosition.y,
 					z: targetPosition.z,
@@ -1312,7 +1049,7 @@ export class VoxelModelViewer {
 
 		// Update colors for hover effect
 		if (this.instancedMesh) {
-			this.instancedMesh.setColorAt(index, this.voxels[index].color);
+			this.instancedMesh.setColorAt(index, this.liveVoxels[index].color);
 			// Use flag instead of direct update
 			this.instanceColorNeedsUpdate = true;
 		}
@@ -1323,7 +1060,7 @@ export class VoxelModelViewer {
 	 * @param index The index of the voxel to unhover
 	 */
 	private handleVoxelUnhover(index: number): void {
-		if (!this.instancedMesh || index < 0 || index >= this.voxels.length)
+		if (!this.instancedMesh || index < 0 || index >= this.liveVoxels.length)
 			return;
 
 		// Kill any existing hover tweens for all voxels
@@ -1339,14 +1076,14 @@ export class VoxelModelViewer {
 		});
 
 		// Return all voxels to their original positions
-		for (let i = 0; i < this.voxels.length; i++) {
+		for (let i = 0; i < this.liveVoxels.length; i++) {
 			// Get the original position from our map, or use current position if not found
 			const originalPosition = this.voxelOriginalPositions.get(i);
 
 			// Skip if we don't have an original position stored
 			if (!originalPosition) continue;
 
-			const currentPosition = this.voxels[i].position;
+			const currentPosition = this.liveVoxels[i].position;
 
 			// Only animate if the positions are different (using a small threshold for floating point comparison)
 			const positionDifference =
@@ -1387,7 +1124,9 @@ export class VoxelModelViewer {
 				onUpdate: () => {
 					// Update the matrix for this voxel with the new scale
 					if (this.instancedMesh) {
-						this.dummy.position.copy(this.voxels[index].position);
+						this.dummy.position.copy(
+							this.liveVoxels[index].position
+						);
 						this.dummy.scale.set(
 							scaleObj.scale,
 							scaleObj.scale,
@@ -1409,7 +1148,7 @@ export class VoxelModelViewer {
 
 		// Reset color
 		if (this.instancedMesh) {
-			this.instancedMesh.setColorAt(index, this.voxels[index].color);
+			this.instancedMesh.setColorAt(index, this.liveVoxels[index].color);
 			// Use flag instead of direct update
 			this.instanceColorNeedsUpdate = true;
 		}
@@ -1420,60 +1159,40 @@ export class VoxelModelViewer {
 	 * This is a failsafe to ensure voxels always return to their original state
 	 */
 	private forceResetAllVoxelPositions(): void {
-		if (!this.instancedMesh) return;
+		if (!this.instancedMesh || !this.voxelsPerModel[this.activeModelIndex])
+			return;
 
-		// console.log("Executing forceResetAllVoxelPositions");
+		const targetModelData = this.voxelsPerModel[this.activeModelIndex];
+		const targetCount = targetModelData.length;
 
-		for (let i = 0; i < this.voxels.length; i++) {
-			const trueOriginalPosition = this.voxelOriginalPositions.get(i);
-			const voxelData = this.voxelsPerModel[this.activeModelIndex]?.[i];
-
-			if (trueOriginalPosition && this.voxels[i]) {
-				this.voxels[i].position.copy(trueOriginalPosition);
-				// No animation, direct set for force reset
-				// Scale is reset below, color is reset here if needed
-				if (voxelData && this.voxels[i].color) {
-					this.voxels[i].color.copy(voxelData.color);
-				}
-				this.updateMatrix(i); // Updates position and color based on this.voxels[i]
+		for (let i = 0; i < this.liveVoxels.length; i++) {
+			if (i < targetCount) {
+				this.liveVoxels[i].position.copy(targetModelData[i].position);
+				this.liveVoxels[i].color.copy(targetModelData[i].color); // Also reset color
 			} else {
-				// console.warn(`No original position found for voxel ${i} during forceReset.`);
+				// For voxels beyond the target model's count, perhaps move them far away
+				this.liveVoxels[i].position.set(1000, 1000, 1000); // Effectively hide
+			}
+			this.updateMatrix(i);
+			if (this.instancedMesh) {
+				// Guard instancedMesh
+				this.instancedMesh.setColorAt(i, this.liveVoxels[i].color);
 			}
 		}
-
-		// Reset scale for all voxels (assuming scale is always reset to 1)
-		// and ensure color is from original model data via updateMatrix
-		for (let i = 0; i < this.voxels.length; i++) {
-			const trueOriginalPosition = this.voxelOriginalPositions.get(i);
-			const voxelData = this.voxelsPerModel[this.activeModelIndex]?.[i];
-
-			if (this.voxels[i]) {
-				// Check if voxel exists
-				if (trueOriginalPosition) {
-					this.dummy.position.copy(trueOriginalPosition); // Use original position for dummy
-				} else {
-					// Fallback if no original position, use current (less ideal but prevents error)
-					this.dummy.position.copy(this.voxels[i].position);
-				}
-				this.dummy.scale.set(1, 1, 1); // Reset to default scale
-				// Color is set via instancedMesh.setColorAt if instanceColor is used and resetColors is true.
-				this.dummy.updateMatrix();
-				this.instancedMesh.setMatrixAt(i, this.dummy.matrix);
-				// Also ensure the instanced mesh color is updated if it's per-instance
-				if (this.instancedMesh.instanceColor && voxelData) {
-					this.instancedMesh.setColorAt(i, voxelData.color);
-				}
-			}
-		}
-
 		if (this.instancedMesh) {
-			this.instancedMesh.instanceMatrix.needsUpdate = true;
-			if (this.instancedMesh.instanceColor) {
-				this.instancedMesh.instanceColor.needsUpdate = true;
-			}
+			// Guard instancedMesh
+			this.instancedMesh.count = targetCount;
+			this.instanceMatrixNeedsUpdate = true;
+			this.instanceColorNeedsUpdate = true;
 		}
-		// DO NOT CLEAR: this.voxelOriginalPositions.clear();
-		// console.log("Force reset all voxel positions and colors completed.");
+		// Update original positions map for hover effects
+		this.voxelOriginalPositions.clear();
+		for (let i = 0; i < targetCount; i++) {
+			this.voxelOriginalPositions.set(
+				i,
+				targetModelData[i].position.clone()
+			);
+		}
 	}
 
 	/**
@@ -1484,7 +1203,7 @@ export class VoxelModelViewer {
 		if (
 			!this.instancedMesh ||
 			index < 0 ||
-			index >= this.voxels.length ||
+			index >= this.liveVoxels.length ||
 			!this.isInteractionEnabled
 		) {
 			// console.log("Click handling skipped: Pre-conditions not met or interaction disabled.");
@@ -1511,9 +1230,12 @@ export class VoxelModelViewer {
 		// These are temporary and not the 'true' original positions.
 		const positionsAtClickTime: Map<number, THREE.Vector3> = new Map();
 
-		for (let i = 0; i < this.voxels.length; i++) {
-			if (this.voxels[i] && this.voxels[i].position) {
-				positionsAtClickTime.set(i, this.voxels[i].position.clone()); // Current position of voxel i
+		for (let i = 0; i < this.liveVoxels.length; i++) {
+			if (this.liveVoxels[i] && this.liveVoxels[i].position) {
+				positionsAtClickTime.set(
+					i,
+					this.liveVoxels[i].position.clone()
+				); // Current position of voxel i
 
 				const trueOriginalPosOfCurrentVoxel =
 					this.voxelOriginalPositions.get(i);
@@ -1530,8 +1252,8 @@ export class VoxelModelViewer {
 
 		// Kill any existing tweens that might conflict
 		// This is a broad approach; more targeted killing could be used if performance becomes an issue.
-		gsap.killTweensOf(this.voxels.map((v) => v.position));
-		gsap.killTweensOf(this.voxels.map((v) => v.color));
+		gsap.killTweensOf(this.liveVoxels.map((v) => v.position));
+		gsap.killTweensOf(this.liveVoxels.map((v) => v.color));
 		this.voxelHoverTweens.forEach((tween) => tween.kill());
 		this.voxelHoverTweens.clear();
 
@@ -1545,7 +1267,7 @@ export class VoxelModelViewer {
 
 		// STAGE 1: Explode outward and brighten
 		for (const voxelIdx of affectedVoxelsIndices) {
-			const voxel = this.voxels[voxelIdx];
+			const voxel = this.liveVoxels[voxelIdx];
 			const posAtClick = positionsAtClickTime.get(voxelIdx);
 			const trueOriginalModelColor =
 				this.voxelsPerModel[this.activeModelIndex]?.[
@@ -1605,7 +1327,7 @@ export class VoxelModelViewer {
 
 		// STAGE 3: Return to TRUE original positions and colors
 		for (const voxelIdx of affectedVoxelsIndices) {
-			const voxel = this.voxels[voxelIdx];
+			const voxel = this.liveVoxels[voxelIdx];
 			const trueOriginalPosition =
 				this.voxelOriginalPositions.get(voxelIdx);
 			const trueOriginalModelColor =
@@ -1863,8 +1585,8 @@ export class VoxelModelViewer {
 
 		// Kill existing tweens for all voxel positions to prevent conflicts
 		for (let i = 0; i < this.instancedMesh.count; i++) {
-			if (this.voxels[i]) {
-				gsap.killTweensOf(this.voxels[i].position);
+			if (this.liveVoxels[i]) {
+				gsap.killTweensOf(this.liveVoxels[i].position);
 			}
 		}
 
@@ -1877,7 +1599,7 @@ export class VoxelModelViewer {
 		const maxStartDelay = 0.1; // Max random start delay for each voxel, creates a wave effect
 
 		for (let i = 0; i < this.instancedMesh.count; i++) {
-			const voxelInfo = this.voxels[i];
+			const voxelInfo = this.liveVoxels[i];
 			if (!voxelInfo) continue;
 
 			const originalPosition = voxelInfo.position.clone();
@@ -1955,7 +1677,7 @@ export class VoxelModelViewer {
 					onComplete: () => {
 						if (this.instancedMesh) {
 							for (let k = 0; k < this.instancedMesh.count; k++) {
-								if (this.voxels[k]) {
+								if (this.liveVoxels[k]) {
 									this.updateMatrix(k); // Ensure final positions are set
 								}
 							}
@@ -1986,15 +1708,15 @@ export class VoxelModelViewer {
 
 		// Kill existing tweens for all voxel positions to prevent conflicts
 		for (let i = 0; i < this.instancedMesh.count; i++) {
-			if (this.voxels[i]) {
-				gsap.killTweensOf(this.voxels[i].position);
+			if (this.liveVoxels[i]) {
+				gsap.killTweensOf(this.liveVoxels[i].position);
 			}
 		}
 
 		let maxIndividualAnimationDuration = 0;
 
 		for (let i = 0; i < this.instancedMesh.count; i++) {
-			const voxelInfo = this.voxels[i];
+			const voxelInfo = this.liveVoxels[i];
 			if (!voxelInfo) continue;
 
 			const originalPosition = voxelInfo.position.clone();
@@ -2067,7 +1789,7 @@ export class VoxelModelViewer {
 						// Final update to ensure all matrices are correct
 						if (this.instancedMesh) {
 							for (let k = 0; k < this.instancedMesh.count; k++) {
-								if (this.voxels[k]) {
+								if (this.liveVoxels[k]) {
 									this.updateMatrix(k);
 								}
 							}
@@ -2247,7 +1969,7 @@ export class VoxelModelViewer {
 	private applyAudioDataToVoxels(): void {
 		if (
 			!this.isAudioVisualizationActive ||
-			!this.voxels.length ||
+			!this.liveVoxels.length ||
 			!this.audioData.length
 		)
 			return;
@@ -2262,7 +1984,7 @@ export class VoxelModelViewer {
 		const voxelsByHeight = new Map<number, number[]>();
 
 		// Round y positions to group similar heights
-		this.voxels.forEach((voxel, index) => {
+		this.liveVoxels.forEach((voxel, index) => {
 			const roundedY = Math.round(voxel.position.y * 10) / 10;
 			if (!voxelsByHeight.has(roundedY)) {
 				voxelsByHeight.set(roundedY, []);
@@ -2300,8 +2022,8 @@ export class VoxelModelViewer {
 
 			// Apply visualization effect to voxels in this height group
 			voxelIndices.forEach((voxelIndex) => {
-				if (voxelIndex >= 0 && voxelIndex < this.voxels.length) {
-					const voxel = this.voxels[voxelIndex];
+				if (voxelIndex >= 0 && voxelIndex < this.liveVoxels.length) {
+					const voxel = this.liveVoxels[voxelIndex];
 					const originalPos =
 						this.voxelOriginalPositions.get(voxelIndex);
 
