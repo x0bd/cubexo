@@ -532,33 +532,55 @@ export class ModelSelector {
 			currentPreview.classList.add("loading");
 		}
 
+		// Get the target model name to check if it's the chicken model
+		const targetModelElement = document.querySelector(
+			`.model-preview[data-index="${nextIndex}"]`
+		);
+		const targetModelName =
+			targetModelElement
+				?.getAttribute("data-model-name")
+				?.toLowerCase() || "";
+		const isChickenModel = targetModelName.includes("chicken");
+
+		if (isChickenModel) {
+			console.log(
+				"🐔 Chicken model detected - using extra precautions for transition"
+			);
+		}
+
 		// Debounce the actual model switch to prevent multiple rapid changes
-		this.modelSwitchDebounceTimeout = window.setTimeout(() => {
-			// Update current index
-			this.currentModelIndex = nextIndex;
+		this.modelSwitchDebounceTimeout = window.setTimeout(
+			() => {
+				// Update current index
+				this.currentModelIndex = nextIndex;
 
-			// Fetch and activate the model
-			const scene = this.previewScenes[nextIndex];
+				// Fetch and activate the model
+				const scene = this.previewScenes[nextIndex];
 
-			// Enable low detail mode during transition
-			if (this.renderer) {
-				// Trigger the model change
-				this.activeModelIdx = nextIndex;
+				// Enable low detail mode during transition
+				if (this.renderer) {
+					// Trigger the model change
+					this.activeModelIdx = nextIndex;
 
-				// Update UI
-				this.updateActivePreview();
+					// Update UI
+					this.updateActivePreview();
 
-				// Reset loading state after a short delay to ensure animation completes
-				window.setTimeout(() => {
-					this.isModelSwitchInProgress = false;
-					document.body.classList.remove("model-loading");
+					// Reset loading state after a short delay to ensure animation completes
+					// Use longer delay for chicken model
+					const resetDelay = isChickenModel ? 2000 : 1500;
 
-					if (currentPreview) {
-						currentPreview.classList.remove("loading");
-					}
-				}, 1500); // Slightly longer than the animation duration
-			}
-		}, 100); // Short debounce to prevent multiple clicks
+					window.setTimeout(() => {
+						this.isModelSwitchInProgress = false;
+						document.body.classList.remove("model-loading");
+
+						if (currentPreview) {
+							currentPreview.classList.remove("loading");
+						}
+					}, resetDelay);
+				}
+			},
+			isChickenModel ? 200 : 100
+		); // Longer debounce for chicken model
 	}
 
 	public setupModelPreviews(): void {
