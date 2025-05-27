@@ -139,7 +139,7 @@ export class VoxelModelViewer {
 			this.animateToModel(oldModelIdx, this.activeModelIndex);
 		} else {
 			// Fallback: if not animating and not recreating, still ensure positions are set from new model data
-			for (let i = 0; i < this.voxels.length; i++) {
+		for (let i = 0; i < this.voxels.length; i++) {
 				if (this.voxels[i] && this.voxels[i].position) {
 					// Added null check for this.voxels[i].position
 					this.dummy.position.copy(this.voxels[i].position);
@@ -324,7 +324,7 @@ export class VoxelModelViewer {
 				if (i < targetCount) {
 					targetPos = targetVoxels[i].position;
 					targetColor = targetVoxels[i].color;
-				} else {
+			} else {
 					// Find a suitable target voxel using spatial mapping
 					const sourceVoxel = this.voxels[i];
 					// Use the same region grid size as when building the index
@@ -382,7 +382,7 @@ export class VoxelModelViewer {
 						candidateVoxels.length === 0 &&
 						targetVoxels.length > 0
 					) {
-						const randomIndex = Math.floor(
+					const randomIndex = Math.floor(
 							targetVoxels.length * Math.random()
 						);
 						candidateVoxels = [targetVoxels[randomIndex]];
@@ -398,11 +398,11 @@ export class VoxelModelViewer {
 							];
 						targetPos = selectedVoxel.position;
 						targetColor = selectedVoxel.color;
-					} else {
+				} else {
 						// Fallback if no candidates found
-						targetPos = new THREE.Vector3(0, 0, 0);
-					}
+					targetPos = new THREE.Vector3(0, 0, 0);
 				}
+			}
 
 				// Store the mapping for later use
 				targetMappings.set(i, {
@@ -422,13 +422,13 @@ export class VoxelModelViewer {
 				const posAnim = gsap.to(this.voxels[i].position, {
 					delay,
 					duration,
-					x: targetPos.x,
-					y: targetPos.y,
-					z: targetPos.z,
+				x: targetPos.x,
+				y: targetPos.y,
+				z: targetPos.z,
 					ease: "back.out(1.7)", // Reduce overshoot for large models
-					onUpdate: () => {
-						this.updateMatrix(i);
-					},
+				onUpdate: () => {
+					this.updateMatrix(i);
+				},
 					paused: true,
 				});
 				positionAnimations.push(posAnim);
@@ -444,7 +444,7 @@ export class VoxelModelViewer {
 						b: targetColor.b,
 						ease: "power1.in",
 						onUpdate: () => {
-							if (this.instancedMesh) {
+		if (this.instancedMesh) {
 								this.instancedMesh.setColorAt(
 									i,
 									this.voxels[i].color
@@ -495,11 +495,11 @@ export class VoxelModelViewer {
 				{},
 				{
 					duration: 1.4,
-					onUpdate: () => {
-						if (this.instancedMesh) {
+				onUpdate: () => {
+					if (this.instancedMesh) {
 							this.instancedMesh.instanceMatrix.needsUpdate =
 								true;
-							if (this.instancedMesh.instanceColor) {
+						if (this.instancedMesh.instanceColor) {
 								this.instancedMesh.instanceColor.needsUpdate =
 									true;
 							}
@@ -539,7 +539,7 @@ export class VoxelModelViewer {
 						}
 
 						// Set active model index
-						this.activeModelIndex = newModelIdx;
+		this.activeModelIndex = newModelIdx;
 
 						console.log(
 							`===== TRANSITION COMPLETE [${_oldModelIdx} → ${newModelIdx}] =====`
@@ -914,9 +914,9 @@ export class VoxelModelViewer {
 
 	private updateMatrix(index: number): void {
 		if (this.instancedMesh && index >= 0 && index < this.voxels.length) {
-			this.dummy.position.copy(this.voxels[index].position);
-			this.dummy.updateMatrix();
-			this.instancedMesh.setMatrixAt(index, this.dummy.matrix);
+		this.dummy.position.copy(this.voxels[index].position);
+		this.dummy.updateMatrix();
+		this.instancedMesh.setMatrixAt(index, this.dummy.matrix);
 
 			// Flag for batch update instead of immediate update
 			this.instanceMatrixNeedsUpdate = true;
@@ -2017,7 +2017,7 @@ export class VoxelModelViewer {
 		existingNotifications.forEach((notif) => {
 			if (notif.parentNode) {
 				notif.parentNode.removeChild(notif);
-			}
+		}
 		});
 
 		// Create notification element with Tailwind classes
