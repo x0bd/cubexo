@@ -4,28 +4,67 @@ import type { ModelData, Voxel } from "../types/types";
 
 // Helper function (can be outside the class or a static method if preferred)
 // This is similar to the one in VoxelModelViewer but operates on THREE.Group
-function centerModelInScene(
+function centerAndScaleModelInPreviewScene(
 	model: THREE.Group,
 	scene: THREE.Scene,
-	fitScale?: number
+	fitScale: number,
+	modelName?: string
 ): void {
-	const box = new THREE.Box3().setFromObject(model);
-	const center = new THREE.Vector3();
-	box.getCenter(center);
-	model.position.sub(center); // Center the model at the scene's origin
-
-	if (fitScale) {
-		const size = new THREE.Vector3();
-		box.getSize(size);
-		const maxDim = Math.max(size.x, size.y, size.z);
-		const scale = fitScale / maxDim;
-		model.scale.setScalar(scale);
-		// After scaling, re-center if origin was not 0,0,0 due to initial large size
-		// but since we centered first, this might not be strictly needed unless scale affects pivot
-		// For simplicity, let's assume centering then scaling is okay for previews.
+	// Remove previous model/wrapper to avoid duplicates
+	const existingWrapper = scene.getObjectByName("previewModelWrapper");
+	if (existingWrapper) {
+		scene.remove(existingWrapper);
+		// Ideally, traverse and dispose geometries/materials if they are not shared,
+		// but this can be complex if models share resources. For now, just remove.
+		// existingWrapper.traverse((object) => {
+		// 	if (object instanceof THREE.Mesh) {
+		// 		object.geometry.dispose();
+		// 		if (object.material instanceof Array) {
+		// 			object.material.forEach(material => material.dispose());
+		// 		} else if (object.material) {
+		// 			object.material.dispose();
+		// 		}
+		// 	}
+		// });
 	}
 
-	// Ensure orbit controls for this preview target the model's new center (0,0,0 in its local scene)
+	const wrapper = new THREE.Group();
+	wrapper.name = "previewModelWrapper";
+
+	// Clone the model to avoid modifying the original modelData.model
+	// and to ensure transformations are applied to a fresh instance for this preview.
+	const modelClone = model.clone();
+
+	const box = new THREE.Box3().setFromObject(modelClone);
+	const center = new THREE.Vector3();
+	box.getCenter(center);
+
+	modelClone.position.sub(center); // Center the clone *within* the wrapper
+
+	wrapper.add(modelClone);
+
+	const size = new THREE.Vector3();
+	box.getSize(size); // Get size from the clone's bounding box
+	const maxDim = Math.max(size.x, size.y, size.z);
+
+	if (maxDim > 0) {
+		const scaleFactor = fitScale / maxDim;
+		wrapper.scale.setScalar(scaleFactor);
+	} else {
+		// If model has no dimensions (e.g., empty group), set a default small scale
+		// to prevent issues with zero or infinite scales.
+		wrapper.scale.setScalar(0.1);
+		console.warn(
+			`Model has zero max dimension, applying default small scale to wrapper. Model name: ${
+				modelName || "Unknown"
+			}`,
+			model
+		);
+	}
+
+	scene.add(wrapper);
+
+	// Ensure orbit controls for this preview target the model's new center (wrapper's origin)
 	if (scene.userData.orbit) {
 		scene.userData.orbit.target.set(0, 0, 0);
 		scene.userData.orbit.update();
@@ -104,20 +143,18 @@ export class ModelSelector {
 	}
 
 	public addModelPreview(modelData: ModelData, modelIdx: number): void {
+		this.models[modelIdx] = modelData; // Store original model data
+
 		const scene = this.previewScenes.find(
-			(scene) => scene.userData.modelIdx === modelIdx
+			(s) => s.userData.modelIdx === modelIdx
 		);
 
 		if (scene) {
-			// Set the model name in the DOM element
 			const element = scene.userData.element as HTMLElement;
 			if (element) {
 				element.dataset.modelName = modelData.name;
-
-				// Add model label
 				const labelEl = element.querySelector(".model-label");
 				if (labelEl) {
-					// Extract just the base name without the prefix for display
 					let displayName = modelData.name;
 					if (displayName.startsWith("user-model-")) {
 						displayName = displayName.substring(
@@ -128,12 +165,18 @@ export class ModelSelector {
 				}
 			}
 
-			// Log the model data for debugging
-			console.log(
-				`Adding model preview for ${modelData.name} at index ${modelIdx}`
+			// Pass the original model from modelData.
+			// centerAndScaleModelInPreviewScene will handle cloning internally.
+			centerAndScaleModelInPreviewScene(
+				modelData.model,
+				scene,
+				1.5,
+				modelData.name
 			);
-
-			this.addModelToScene(modelIdx, modelData.model, modelData.name);
+		} else {
+			console.warn(
+				`Preview scene for model index ${modelIdx} not found when trying to add model geometry.`
+			);
 		}
 	}
 
@@ -275,7 +318,12 @@ export class ModelSelector {
 			// Ensure the model is cloned if it's going to be used elsewhere or re-added.
 			const modelClone = modelData.model.clone();
 			scene.add(modelClone);
-			centerModelInScene(modelClone, scene, 1.5); // Fit within a scale of ~1.5 units in preview
+			centerAndScaleModelInPreviewScene(
+				modelClone,
+				scene,
+				1.5,
+				modelData.name
+			); // Fit within a scale of ~1.5 units in preview
 		} else {
 			console.warn(
 				`Preview scene for model index ${modelIdx} not found when trying to add model geometry.`
@@ -623,16 +671,16 @@ export class ModelSelector {
 				to { transform: rotate(360deg); }
 			}
 
-			/* Styling for scrollable selector */
+			/* Styling for scrollable selector container */
 			#selector-container {
 				/* Assuming this is the direct parent of #selector */
-				max-height: 280px; /* Approx height for 2 rows of 130px + padding/margin */
+				max-height: 300px; /* Adjusted height, e.g. for 2 rows of 130px items + gaps + padding */
 				overflow-y: auto;
-				overflow-x: hidden; /* Prevent horizontal scroll if not desired */
+				overflow-x: hidden; /* Prevent horizontal scroll */
 				padding-right: 8px; /* Space for scrollbar to not overlap content */
 				/* Custom scrollbar styling (optional, webkit-based) */
 				scrollbar-width: thin;
-				scrollbar-color: #4b5563 #374151; /* thumb track */
+				scrollbar-color: #4b5563 #1f2937; /* thumb track (zinc-600, zinc-800) */
 			}
 
 			#selector-container::-webkit-scrollbar {
@@ -648,6 +696,15 @@ export class ModelSelector {
 				background-color: #4b5563; /* zinc-600 */
 				border-radius: 10px;
 				border: 2px solid #1f2937; /* zinc-800, creates padding around thumb */
+			}
+
+			/* Styling for the #selector grid */
+			#selector {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, 130px); /* Creates columns of 130px width */
+				gap: 16px; /* Space between grid items */
+				padding: 16px; /* Padding around the grid */
+				justify-content: center; /* Centers grid items if they don't fill the row */
 			}
 		`;
 		document.head.appendChild(style);
