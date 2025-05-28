@@ -7,10 +7,10 @@ export interface Voxel {
 
 export interface ModelData {
 	name: string;
-	model: THREE.Group | null;
-	voxels: Voxel[];
 	url: string;
-	originalIndex: number;
+	model: THREE.Group;
+	voxels?: Voxel[];
+	previewScene?: THREE.Scene;
 }
 
 export interface AppParameters {
