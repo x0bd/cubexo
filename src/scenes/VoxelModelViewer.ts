@@ -85,25 +85,68 @@ export class VoxelModelViewer {
 		this.recreateInstancedMesh(100);
 	}
 
-	public addVoxelsForModel(modelIdx: number, modelVoxels: Voxel[]): void {
-		// Store voxels definition for this model
-		this.voxelsPerModel[modelIdx] = modelVoxels;
+	private getCenteredVoxelData(voxels: Voxel[]): {
+		centeredVoxels: Voxel[];
+		centerOffset: THREE.Vector3;
+	} {
+		if (!voxels || voxels.length === 0) {
+			return { centeredVoxels: [], centerOffset: new THREE.Vector3() };
+		}
 
-		// Update the mesh and liveVoxels array if needed, based on the largest model so far
+		const boundingBox = new THREE.Box3();
+		voxels.forEach((voxel) => {
+			boundingBox.expandByPoint(voxel.position);
+		});
+
+		const centerOffset = new THREE.Vector3();
+		boundingBox.getCenter(centerOffset);
+
+		const centeredVoxels = voxels.map((voxel) => ({
+			...voxel,
+			position: voxel.position.clone().sub(centerOffset),
+			// Keep the color as a THREE.Color instance
+			color:
+				voxel.color instanceof THREE.Color
+					? voxel.color.clone()
+					: new THREE.Color(voxel.color),
+		}));
+
+		return { centeredVoxels, centerOffset };
+	}
+
+	// Update addVoxelsForModel to store both original and centered data
+	public addVoxelsForModel(
+		modelIdx: number,
+		originalModelVoxels: Voxel[]
+	): void {
+		const { centeredVoxels, centerOffset } =
+			this.getCenteredVoxelData(originalModelVoxels);
+
+		// Store both original and processed data if needed, or just the centered one for display
+		// For now, let's primarily use centered data for display consistency.
+		this.voxelsPerModel[modelIdx] = centeredVoxels;
+		// Optionally, store the offset if you need to transform back to original coordinates for export, etc.
+		// this.voxelModelOffsets[modelIdx] = centerOffset;
+
+		console.log(
+			`Added model ${modelIdx}. Original voxel count: ${
+				originalModelVoxels.length
+			}, Centered voxel count: ${
+				centeredVoxels.length
+			}. Center offset: ${centerOffset.x.toFixed(
+				2
+			)}, ${centerOffset.y.toFixed(2)}, ${centerOffset.z.toFixed(2)}`
+		);
+
 		const maxVoxelCountAcrossAllModels = Math.max(
-			this.instancedMesh?.count || 0, // Current capacity
-			...this.voxelsPerModel.filter((m) => m).map((m) => m.length) // Max defined
+			this.instancedMesh?.count || 0,
+			...this.voxelsPerModel.filter((m) => m).map((m) => m.length)
 		);
 
 		if (
 			!this.instancedMesh ||
 			maxVoxelCountAcrossAllModels > this.instancedMesh.count
 		) {
-			console.log(
-				`Recreating instanced mesh and liveVoxels. Old count: ${
-					this.instancedMesh?.count || 0
-				}, New potential max count: ${maxVoxelCountAcrossAllModels}`
-			);
 			this.recreateInstancedMesh(maxVoxelCountAcrossAllModels);
 		}
 	}
@@ -137,46 +180,37 @@ export class VoxelModelViewer {
 		this.isInteractionEnabled = false;
 		const startTime = performance.now();
 
-		const modelNameForLogging =
-			this.voxelsPerModel[newModelIdx]?.length > 0
-				? `modelData (name unknown, index ${newModelIdx})`
-				: `UNKNOWN MODEL (index ${newModelIdx})`; // Placeholder for actual name if available
+		// Fetch the (already centered) model definition
+		const targetModelDefinition = this.voxelsPerModel[newModelIdx];
+		const modelNameForLogging = targetModelDefinition
+			? `model (index ${newModelIdx})`
+			: `UNKNOWN MODEL (index ${newModelIdx})`;
 		console.log(
 			`===== ANIMATE TO MODEL [${_oldModelIdx} → ${newModelIdx}] Name: ${modelNameForLogging} =====`
 		);
 
-		const targetModelDefinition = this.voxelsPerModel[newModelIdx];
-
-		// CRUCIAL CHECK: Validate target model data
 		if (!targetModelDefinition) {
 			console.error(
-				`CRITICAL: Target model definition for index ${newModelIdx} is UNDEFINED. Cannot animate.`
+				`CRITICAL: Target model definition for index ${newModelIdx} is UNDEFINED (already centered). Cannot animate.`
 			);
 			this.isInteractionEnabled = true;
-			// Optionally, hide all voxels if target is undefined
 			if (this.instancedMesh) this.instancedMesh.count = 0;
 			return;
 		}
 
-		const targetModelVoxelCount = targetModelDefinition.length;
+		const targetModelVoxelCount = targetModelDefinition.length; // This is the count of centered voxels
+
 		if (targetModelVoxelCount === 0) {
 			console.warn(
 				`WARNING: Target model definition for index ${newModelIdx} (${modelNameForLogging}) is EMPTY (0 voxels). Model will appear empty.`
 			);
-			// No voxels to animate to, so just hide all existing liveVoxels by setting count to 0.
-			// Individual animations for liveVoxels will still run to move them (e.g., off-screen), then instancedMesh.count makes them disappear.
 		} else {
-			// Log a sample of the chicken model's data if it's the one being targeted
-			// Assuming chicken might be index 1 or if its name can be identified.
-			// For now, let's log if the count is unusual or a specific known problematic index.
-			// This is a placeholder for more specific chicken detection if its name/ID becomes available here.
 			if (
 				newModelIdx === 1 ||
 				(targetModelVoxelCount < 10 && targetModelVoxelCount > 0)
 			) {
-				// Example: index 1 is chicken, or very few voxels
 				console.log(
-					`Sample Voxel Data for ${modelNameForLogging} (first 5 of ${targetModelVoxelCount}):`
+					`Sample CENTERED Voxel Data for ${modelNameForLogging} (first 5 of ${targetModelVoxelCount}):`
 				);
 				for (let k = 0; k < Math.min(5, targetModelVoxelCount); k++) {
 					console.log(
@@ -223,14 +257,12 @@ export class VoxelModelViewer {
 			sizeDifferenceRatio > 1.5 ||
 			targetModelVoxelCount === 0;
 
-		// ALWAYS USE SIMPLIFIED PATH FOR NOW TO DEBUG CHICKEN
 		console.log(
 			"NOTICE: Using SIMPLIFIED transition logic for ALL models to debug chicken."
 		);
 
 		for (let i = 0; i < sourceLiveVoxelCount; i++) {
 			if (!this.liveVoxels[i]) {
-				// This case should ideally not happen if liveVoxels is always maintained correctly
 				console.warn(
 					`animateToModel: liveVoxels[${i}] is undefined. Skipping.`
 				);
@@ -243,10 +275,9 @@ export class VoxelModelViewer {
 			let targetCol: THREE.Color;
 
 			if (i < targetModelVoxelCount) {
-				targetPos = targetModelDefinition[i].position;
+				targetPos = targetModelDefinition[i].position; // Already centered
 				targetCol = targetModelDefinition[i].color;
 			} else {
-				// This liveVoxel is "extra" (instancedMesh capacity > targetModel actual count)
 				if (targetModelVoxelCount > 0) {
 					const randomTargetIdx = Math.floor(
 						Math.random() * targetModelVoxelCount
@@ -259,18 +290,17 @@ export class VoxelModelViewer {
 								Math.random() - 0.5,
 								Math.random() - 0.5
 							).multiplyScalar(0.1)
-						);
+						); // Already centered + jitter
 					targetCol = targetModelDefinition[randomTargetIdx].color;
 				} else {
-					// Target model is empty, so nowhere for "extra" voxels to go. Send them far away.
 					targetPos = new THREE.Vector3(
 						(Math.random() - 0.5) * 50,
 						(Math.random() - 0.5) * 50,
 						(Math.random() - 0.5) * 50
-					); // Scatter them far
+					);
 					targetCol = this.liveVoxels[i].color
 						.clone()
-						.lerp(new THREE.Color(0x333333), 0.5); // Fade to dark grey
+						.lerp(new THREE.Color(0x333333), 0.5);
 				}
 			}
 
@@ -318,7 +348,6 @@ export class VoxelModelViewer {
 			});
 		}
 
-		// Common GSAP animations for mesh properties
 		if (this.instancedMesh) {
 			gsap.to(this.instancedMesh.rotation, {
 				duration: 1.2,
@@ -330,7 +359,7 @@ export class VoxelModelViewer {
 
 			gsap.to(this.instancedMesh, {
 				duration: 0.6,
-				count: targetModelVoxelCount, // Crucial: Set to the actual number of voxels in the target model
+				count: targetModelVoxelCount,
 				ease: "power1.inOut",
 			});
 		}
@@ -353,12 +382,12 @@ export class VoxelModelViewer {
 
 					this.voxelOriginalPositions.clear();
 					if (targetModelVoxelCount > 0) {
-						// Only rebuild if target has voxels
 						for (let i = 0; i < targetModelVoxelCount; i++) {
 							if (
 								targetModelDefinition[i] &&
 								targetModelDefinition[i].position
 							) {
+								// Storing the centered positions as the "original" for hover effects
 								this.voxelOriginalPositions.set(
 									i,
 									targetModelDefinition[i].position.clone()
@@ -371,6 +400,23 @@ export class VoxelModelViewer {
 						this.instancedMesh.count = targetModelVoxelCount;
 					this.instanceMatrixNeedsUpdate = true;
 					this.instanceColorNeedsUpdate = true;
+
+					// Reset the main instancedMesh rotation to 0,0,0 after each model transition
+					// The model itself is centered, so the mesh should not retain compound rotations.
+					if (this.instancedMesh) {
+						gsap.to(this.instancedMesh.rotation, {
+							duration: 0.3, // Quick reset
+							x: 0,
+							y: 0,
+							z: 0,
+							ease: "power1.out",
+						});
+					}
+					// Set OrbitControls target to origin, where the model is centered
+					if (this.controls) {
+						this.controls.target.set(0, 0, 0);
+						this.controls.update();
+					}
 
 					const endTime = performance.now();
 					console.log(
@@ -505,14 +551,20 @@ export class VoxelModelViewer {
 
 		this.controls = new OrbitControls(this.camera, this.canvasElement);
 		this.controls.enableDamping = true;
-		this.controls.dampingFactor = 0.05;
-		this.controls.enablePan = false;
-		this.controls.minDistance = 15;
-		this.controls.maxDistance = 25;
-		this.controls.minPolarAngle = 0.3;
-		this.controls.maxPolarAngle = Math.PI * 0.6;
-		this.controls.autoRotate = false; // Disable auto-rotation to let user control the angle
-		this.controls.autoRotateSpeed = 0.5; // Slower rotation for a more premium feel
+		this.controls.dampingFactor = 0.07;
+		this.controls.screenSpacePanning = false;
+		this.controls.minDistance = 5;
+		this.controls.maxDistance = 30;
+		this.controls.maxPolarAngle = Math.PI / 1.8; // Prevent looking from below too much
+		this.controls.minPolarAngle = Math.PI / 4; // Prevent looking from top down too much
+		this.controls.autoRotate = true;
+		this.controls.autoRotateSpeed = 0.4;
+		this.controls.target.set(0, 0, 0); // Explicitly set target to origin
+
+		// Stop auto-rotation on user interaction
+		this.controls.addEventListener("start", () => {
+			if (this.controls) this.controls.autoRotate = false;
+		});
 	}
 
 	private setupLights(): void {

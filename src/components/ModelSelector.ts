@@ -1,6 +1,36 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { ModelData } from "../types/types";
+import type { ModelData, Voxel } from "../types/types";
+
+// Helper function (can be outside the class or a static method if preferred)
+// This is similar to the one in VoxelModelViewer but operates on THREE.Group
+function centerModelInScene(
+	model: THREE.Group,
+	scene: THREE.Scene,
+	fitScale?: number
+): void {
+	const box = new THREE.Box3().setFromObject(model);
+	const center = new THREE.Vector3();
+	box.getCenter(center);
+	model.position.sub(center); // Center the model at the scene's origin
+
+	if (fitScale) {
+		const size = new THREE.Vector3();
+		box.getSize(size);
+		const maxDim = Math.max(size.x, size.y, size.z);
+		const scale = fitScale / maxDim;
+		model.scale.setScalar(scale);
+		// After scaling, re-center if origin was not 0,0,0 due to initial large size
+		// but since we centered first, this might not be strictly needed unless scale affects pivot
+		// For simplicity, let's assume centering then scaling is okay for previews.
+	}
+
+	// Ensure orbit controls for this preview target the model's new center (0,0,0 in its local scene)
+	if (scene.userData.orbit) {
+		scene.userData.orbit.target.set(0, 0, 0);
+		scene.userData.orbit.update();
+	}
+}
 
 export class ModelSelector {
 	private selectorElement: HTMLElement | null;
@@ -15,6 +45,7 @@ export class ModelSelector {
 	private currentModelIndex = 0;
 	private isModelSwitchInProgress = false;
 	private modelSwitchDebounceTimeout: number | null = null;
+	private models: ModelData[] = []; // Store model data including the raw THREE.Group
 
 	constructor() {
 		this.selectorElement = document.getElementById("selector");
@@ -219,12 +250,36 @@ export class ModelSelector {
 	}
 
 	public addModelToPreview(modelData: ModelData, modelIdx: number): void {
+		this.models[modelIdx] = modelData; // Store for later use if needed
+
 		const scene = this.previewScenes.find(
-			(scene) => scene.userData.modelIdx === modelIdx
+			(s) => s.userData.modelIdx === modelIdx
 		);
 
 		if (scene) {
-			this.addModelToScene(modelIdx, modelData.model, modelData.name);
+			const element = scene.userData.element as HTMLElement;
+			if (element) {
+				element.dataset.modelName = modelData.name;
+				const labelEl = element.querySelector(".model-label");
+				if (labelEl) {
+					let displayName = modelData.name;
+					if (displayName.startsWith("user-model-")) {
+						displayName = displayName.substring(
+							"user-model-".length
+						);
+					}
+					labelEl.textContent = displayName;
+				}
+			}
+			// Add the raw THREE.Group model to the scene and center it.
+			// Ensure the model is cloned if it's going to be used elsewhere or re-added.
+			const modelClone = modelData.model.clone();
+			scene.add(modelClone);
+			centerModelInScene(modelClone, scene, 1.5); // Fit within a scale of ~1.5 units in preview
+		} else {
+			console.warn(
+				`Preview scene for model index ${modelIdx} not found when trying to add model geometry.`
+			);
 		}
 	}
 
@@ -360,77 +415,45 @@ export class ModelSelector {
 	}
 
 	private updateActivePreview(): void {
-		// Update active class on preview elements
-		this.previewScenes.forEach((scene) => {
+		this.previewScenes.forEach((scene, index) => {
 			const element = scene.userData.element as HTMLElement;
-			if (element) {
-				if (scene.userData.modelIdx === this.activeModelIdx) {
-					// Add active styles with premium Japanese-inspired aesthetic
-					element.classList.add(
-						"border-indigo-500",
-						"ring-2",
-						"ring-indigo-500/40",
-						"scale-105",
-						"shadow-lg"
-					);
+			if (!element) return;
 
-					// Show the label for active model
-					const label = element.querySelector(".model-label");
-					if (label) {
-						(label as HTMLElement).style.transform =
-							"translateY(0)";
-					}
-				} else {
-					// Remove active styles
-					element.classList.remove(
-						"border-indigo-500",
-						"ring-2",
-						"ring-indigo-500/40",
-						"scale-105",
-						"shadow-lg"
-					);
+			const isActive = index === this.activeModelIdx;
+			const baseClasses =
+				"model-preview w-[130px] h-[130px] bg-zinc-900/50 border rounded-lg overflow-hidden cursor-pointer relative transition-all duration-200 hover:scale-105 hover:shadow-lg group";
+			const borderBase = "border-zinc-700/50 hover:border-zinc-600/70";
+			const activeBorder =
+				"border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/30 dark:ring-indigo-500/30 shadow-md";
 
-					// Hide label for inactive models
-					const label = element.querySelector(".model-label");
-					if (label) {
-						(label as HTMLElement).style.transform =
-							"translateY(100%)";
-					}
-				}
+			if (isActive) {
+				element.className = `${baseClasses} ${activeBorder}`;
+			} else {
+				element.className = `${baseClasses} ${borderBase}`;
 			}
 		});
 	}
 
 	private updateSceneSize(): void {
-		if (!this.selectorElement) return;
-
-		// Set renderer size
-		this.renderer.setSize(window.innerWidth, window.innerHeight);
-
-		// Update the selector element to create a grid layout
-		this.selectorElement.style.display = "grid";
-		this.selectorElement.style.gridTemplateColumns = "repeat(2, 1fr)";
-		this.selectorElement.style.gap = "12px";
-		this.selectorElement.style.justifyItems = "center";
+		const canvas = this.renderer.domElement;
+		const width = canvas.clientWidth;
+		const height = canvas.clientHeight;
+		if (canvas.width !== width || canvas.height !== height) {
+			this.renderer.setSize(width, height, false);
+		}
 
 		this.previewScenes.forEach((scene) => {
 			const element = scene.userData.element as HTMLElement;
 			if (!element) return;
-
-			// Use fixed width and height for consistent square proportions
-			element.style.width = `${this.previewWidth}px`;
-			element.style.height = `${this.previewHeight}px`;
-
-			// Update rect with precise positioning
 			const rect = element.getBoundingClientRect();
+
 			scene.userData.rect = {
 				width: rect.width,
 				height: rect.height,
 				left: rect.left,
-				bottom: window.innerHeight - rect.bottom,
+				bottom: this.renderer.domElement.clientHeight - rect.bottom,
 			};
 
-			// Update camera
 			const camera = scene.userData.camera as THREE.PerspectiveCamera;
 			if (camera) {
 				camera.aspect = rect.width / rect.height;
@@ -440,43 +463,45 @@ export class ModelSelector {
 	}
 
 	private startRenderingPreviews(): void {
-		// Listen for resize
-		window.addEventListener("resize", () => this.updateSceneSize());
-
-		// Animation loop
 		const animate = () => {
-			requestAnimationFrame(animate);
+			this.updateSceneSize(); // Update sizes before rendering each frame
+			this.renderer.setClearColor(0x000000, 0); // Ensure transparent background for previews
+			this.renderer.setScissorTest(true);
 
-			// Skip if no previews
-			if (this.previewScenes.length === 0) return;
-
-			// Render each preview
 			this.previewScenes.forEach((scene) => {
-				if (!scene.userData.rect || !scene.userData.camera) return;
+				if (
+					!scene.userData.element ||
+					!scene.userData.rect ||
+					!scene.userData.camera
+				)
+					return;
 
-				// Update controls
-				const orbit = scene.userData.orbit as OrbitControls;
-				if (orbit) orbit.update();
-
-				// Set viewport and scissor with exact positioning
+				const element = scene.userData.element as HTMLElement;
 				const rect = scene.userData.rect;
+				const camera = scene.userData.camera as THREE.PerspectiveCamera;
 
-				// Ensure perfect alignment by using integer values for all models
-				const left = Math.floor(rect.left);
-				const bottom = Math.floor(rect.bottom);
-				const width = Math.floor(rect.width);
-				const height = Math.floor(rect.height);
+				// get the viewport relative position of this element
+				const { left, right, top, bottom, width, height } = rect;
 
-				this.renderer.setViewport(left, bottom, width, height);
-				this.renderer.setScissor(left, bottom, width, height);
+				const isOffscreen =
+					bottom < 0 ||
+					top > this.renderer.domElement.clientHeight ||
+					right < 0 ||
+					left > this.renderer.domElement.clientWidth;
 
-				// Render
-				const camera = scene.userData.camera as THREE.Camera;
-				this.renderer.render(scene, camera);
+				if (!isOffscreen) {
+					// update orbit controls if they exist
+					if (scene.userData.orbit) {
+						scene.userData.orbit.update();
+					}
+					this.renderer.setViewport(left, bottom, width, height);
+					this.renderer.setScissor(left, bottom, width, height);
+					this.renderer.render(scene, camera);
+				}
 			});
+			requestAnimationFrame(animate);
 		};
-
-		animate();
+		requestAnimationFrame(animate);
 	}
 
 	public getActiveModelIndex(): number {
@@ -504,35 +529,24 @@ export class ModelSelector {
 	}
 
 	private cycleModel(direction: number): void {
-		// Prevent rapid cycling that could cause performance issues
 		if (this.isModelSwitchInProgress) {
 			return;
 		}
-
-		// Clear any pending model switches
 		if (this.modelSwitchDebounceTimeout !== null) {
 			window.clearTimeout(this.modelSwitchDebounceTimeout);
 			this.modelSwitchDebounceTimeout = null;
 		}
-
-		// Set loading state
 		this.isModelSwitchInProgress = true;
 		document.body.classList.add("model-loading");
-
-		// Get next model index with wrapping
 		const nextIndex =
 			(this.currentModelIndex + direction + this.previewScenes.length) %
 			this.previewScenes.length;
-
-		// Show loading indicator in UI
 		const currentPreview = document.querySelector(
 			`.model-preview[data-index="${this.currentModelIndex}"]`
 		);
 		if (currentPreview) {
 			currentPreview.classList.add("loading");
 		}
-
-		// Get the target model name to check if it's the chicken model
 		const targetModelElement = document.querySelector(
 			`.model-preview[data-index="${nextIndex}"]`
 		);
@@ -548,31 +562,26 @@ export class ModelSelector {
 			);
 		}
 
-		// Debounce the actual model switch to prevent multiple rapid changes
 		this.modelSwitchDebounceTimeout = window.setTimeout(
 			() => {
-				// Update current index
 				this.currentModelIndex = nextIndex;
-
-				// Fetch and activate the model
-				const scene = this.previewScenes[nextIndex];
-
-				// Enable low detail mode during transition
+				// const scene = this.previewScenes[nextIndex]; // scene var not used
 				if (this.renderer) {
-					// Trigger the model change
 					this.activeModelIdx = nextIndex;
-
-					// Update UI
 					this.updateActivePreview();
-
-					// Reset loading state after a short delay to ensure animation completes
-					// Use longer delay for chicken model
+					if (this.modelSelectedCallback) {
+						// Ensure callback is called to switch main model
+						this.modelSelectedCallback(
+							this.activeModelIdx === 0
+								? this.previewScenes.length - 1
+								: this.activeModelIdx - direction,
+							this.activeModelIdx
+						);
+					}
 					const resetDelay = isChickenModel ? 2000 : 1500;
-
 					window.setTimeout(() => {
 						this.isModelSwitchInProgress = false;
 						document.body.classList.remove("model-loading");
-
 						if (currentPreview) {
 							currentPreview.classList.remove("loading");
 						}
@@ -580,11 +589,10 @@ export class ModelSelector {
 				}
 			},
 			isChickenModel ? 200 : 100
-		); // Longer debounce for chicken model
+		);
 	}
 
 	public setupModelPreviews(): void {
-		// Add loading indicator styles to document
 		const style = document.createElement("style");
 		style.innerHTML = `
 			.model-loading .model-preview {
@@ -613,6 +621,33 @@ export class ModelSelector {
 			
 			@keyframes model-loading-spin {
 				to { transform: rotate(360deg); }
+			}
+
+			/* Styling for scrollable selector */
+			#selector-container {
+				/* Assuming this is the direct parent of #selector */
+				max-height: 280px; /* Approx height for 2 rows of 130px + padding/margin */
+				overflow-y: auto;
+				overflow-x: hidden; /* Prevent horizontal scroll if not desired */
+				padding-right: 8px; /* Space for scrollbar to not overlap content */
+				/* Custom scrollbar styling (optional, webkit-based) */
+				scrollbar-width: thin;
+				scrollbar-color: #4b5563 #374151; /* thumb track */
+			}
+
+			#selector-container::-webkit-scrollbar {
+				width: 8px;
+			}
+
+			#selector-container::-webkit-scrollbar-track {
+				background: #1f2937; /* zinc-800 */
+				border-radius: 10px;
+			}
+
+			#selector-container::-webkit-scrollbar-thumb {
+				background-color: #4b5563; /* zinc-600 */
+				border-radius: 10px;
+				border: 2px solid #1f2937; /* zinc-800, creates padding around thumb */
 			}
 		`;
 		document.head.appendChild(style);
