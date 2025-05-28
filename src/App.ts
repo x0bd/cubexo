@@ -5,143 +5,158 @@ import { Voxelizer } from "./models/Voxelizer";
 import * as THREE from "three";
 import gsap from "gsap";
 import { ExportFormat } from "./utils/ModelExporter";
-import { ModelUploader } from "./utils/ModelUploader";
-import { ThemeManager } from "./utils/theme"; // Added import for ThemeManager
-import { AudioVisualizer } from "./utils/AudioVisualizer"; // Import the AudioVisualizer
+import { ModelUploader } from "./components/ModelUploader";
+import { ThemeManager } from "./utils/theme";
+import { AudioVisualizer } from "./utils/AudioVisualizer";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { AppParameters, ModelData, Voxel } from "../types/types";
 
 export class App {
-	private viewer: VoxelModelViewer;
+	private params: AppParameters;
+	public viewer: VoxelModelViewer;
+	public modelSelector: ModelSelector;
 	private modelLoader: ModelLoader;
-	private modelSelector: ModelSelector;
 	private voxelizer: Voxelizer;
 	private modelUploader: ModelUploader;
-	private themeManager: ThemeManager; // Declared themeManager property
-	private audioVisualizer: AudioVisualizer; // Declare AudioVisualizer property
+	private themeManager: ThemeManager;
+	private audioVisualizer: AudioVisualizer;
 	private isInitialized = false;
 	private loaderElement: HTMLElement | null;
-	private activeModelIdx = 1; // Start with Chicken (index 1)
-	private userModels: { name: string; url: string; model: THREE.Group }[] =
-		[];
+	private activeModelIdx = 1;
+	private userModels: ModelData[] = [];
+	private notificationElement!: HTMLElement;
+	private notificationTimeout: number | null = null;
 
-	constructor() {
-		// Log for debugging
+	private demoModels: ModelData[] = [
+		{
+			name: "Chili Pepper",
+			url: "https://ksenia-k.com/models/Chili%20Pepper.glb",
+			model: null,
+			voxels: [],
+			originalIndex: 0,
+		},
+		{
+			name: "Chicken",
+			url: "https://ksenia-k.com/models/Chicken.glb",
+			model: null,
+			voxels: [],
+			originalIndex: 1,
+		},
+		{
+			name: "Cherry",
+			url: "https://ksenia-k.com/models/Cherry.glb",
+			model: null,
+			voxels: [],
+			originalIndex: 2,
+		},
+		{
+			name: "Banana Bundle",
+			url: "https://ksenia-k.com/models/Banana%20Bundle.glb",
+			model: null,
+			voxels: [],
+			originalIndex: 3,
+		},
+		{
+			name: "Bonsai",
+			url: "https://ksenia-k.com/models/Bonsai.glb",
+			model: null,
+			voxels: [],
+			originalIndex: 4,
+		},
+		{
+			name: "Egg",
+			url: "https://ksenia-k.com/models/egg.glb",
+			model: null,
+			voxels: [],
+			originalIndex: 5,
+		},
+	];
+
+	constructor(params?: Partial<AppParameters>) {
+		this.params = {
+			...params,
+		} as AppParameters;
+
 		console.log("App constructor called");
-
-		// Get DOM elements
 		this.loaderElement = document.querySelector("#loader");
-
-		// Initialize theme manager
 		console.log("[App] Initializing ThemeManager...");
 		this.themeManager = new ThemeManager();
-		this.themeManager.init(); // Call init() to set up event listeners and initial theme
+		this.themeManager.init();
 		console.log("[App] ThemeManager initialized and started.");
 
-		// Initialize components
 		this.viewer = new VoxelModelViewer();
 		this.modelLoader = new ModelLoader();
 		this.voxelizer = new Voxelizer();
 		this.modelSelector = new ModelSelector();
-		this.modelUploader = new ModelUploader();
-		this.audioVisualizer = new AudioVisualizer(); // Initialize AudioVisualizer
+		this.modelUploader = new ModelUploader(
+			this.viewer,
+			this.modelSelector,
+			this
+		);
+		this.audioVisualizer = new AudioVisualizer();
 
-		// Setup export panel buttons
-		this.setupExportPanelButtons();
+		this.initNotificationSystem();
+		this.init();
+	}
 
-		// Setup theme toggle and utility buttons
-		this.setupThemeToggle();
-		this.setupUploadButton();
-
-		// Setup model uploader
-		this.setupModelUploader();
-
-		// Setup effect buttons
-		this.setupEffectButtons();
-
-		// Listen for custom notification events
-		this.setupNotificationListener();
-
-		// Setup model selector
-		this.modelSelector.init((oldIdx, newIdx) => {
-			// Set active model in the model viewer
-			if (this.viewer) {
-				this.viewer.setActiveModel(newIdx);
-			}
-		});
-
-		// Set up model cycling buttons
-		this.modelSelector.setupModelCycling();
-		this.modelSelector.setupModelPreviews();
+	private initNotificationSystem(): void {
+		this.notificationElement = document.createElement("div");
+		this.notificationElement.className =
+			"fixed bottom-6 right-6 p-4 rounded-lg shadow-xl text-sm font-geist-mono tracking-wide transition-all duration-300 ease-in-out transform opacity-0 translate-y-2 pointer-events-none flex items-center";
+		document.body.appendChild(this.notificationElement);
+		this.notificationTimeout = null;
 	}
 
 	public async init(): Promise<void> {
 		if (this.isInitialized) return;
 		this.isInitialized = true;
 
-		// Log for debugging
 		console.log("App initializing");
 
-		// Initialize the viewer
 		this.viewer.init();
 
-		// Initialize the selector with callback for model switching
 		this.modelSelector.init((oldIndex, newIndex) => {
 			console.log(`Model selected: ${oldIndex} -> ${newIndex}`);
 			this.viewer.animateToModel(oldIndex, newIndex);
 			this.activeModelIdx = newIndex;
 		});
 
-		// Set audio data callback for the viewer
 		this.audioVisualizer.setCallback((audioData) => {
 			this.viewer.updateWithAudioData(audioData);
 		});
 
-		// Load models
 		this.loadModels();
 	}
 
 	private loadModels(): void {
-		// Show loading message
 		if (this.loaderElement) {
 			this.loaderElement.innerHTML = "Loading models...";
 		}
-
-		// Get model URLs
 		const modelURLs = this.modelLoader.getURLs();
-
-		// Log for debugging
 		console.log(`Loading ${modelURLs.length} models`);
-
-		// Create preview scenes first
 		modelURLs.forEach((_, modelIdx) => {
 			this.modelSelector.createPreviewScene(modelIdx);
 		});
 
-		// Counter for loaded models
 		let modelsLoadedCount = 0;
-
-		// Load each model
 		modelURLs.forEach((url, modelIdx) => {
 			console.log(`Loading model ${modelIdx}: ${url}`);
-
 			this.modelLoader.loadModel(
 				url,
 				(model) => {
 					console.log(`Model ${modelIdx} loaded successfully`);
-
-					// Get model name from URL
 					const name = this.modelLoader.getModelNameFromUrl(url);
 
-					// Add the model to the selector preview
-					this.modelSelector.addModelPreview(
-						{
-							name,
-							url,
-							model,
-						},
-						modelIdx
-					);
+					const newModelData: ModelData = {
+						name,
+						url,
+						model,
+						voxels: [],
+						originalIndex: modelIdx,
+					};
 
-					// Voxelize the model
+					this.modelSelector.addModelPreview(newModelData, modelIdx);
+
 					const modelVoxels = this.voxelizer.voxelizeModel(
 						modelIdx,
 						model
@@ -149,14 +164,8 @@ export class App {
 					console.log(
 						`Model ${modelIdx} voxelized with ${modelVoxels.length} voxels`
 					);
-
-					// Add voxels to the viewer
 					this.viewer.addVoxelsForModel(modelIdx, modelVoxels);
-
-					// Increment counter
 					modelsLoadedCount++;
-
-					// First model loaded - start rendering
 					if (modelsLoadedCount === 1) {
 						console.log("First model loaded, starting render loop");
 						if (this.loaderElement) {
@@ -165,12 +174,8 @@ export class App {
 						}
 						this.viewer.startRenderLoop();
 					}
-
-					// All models loaded
 					if (modelsLoadedCount === modelURLs.length) {
 						console.log("All models loaded");
-
-						// Fade out loader
 						if (this.loaderElement) {
 							gsap.to(this.loaderElement, {
 								duration: 0.3,
@@ -183,13 +188,9 @@ export class App {
 								},
 							});
 						}
-
-						// Set active model in selector
 						this.modelSelector.setActiveModelIndex(
 							this.activeModelIdx
 						);
-
-						// Animate to initial model (Bonsai)
 						this.viewer.setActiveModel(this.activeModelIdx);
 						this.viewer.animateToModel(0, this.activeModelIdx);
 					}
@@ -201,11 +202,7 @@ export class App {
 		});
 	}
 
-	/**
-	 * Setup the export panel buttons functionality
-	 */
 	private setupExportPanelButtons(): void {
-		// Picture export button
 		const pictureButton = document.getElementById("export-picture");
 		if (pictureButton) {
 			pictureButton.addEventListener("click", () => {
@@ -215,7 +212,6 @@ export class App {
 			});
 		}
 
-		// Model export button
 		const modelButton = document.getElementById("export-model");
 		if (modelButton) {
 			modelButton.addEventListener("click", () => {
@@ -225,17 +221,14 @@ export class App {
 			});
 		}
 
-		// GIF export button
 		const gifButton = document.getElementById("export-gif");
 		if (gifButton) {
 			gifButton.addEventListener("click", () => {
 				console.log("Exporting as GIF animation");
-				// TODO: Implement GIF export functionality
 				this.showNotification("GIF export coming soon");
 			});
 		}
 
-		// Audio reactive button
 		const audioReactiveButton = document.getElementById(
 			"export-audio-reactive"
 		);
@@ -246,7 +239,6 @@ export class App {
 			});
 		}
 
-		// Download button
 		const downloadButton = document.getElementById("export-download");
 		if (downloadButton) {
 			downloadButton.addEventListener("click", () => {
@@ -256,20 +248,15 @@ export class App {
 			});
 		}
 
-		// Share button
 		const shareButton = document.getElementById("export-share");
 		if (shareButton) {
 			shareButton.addEventListener("click", () => {
 				console.log("Share current model");
-				// TODO: Implement sharing functionality
 				this.showNotification("Sharing coming soon");
 			});
 		}
 	}
 
-	/**
-	 * Set up listener for custom notification events
-	 */
 	private setupNotificationListener(): void {
 		window.addEventListener("show-notification", ((event: CustomEvent) => {
 			const { message, type } = event.detail;
@@ -277,9 +264,6 @@ export class App {
 		}) as EventListener);
 	}
 
-	/**
-	 * Export the current model as GLB
-	 */
 	private exportCurrentModel(): void {
 		if (!this.viewer) return;
 
@@ -287,9 +271,6 @@ export class App {
 		this.viewer.exportCurrentModel(ExportFormat.GLB);
 	}
 
-	/**
-	 * Export the current view as a high-resolution PNG image
-	 */
 	private exportAsPng(): void {
 		if (!this.viewer) return;
 
@@ -298,202 +279,13 @@ export class App {
 		this.showNotification("Image exported");
 	}
 
-	/**
-	 * Setup the model upload button
-	 */
-	private setupModelUploader(): void {
-		const uploadInput = document.getElementById(
-			"model-upload"
-		) as HTMLInputElement;
-		if (!uploadInput) return;
-
-		uploadInput.addEventListener("change", async (event) => {
-			const target = event.target as HTMLInputElement;
-			const files = target.files;
-
-			if (!files || files.length === 0) return;
-
-			const file = files[0];
-
-			// Show loading message
-			if (this.loaderElement) {
-				this.loaderElement.innerHTML = "Processing uploaded model...";
-				this.loaderElement.style.display = "block";
-				this.loaderElement.style.opacity = "1";
-			}
-
-			try {
-				// Load the model
-				const model = await this.modelUploader.loadUserModel(file);
-
-				// Get model name from file
-				const name = ModelUploader.getModelNameFromFile(file);
-
-				// Create a data URL as a placeholder "url" for the model
-				// Add a prefix to indicate this is a user-uploaded model for proper scaling
-				const modelData = {
-					name: `user-model-${name}`, // Add prefix to help with identification
-					url: `user-model://${name}`,
-					model,
-				};
-
-				// Add to user models
-				this.userModels.push(modelData);
-
-				// Create a new index for this model
-				const modelIdx =
-					this.modelLoader.getURLs().length +
-					this.userModels.length -
-					1;
-
-				// Create preview scene for the model
-				this.modelSelector.createPreviewScene(modelIdx);
-
-				// Add the model to the selector preview
-				this.modelSelector.addModelPreview(modelData, modelIdx);
-
-				// Voxelize the model
-				const modelVoxels = this.voxelizer.voxelizeModel(
-					modelIdx,
-					model
-				);
-				console.log(
-					`User model voxelized with ${modelVoxels.length} voxels`
-				);
-
-				// Add voxels to the viewer
-				this.viewer.addVoxelsForModel(modelIdx, modelVoxels);
-
-				// Switch to the new model
-				this.modelSelector.setActiveModelIndex(modelIdx);
-				this.viewer.animateToModel(this.activeModelIdx, modelIdx);
-				this.activeModelIdx = modelIdx;
-
-				// Hide the loader
-				if (this.loaderElement) {
-					gsap.to(this.loaderElement, {
-						duration: 0.3,
-						opacity: 0,
-						onComplete: () => {
-							if (this.loaderElement) {
-								this.loaderElement.style.display = "none";
-							}
-						},
-					});
-				}
-
-				// Show success notification
-				this.showNotification(`${name} uploaded successfully`);
-			} catch (error) {
-				console.error("Error processing uploaded model:", error);
-
-				// Show error message
-				if (this.loaderElement) {
-					this.loaderElement.innerHTML = "Error processing model";
-					setTimeout(() => {
-						if (this.loaderElement) {
-							gsap.to(this.loaderElement, {
-								duration: 0.3,
-								opacity: 0,
-								onComplete: () => {
-									if (this.loaderElement) {
-										this.loaderElement.style.display =
-											"none";
-									}
-								},
-							});
-						}
-					}, 2000);
-				}
-			} finally {
-				// Reset the file input value so the same file can be uploaded again if needed
-				uploadInput.value = "";
-			}
-		});
-	}
-
-	/**
-	 * Show notification
-	 */
-	private showNotification(
-		message: string,
-		type: "success" | "error" = "success"
-	): void {
-		// Create notification element with updated premium Japanese design
-		const notificationEl = document.createElement("div");
-		notificationEl.className =
-			"fixed bottom-6 right-6 py-2.5 px-3.5 rounded-lg shadow-xl flex items-center gap-3 z-50 " +
-			"bg-zinc-900/80 backdrop-blur-md border border-zinc-700/50 " +
-			(type === "success" ? "text-emerald-500" : "text-rose-500");
-
-		// Add icon with premium styling
-		const iconEl = document.createElement("span");
-		iconEl.className = "flex items-center justify-center";
-
-		// Create SVG icon based on type
-		if (type === "success") {
-			iconEl.innerHTML = `
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle">
-					<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-					<polyline points="22 4 12 14.01 9 11.01"/>
-				</svg>
-			`;
-		} else {
-			iconEl.innerHTML = `
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-circle">
-					<circle cx="12" cy="12" r="10"/>
-					<line x1="12" y1="8" x2="12" y2="12"/>
-					<line x1="12" y1="16" x2="12.01" y2="16"/>
-				</svg>
-			`;
-		}
-
-		notificationEl.appendChild(iconEl);
-
-		// Add message text with premium Japanese-style typography
-		const messageEl = document.createElement("span");
-		messageEl.className =
-			"text-xs jp tracking-wide uppercase text-zinc-200";
-		messageEl.textContent = message;
-		notificationEl.appendChild(messageEl);
-
-		// Add to DOM
-		document.body.appendChild(notificationEl);
-
-		// Animate appearance
-		gsap.fromTo(
-			notificationEl,
-			{ y: 20, opacity: 0 },
-			{ y: 0, opacity: 1, duration: 0.3, ease: "power2.out" }
-		);
-
-		// Animate and remove after delay
-		setTimeout(() => {
-			gsap.to(notificationEl, {
-				y: 10,
-				opacity: 0,
-				duration: 0.4,
-				ease: "power3.in",
-				onComplete: () => {
-					document.body.removeChild(notificationEl);
-				},
-			});
-		}, 3000);
-	}
-
-	/**
-	 * Setup effect buttons in the effects panel
-	 */
 	private setupEffectButtons(): void {
-		// Setup shake effect button
 		const shakeButton = document.getElementById("effect-shake");
 		if (shakeButton) {
 			shakeButton.addEventListener("click", () => {
 				console.log("Applying shake effect");
-				// Apply the shake effect to the current model
 				this.viewer.applyShakeEffect();
 
-				// Add active state to button
 				shakeButton.classList.add(
 					"bg-indigo-700/90",
 					"border-indigo-600/70"
@@ -503,19 +295,16 @@ export class App {
 						"bg-indigo-700/90",
 						"border-indigo-600/70"
 					);
-				}, 800); // Duration slightly longer than the effect
+				}, 800);
 			});
 		}
 
-		// Setup explode effect button
 		const explodeButton = document.getElementById("effect-explode");
 		if (explodeButton) {
 			explodeButton.addEventListener("click", () => {
 				console.log("Applying explode effect");
-				// Apply the explode effect to the current model
 				this.viewer.applyExplodeEffect();
 
-				// Add active state to button
 				explodeButton.classList.add(
 					"bg-indigo-700/90",
 					"border-indigo-600/70"
@@ -525,17 +314,11 @@ export class App {
 						"bg-indigo-700/90",
 						"border-indigo-600/70"
 					);
-				}, 900); // Duration slightly longer than the effect (explode is 0.3s + 0.1s + 0.5s animation)
+				}, 900);
 			});
 		}
-
-		// Setup for other effect buttons will be added here in the future
-		// Each effect will follow a similar pattern to the shake and explode effects
 	}
 
-	/**
-	 * Setup theme toggle button
-	 */
 	private setupThemeToggle(): void {
 		const themeToggle = document.getElementById("theme-toggle");
 		if (themeToggle) {
@@ -544,7 +327,6 @@ export class App {
 					document.documentElement.classList.contains("dark");
 				document.documentElement.classList.toggle("dark");
 
-				// Dispatch custom event for components to react to theme change
 				window.dispatchEvent(
 					new CustomEvent("themechange", {
 						detail: { theme: !isDark ? "dark" : "light" },
@@ -554,16 +336,12 @@ export class App {
 		}
 	}
 
-	/**
-	 * Setup upload button in the dock
-	 */
 	private setupUploadButton(): void {
 		const uploadBtn = document.getElementById("upload-btn");
 		if (!uploadBtn) return;
 
 		uploadBtn.addEventListener("click", () => {
 			console.log("Triggering model upload");
-			// Trigger the file input click
 			const fileInput = document.getElementById(
 				"model-upload"
 			) as HTMLInputElement;
@@ -571,5 +349,126 @@ export class App {
 				fileInput.click();
 			}
 		});
+	}
+
+	private loadDemoModels(): void {
+		const loader = new GLTFLoader();
+		this.demoModels.forEach((modelData, index) => {
+			this.modelSelector.createPreviewScene(modelData.originalIndex);
+
+			loader.load(
+				modelData.url,
+				(gltf) => {
+					const loadedModel = gltf.scene;
+					const modelToUpdate = this.demoModels.find(
+						(m) => m.originalIndex === modelData.originalIndex
+					);
+					if (modelToUpdate) {
+						modelToUpdate.model = loadedModel;
+					} else {
+						console.error(
+							`Could not find modelData for originalIndex ${modelData.originalIndex} to update with loaded GLTF.`
+						);
+					}
+					this.modelSelector.addModelPreview(
+						modelToUpdate,
+						modelData.originalIndex
+					);
+
+					if (index === 0) {
+						this.modelSelector.setActiveModelIndex(
+							modelData.originalIndex
+						);
+						this.viewer.setActiveModel(modelData.originalIndex);
+					}
+				},
+				undefined,
+				(error) => {
+					console.error(
+						`Error loading demo model ${modelData.name}:`,
+						error
+					);
+					this.showNotification(
+						`Error loading ${modelData.name}`,
+						"error"
+					);
+				}
+			);
+		});
+	}
+
+	public showNotification(
+		message: string,
+		type: "success" | "error" | "info" = "info",
+		duration: number = 3000
+	): void {
+		if (!this.notificationElement) this.initNotificationSystem();
+		if (this.notificationTimeout) clearTimeout(this.notificationTimeout);
+		this.notificationElement.className =
+			"fixed bottom-6 right-6 p-4 rounded-lg shadow-xl text-sm font-geist-mono tracking-wide transition-all duration-300 ease-in-out transform opacity-0 translate-y-2 flex items-center pointer-events-none";
+		let iconHtml = "";
+		switch (type) {
+			case "success":
+				this.notificationElement.classList.add(
+					"bg-green-500/20",
+					"text-green-300",
+					"border",
+					"border-green-500/30"
+				);
+				iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2 mr-2 text-green-400"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>`;
+				break;
+			case "error":
+				this.notificationElement.classList.add(
+					"bg-red-500/20",
+					"text-red-300",
+					"border",
+					"border-red-500/30"
+				);
+				iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-circle mr-2 text-red-400"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>`;
+				break;
+			case "info":
+			default:
+				this.notificationElement.classList.add(
+					"bg-blue-500/20",
+					"text-blue-300",
+					"border",
+					"border-blue-500/30"
+				);
+				iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-info mr-2 text-blue-400"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>`;
+				break;
+		}
+		this.notificationElement.innerHTML = `${iconHtml}<span>${message}</span>`;
+		requestAnimationFrame(() => {
+			this.notificationElement.classList.remove(
+				"opacity-0",
+				"translate-y-2",
+				"pointer-events-none"
+			);
+			this.notificationElement.classList.add(
+				"opacity-100",
+				"translate-y-0"
+			);
+		});
+		if (duration > 0) {
+			this.notificationTimeout = window.setTimeout(
+				() => this.clearNotification(),
+				duration
+			);
+		}
+	}
+
+	public clearNotification(): void {
+		if (!this.notificationElement) return;
+		if (this.notificationTimeout) clearTimeout(this.notificationTimeout);
+		this.notificationTimeout = null;
+		this.notificationElement.classList.remove(
+			"opacity-100",
+			"translate-y-0"
+		);
+		this.notificationElement.classList.add(
+			"opacity-0",
+			"translate-y-2",
+			"pointer-events-none"
+		);
 	}
 }
