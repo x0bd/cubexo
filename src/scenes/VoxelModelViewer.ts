@@ -352,7 +352,7 @@ export class VoxelModelViewer {
 			gsap.to(this.instancedMesh.rotation, {
 				duration: 1.2,
 				y:
-					"+=" +
+					"=" +
 					(isPotentiallyProblematic ? Math.PI * 0.75 : Math.PI * 1.1),
 				ease: "power2.out",
 			});
@@ -2134,5 +2134,93 @@ export class VoxelModelViewer {
 		if (this.instancedMesh) {
 			this.instancedMesh.instanceMatrix.needsUpdate = true;
 		}
+	}
+
+	public async exportTurntableGifFrames(
+		numFrames: number = 60,
+		rotationDurationPerFrame: number = 50 // ms, for async delay
+	): Promise<string[]> {
+		if (
+			!this.renderer ||
+			!this.scene ||
+			!this.camera ||
+			!this.instancedMesh ||
+			this.instancedMesh.count === 0
+		) {
+			console.error(
+				"Cannot export GIF: Renderer, scene, camera, or active model not available."
+			);
+			this.showExportNotification("Error: No model to export for GIF");
+			return [];
+		}
+
+		this.showExportNotification(
+			"Preparing GIF frames... (this may take a moment)"
+		);
+
+		const originalWidth =
+			this.canvasElement?.clientWidth || window.innerWidth;
+		const originalHeight =
+			this.canvasElement?.clientHeight || window.innerHeight;
+		const originalAspect = this.camera.aspect;
+		const exportWidth = 1600;
+		const exportHeight = 1600;
+
+		// Store original rotation
+		const originalSceneRotationY = this.scene.rotation.y;
+		// If you have a specific model group that's rotated, target that instead.
+		// For now, assuming the whole scene or a primary model group within it is rotated.
+		// const modelGroup = this.scene.getObjectByName("activeModelGroup"); // Example
+		// const originalModelGroupRotationY = modelGroup ? modelGroup.rotation.y : 0;
+
+		this.renderer.setSize(exportWidth, exportHeight, false); // false to not update style
+		this.camera.aspect = exportWidth / exportHeight;
+		this.camera.updateProjectionMatrix();
+
+		const frames: string[] = [];
+		const rotationStep = (Math.PI * 2) / numFrames;
+
+		// Ensure controls are updated to reflect potential camera changes if needed
+		if (this.controls) {
+			this.controls.update();
+		}
+
+		for (let i = 0; i < numFrames; i++) {
+			// Rotate the scene (or the specific model group)
+			this.scene.rotation.y = originalSceneRotationY + i * rotationStep;
+			// if (modelGroup) modelGroup.rotation.y = originalModelGroupRotationY + i * rotationStep;
+
+			// Force render of the current state
+			this.renderer.render(this.scene, this.camera);
+
+			// Capture frame - ensure DOM is updated if renderer writes to offscreen canvas first
+			// await new Promise(resolve => setTimeout(resolve, rotationDurationPerFrame)); // Small delay for rendering to complete
+			// The delay might not be strictly necessary if render is synchronous and writes to the main canvas directly.
+
+			frames.push(this.renderer.domElement.toDataURL("image/png"));
+			console.log(`Captured frame ${i + 1}/${numFrames} for GIF`);
+
+			// Yield to the event loop briefly if many frames to prevent freezing UI
+			if (i % 10 === 0) {
+				// Every 10 frames
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			}
+		}
+
+		// Restore original settings
+		this.scene.rotation.y = originalSceneRotationY;
+		// if (modelGroup) modelGroup.rotation.y = originalModelGroupRotationY;
+		this.renderer.setSize(originalWidth, originalHeight, true); // true to update style back
+		this.camera.aspect = originalAspect;
+		this.camera.updateProjectionMatrix();
+		if (this.controls) {
+			this.controls.update();
+		}
+
+		console.log("GIF frames captured:", frames.length);
+		this.showExportNotification("GIF frames ready for encoding!");
+		// For now, we just return the frames. GIF encoding will be a separate step.
+		// You would typically pass `frames` to a GIF encoding library here.
+		return frames;
 	}
 }

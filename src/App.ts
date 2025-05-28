@@ -228,10 +228,60 @@ export class App {
 		// GIF export button
 		const gifButton = document.getElementById("export-gif");
 		if (gifButton) {
-			gifButton.addEventListener("click", () => {
+			gifButton.addEventListener("click", async () => {
 				console.log("Exporting as GIF animation");
-				// TODO: Implement GIF export functionality
-				this.showNotification("GIF export coming soon");
+				if (this.viewer) {
+					// Disable button during GIF generation to prevent multiple clicks
+					gifButton.setAttribute("disabled", "true");
+					gifButton.classList.add("opacity-50", "cursor-not-allowed");
+
+					this.showNotification(
+						"Generating GIF frames...",
+						"success"
+					);
+					try {
+						const frames =
+							await this.viewer.exportTurntableGifFrames();
+						// At this point, `frames` contains an array of PNG data URLs.
+						// TODO: Implement actual GIF encoding and download using a library like gif.js or GIFEncoder.js
+						console.log(
+							"Turntable GIF frames generated:",
+							frames.length
+						);
+						if (frames.length > 0) {
+							this.showNotification(
+								`Generated ${frames.length} frames for GIF. Ready for encoding.`,
+								"success"
+							);
+							// For now, you can inspect the first frame by opening its data URL in a browser tab.
+							// console.log("First frame data URL (copy and paste in browser to view):");
+							// console.log(frames[0]);
+						} else {
+							this.showNotification(
+								"Could not generate GIF frames.",
+								"error"
+							);
+						}
+					} catch (error) {
+						console.error("Error generating GIF frames:", error);
+						this.showNotification(
+							"Error generating GIF frames.",
+							"error"
+						);
+					} finally {
+						// Re-enable button
+						gifButton.removeAttribute("disabled");
+						gifButton.classList.remove(
+							"opacity-50",
+							"cursor-not-allowed"
+						);
+					}
+				} else {
+					this.showNotification(
+						"Viewer not available for GIF export.",
+						"error"
+					);
+				}
 			});
 		}
 
