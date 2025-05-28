@@ -15,6 +15,7 @@
 	"dependencies": {
 		"@tailwindcss/postcss": "^4.1.7",
 		"@tailwindcss/vite": "^4.1.7",
+		"gif.js.optimized": "^1.0.1",
 		"gsap": "^3.13.0",
 		"lucide": "^0.511.0",
 		"postcss": "^8.5.3",

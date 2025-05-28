@@ -4,6 +4,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import gsap from "gsap";
 import type { Voxel, AppParameters } from "../types/types";
 import { ModelExporter, ExportFormat } from "../utils/ModelExporter";
+import GIF from "gif.js.optimized"; // Import gif.js
 
 export class VoxelModelViewer {
 	private matrixUpdateTween: gsap.core.Tween | null = null;
@@ -82,7 +83,7 @@ export class VoxelModelViewer {
 		this.handleResize();
 
 		// Create initial instanced mesh
-		this.recreateInstancedMesh(100);
+		this.recreateInstancedMesh(100); // Default to 100, will resize if larger model is loaded
 	}
 
 	private getCenteredVoxelData(voxels: Voxel[]): {
@@ -1444,42 +1445,72 @@ export class VoxelModelViewer {
 	 * @param format The format to export as
 	 */
 	public exportCurrentModel(format: ExportFormat = ExportFormat.OBJ): void {
-		if (!this.instancedMesh || !this.scene) {
-			console.error("Cannot export: no model loaded");
+		if (
+			!this.instancedMesh ||
+			this.instancedMesh.count === 0 ||
+			!this.scene
+		) {
+			console.warn("No model to export or scene not ready.");
+			this.showExportNotification(
+				"Error: No model available to export.",
+				"error"
+			);
 			return;
 		}
 
-		// Get the current model's voxels (use only the active ones)
-		const activeVoxels = this.voxelsPerModel[this.activeModelIndex] || [];
-		if (activeVoxels.length === 0) {
-			console.error("Cannot export: no active voxels");
-			return;
-		}
-
-		// Convert the instanced mesh to regular meshes
-		const exportGroup = ModelExporter.convertInstancedMeshToRegular(
-			this.instancedMesh,
-			activeVoxels.slice(0, this.instancedMesh.count)
+		// Use liveVoxels which represent the current state of the model in the scene
+		const currentVoxels = this.liveVoxels.slice(
+			0,
+			this.instancedMesh.count
 		);
 
-		// Get the model name for the filename
-		const modelLoader = document.querySelector("#selector")?.childNodes[
-			this.activeModelIndex
-		] as HTMLElement;
-		const modelName =
-			modelLoader?.getAttribute("data-model-name") ||
-			`model-${this.activeModelIndex}`;
+		if (currentVoxels.length === 0) {
+			console.warn("No voxels in the current model to export.");
+			this.showExportNotification(
+				"Error: Current model is empty.",
+				"error"
+			);
+			return;
+		}
 
-		// Create a sanitized filename
-		const filename = `cubexo-${modelName
-			.toLowerCase()
-			.replace(/[^a-z0-9]/g, "-")}`;
+		let modelName = "exported_model";
+		const activeModelContainer = this.voxelsPerModel[this.activeModelIndex];
+		if (activeModelContainer && (activeModelContainer as any).name) {
+			modelName = (activeModelContainer as any).name;
+		} else if (
+			this.instancedMesh &&
+			this.instancedMesh.name &&
+			this.instancedMesh.name !== "InstancedVoxelMesh"
+		) {
+			modelName = this.instancedMesh.name;
+		}
+		const sanitizedFilename = `${modelName
+			.replace(/[^a-z0-9]/gi, "_")
+			.toLowerCase()}`;
 
-		// Show export notification
-		this.showExportNotification();
+		// Convert the currently visible part of the instanced mesh to a regular group for export
+		const exportGroup = ModelExporter.convertInstancedMeshToRegular(
+			this.instancedMesh,
+			currentVoxels // Pass only the active voxels
+		);
 
-		// Export the model
-		ModelExporter.exportModel(exportGroup, format, filename);
+		if (!exportGroup || exportGroup.children.length === 0) {
+			console.error(
+				"Failed to convert instanced mesh to a group for export or group is empty."
+			);
+			this.showExportNotification(
+				"Error: Could not prepare model for export.",
+				"error"
+			);
+			return;
+		}
+
+		ModelExporter.exportModel(exportGroup, format, sanitizedFilename);
+
+		this.showExportNotification(
+			`Model exported as ${format.toUpperCase()}`,
+			"success"
+		);
 	}
 
 	/**
@@ -1862,113 +1893,22 @@ export class VoxelModelViewer {
 	 * Show notification for effects with Tailwind classes (indigo theme)
 	 */
 	private showEffectNotification(message: string): void {
-		// Create notification element with Tailwind classes
-		const notification = document.createElement("div");
-		notification.className =
-			"fixed bottom-8 right-8 bg-indigo-900/90 border border-indigo-800/80 rounded-lg py-3 px-4 flex items-center gap-3 shadow-md z-50 animate-fade-in export-notification"; // Note: class 'export-notification' might be generic, consider 'effect-notification'
-
-		// Effect icon
-		const icon = document.createElement("div");
-		icon.innerHTML = `
-			<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400 lucide lucide-sparkles">
-				<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
-				<path d="M5 3v4"/>
-				<path d="M19 17v4"/>
-				<path d="M3 5h4"/>
-				<path d="M17 19h4"/>
-			</svg>
-		`;
-		if (notification) {
-			// Check notification, not icon, for appending
-			notification.appendChild(icon);
-		}
-
-		// Message
-		const text = document.createElement("span");
-		text.className = "text-sm font-medium text-indigo-100";
-		text.textContent = message;
-		if (notification) {
-			// Check notification for appending
-			notification.appendChild(text);
-		}
-
-		if (document.body) {
-			// Check document.body for appending
-			document.body.appendChild(notification);
-		}
-
-		// Add fade-out animation
-		setTimeout(() => {
-			if (notification) {
-				notification.classList.add("animate-fade-out");
-				setTimeout(() => {
-					if (notification.parentNode) {
-						notification.parentNode.removeChild(notification);
-					}
-				}, 300); // Duration of fade-out animation
-			}
-		}, 2000); // Display duration before fading out
+		// Dispatch a custom event that App.ts can listen to
+		const event = new CustomEvent("show-notification", {
+			detail: { message, type: "success" },
+		});
+		window.dispatchEvent(event);
 	}
 
-	/**
-	 * Show export notification with Tailwind classes
-	 */
-	private showExportNotification(message: string = "Model exported"): void {
-		// Remove any existing notifications to prevent stacking
-		const existingNotifications = document.querySelectorAll(
-			".export-notification"
-		);
-		existingNotifications.forEach((notif) => {
-			if (notif.parentNode) {
-				notif.parentNode.removeChild(notif);
-			}
+	// Helper to dispatch export-related notifications (can be success or error)
+	private showExportNotification(
+		message: string,
+		type: "success" | "error" = "success"
+	): void {
+		const event = new CustomEvent("show-notification", {
+			detail: { message, type },
 		});
-
-		// Create notification element with Tailwind classes
-		const notification = document.createElement("div");
-		notification.className =
-			"fixed bottom-8 right-8 bg-gray-900 border border-gray-800 rounded-lg py-3 px-4 flex items-center gap-3 shadow-md z-50 animate-fade-in export-notification";
-
-		// Success icon
-		const icon = document.createElement("div");
-		icon.innerHTML = `
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-400">
-				<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-				<polyline points="22 4 12 14.01 9 11.01"></polyline>
-			</svg>
-		`;
-		// Safely append icon to notification
-		if (icon && notification) {
-			notification.appendChild(icon);
-		}
-
-		// Message
-		const text = document.createElement("span");
-		text.className = "text-sm font-medium text-gray-100";
-		text.textContent = message;
-		// Safely append text to notification
-		if (text && notification) {
-			notification.appendChild(text);
-		}
-
-		// Safely append notification to document body
-		if (notification && document.body) {
-			document.body.appendChild(notification);
-		}
-
-		// Add fade-out animation
-		if (notification) {
-			setTimeout(() => {
-				if (notification) {
-					notification.classList.add("animate-fade-out");
-					setTimeout(() => {
-						if (notification && notification.parentNode) {
-							notification.parentNode.removeChild(notification);
-						}
-					}, 300);
-				}
-			}, 3000);
-		}
+		window.dispatchEvent(event);
 	}
 
 	/**
@@ -2138,8 +2078,9 @@ export class VoxelModelViewer {
 
 	public async exportTurntableGifFrames(
 		numFrames: number = 60,
-		rotationDurationPerFrame: number = 50 // ms, for async delay
-	): Promise<string[]> {
+		delayPerFrame: number = 100 // ms, delay for each GIF frame
+	): Promise<void> {
+		// Changed to Promise<void> as it will trigger download directly
 		if (
 			!this.renderer ||
 			!this.scene ||
@@ -2150,13 +2091,14 @@ export class VoxelModelViewer {
 			console.error(
 				"Cannot export GIF: Renderer, scene, camera, or active model not available."
 			);
-			this.showExportNotification("Error: No model to export for GIF");
-			return [];
+			this.showExportNotification(
+				"Error: No model to export for GIF",
+				"error"
+			);
+			return;
 		}
 
-		this.showExportNotification(
-			"Preparing GIF frames... (this may take a moment)"
-		);
+		this.showExportNotification("Preparing GIF frames...", "success");
 
 		const originalWidth =
 			this.canvasElement?.clientWidth || window.innerWidth;
@@ -2166,61 +2108,115 @@ export class VoxelModelViewer {
 		const exportWidth = 1600;
 		const exportHeight = 1600;
 
-		// Store original rotation
 		const originalSceneRotationY = this.scene.rotation.y;
-		// If you have a specific model group that's rotated, target that instead.
-		// For now, assuming the whole scene or a primary model group within it is rotated.
-		// const modelGroup = this.scene.getObjectByName("activeModelGroup"); // Example
-		// const originalModelGroupRotationY = modelGroup ? modelGroup.rotation.y : 0;
 
-		this.renderer.setSize(exportWidth, exportHeight, false); // false to not update style
+		this.renderer.setSize(exportWidth, exportHeight, false);
 		this.camera.aspect = exportWidth / exportHeight;
 		this.camera.updateProjectionMatrix();
 
-		const frames: string[] = [];
+		const capturedFramesDataUrls: string[] = [];
 		const rotationStep = (Math.PI * 2) / numFrames;
 
-		// Ensure controls are updated to reflect potential camera changes if needed
 		if (this.controls) {
 			this.controls.update();
 		}
 
 		for (let i = 0; i < numFrames; i++) {
-			// Rotate the scene (or the specific model group)
 			this.scene.rotation.y = originalSceneRotationY + i * rotationStep;
-			// if (modelGroup) modelGroup.rotation.y = originalModelGroupRotationY + i * rotationStep;
-
-			// Force render of the current state
 			this.renderer.render(this.scene, this.camera);
-
-			// Capture frame - ensure DOM is updated if renderer writes to offscreen canvas first
-			// await new Promise(resolve => setTimeout(resolve, rotationDurationPerFrame)); // Small delay for rendering to complete
-			// The delay might not be strictly necessary if render is synchronous and writes to the main canvas directly.
-
-			frames.push(this.renderer.domElement.toDataURL("image/png"));
+			capturedFramesDataUrls.push(
+				this.renderer.domElement.toDataURL("image/png")
+			);
 			console.log(`Captured frame ${i + 1}/${numFrames} for GIF`);
-
-			// Yield to the event loop briefly if many frames to prevent freezing UI
 			if (i % 10 === 0) {
-				// Every 10 frames
 				await new Promise((resolve) => setTimeout(resolve, 0));
 			}
 		}
 
-		// Restore original settings
+		// Restore original settings BEFORE starting GIF encoding
 		this.scene.rotation.y = originalSceneRotationY;
-		// if (modelGroup) modelGroup.rotation.y = originalModelGroupRotationY;
-		this.renderer.setSize(originalWidth, originalHeight, true); // true to update style back
+		this.renderer.setSize(originalWidth, originalHeight, true);
 		this.camera.aspect = originalAspect;
 		this.camera.updateProjectionMatrix();
 		if (this.controls) {
 			this.controls.update();
 		}
 
-		console.log("GIF frames captured:", frames.length);
-		this.showExportNotification("GIF frames ready for encoding!");
-		// For now, we just return the frames. GIF encoding will be a separate step.
-		// You would typically pass `frames` to a GIF encoding library here.
-		return frames;
+		console.log("GIF frames captured, starting encoding...");
+		this.showExportNotification("Encoding GIF... please wait.", "success");
+
+		const gif = new GIF({
+			workers: 2, // Number of web workers to use
+			quality: 10, // Lower numbers = better quality
+			width: exportWidth,
+			height: exportHeight,
+			// IMPORTANT: Ensure 'gif.worker.js' is available at this path in your built/served application.
+			// You might need to copy it from 'node_modules/gif.js.optimized/dist/' to your public assets folder.
+			workerScript: "gif.worker.js",
+		});
+
+		// Sequentially load images and add frames to ensure order and complete loading
+		for (const frameDataUrl of capturedFramesDataUrls) {
+			await new Promise<void>((resolve) => {
+				const img = new Image();
+				img.onload = () => {
+					gif.addFrame(img, { delay: delayPerFrame });
+					console.log("Frame added to GIF encoder");
+					resolve();
+				};
+				img.onerror = () => {
+					console.error("Error loading frame image for GIF encoding");
+					resolve(); // Resolve anyway to not block the process, though GIF might be incomplete
+				};
+				img.src = frameDataUrl;
+			});
+		}
+
+		gif.on("finished", (blob: Blob) => {
+			// Added Blob type
+			console.log("GIF encoding finished. Blob size:", blob.size);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			// Generate a filename with the active model name if possible
+			let filename = "turntable_export.gif";
+			const activeModelData = this.voxelsPerModel[this.activeModelIndex];
+			// This assumes that your Voxel data structure or related metadata might have a name.
+			// If voxelsPerModel[activeModelIndex] is just an array of Voxel objects,
+			// you might need to fetch the name from where models are defined (e.g., ModelLoader or App state)
+			// For now, we'll use a generic name or try to find a name if it's part of the data.
+			if (activeModelData && (activeModelData as any).name) {
+				// Check if name property exists
+				filename = `${(activeModelData as any).name
+					.replace(/[^a-z0-9]/gi, "_")
+					.toLowerCase()}_turntable.gif`;
+			}
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+			this.showExportNotification("GIF downloaded!", "success");
+		});
+
+		gif.on("progress", (p: number) => {
+			console.log(`GIF encoding progress: ${Math.round(p * 100)}%`);
+			// Assuming showExportNotification takes (message, type, persistentNotification)
+			// If it only takes (message, type), the third argument should be removed.
+			// For now, let's assume it's (message, type) as per previous definition if the third arg was an addition.
+			// Re-checking the definition. The method showExportNotification was used before with 2 args.
+			// Let's adjust this call to use the two-argument version if that was the original intent.
+			// this.showExportNotification(`Encoding GIF: ${Math.round(p * 100)}%`, "success", false); // Potential issue here
+			// Correcting based on typical notification pattern (message, type)
+			this.showExportNotification(
+				`Encoding GIF: ${Math.round(p * 100)}%`,
+				"success"
+			);
+		});
+
+		console.log("Rendering GIF...");
+		gif.render();
+
+		// The method is now Promise<void> and doesn't return frames
 	}
 }
