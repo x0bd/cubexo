@@ -1,0 +1,1 @@
+-   [ ] Use A Modern Gif exporter like gifenc
