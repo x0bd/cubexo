@@ -113,7 +113,7 @@ export class App {
 
 		// Create preview scenes first
 		modelURLs.forEach((_, modelIdx) => {
-			this.modelSelector.createPreviewScene(modelIdx);
+			this.modelSelector.createPreviewElement(modelIdx);
 		});
 
 		// Counter for loaded models
@@ -132,7 +132,7 @@ export class App {
 					const name = this.modelLoader.getModelNameFromUrl(url);
 
 					// Add the model to the selector preview
-					this.modelSelector.addModelPreview(
+					this.modelSelector.addModelDataAndUpdatePreview(
 						{
 							name,
 							url,
@@ -347,10 +347,13 @@ export class App {
 					1;
 
 				// Create preview scene for the model
-				this.modelSelector.createPreviewScene(modelIdx);
+				this.modelSelector.createPreviewElement(modelIdx);
 
 				// Add the model to the selector preview
-				this.modelSelector.addModelPreview(modelData, modelIdx);
+				this.modelSelector.addModelDataAndUpdatePreview(
+					modelData,
+					modelIdx
+				);
 
 				// Voxelize the model
 				const modelVoxels = this.voxelizer.voxelizeModel(
