@@ -835,8 +835,22 @@ export class VoxelModelViewer {
 			index < this.liveVoxels.length &&
 			this.liveVoxels[index]
 		) {
-			// Check liveVoxels[index]
+			// Copy position from the voxel
 			this.dummy.position.copy(this.liveVoxels[index].position);
+
+			// Explicitly set identity rotation and unit scale for the dummy object
+			// This ensures each instance matrix primarily carries position,
+			// and uses the default orientation and scale of the base voxel geometry.
+			this.dummy.quaternion.identity();
+			this.dummy.scale.set(1, 1, 1);
+
+			// If individual voxels were meant to have unique rotations/scales,
+			// the Voxel type and data population would need to support this.
+			// For now, we assume uniform instances affected only by position.
+			// Example: if ((this.liveVoxels[index] as any).quaternion) { this.dummy.quaternion.copy((this.liveVoxels[index] as any).quaternion); }
+			// Example: if ((this.liveVoxels[index] as any).scale) { this.dummy.scale.copy((this.liveVoxels[index] as any).scale); }
+
+			// Update the matrix
 			this.dummy.updateMatrix();
 			this.instancedMesh.setMatrixAt(index, this.dummy.matrix);
 			this.instanceMatrixNeedsUpdate = true;
@@ -1488,24 +1502,22 @@ export class VoxelModelViewer {
 			.replace(/[^a-z0-9]/gi, "_")
 			.toLowerCase()}`;
 
-		// Convert the currently visible part of the instanced mesh to a regular group for export
-		const exportGroup = ModelExporter.convertInstancedMeshToRegular(
-			this.instancedMesh,
-			currentVoxels // Pass only the active voxels
+		console.log(
+			`Exporting model with ${currentVoxels.length} voxels as ${format}`
 		);
 
-		if (!exportGroup || exportGroup.children.length === 0) {
-			console.error(
-				"Failed to convert instanced mesh to a group for export or group is empty."
-			);
-			this.showExportNotification(
-				"Error: Could not prepare model for export.",
-				"error"
-			);
-			return;
-		}
+		// Use the new direct voxel export functionality instead of converting to a group of meshes
+		this.showExportNotification(
+			`Preparing ${currentVoxels.length} voxels for export...`,
+			"success"
+		);
 
-		ModelExporter.exportModel(exportGroup, format, sanitizedFilename);
+		// Use the new exportVoxelModel function which is optimized for voxel models
+		ModelExporter.exportVoxelModel(
+			currentVoxels,
+			format,
+			sanitizedFilename
+		);
 
 		this.showExportNotification(
 			`Model exported as ${format.toUpperCase()}`,
