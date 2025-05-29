@@ -120,9 +120,9 @@ export class ModelSelector {
 	 */
 	// private updateSceneBackgrounds(isDark: boolean): void {
 	// 	const bgColor = new THREE.Color(isDark ? 0x18181b : 0x27272a);
-	// 	// this.previewScenes.forEach((scene) => { // Not applicable to image previews
-	// 	// 	scene.background = bgColor;
-	// 	// });
+	// this.previewScenes.forEach((scene) => { // Not applicable to image previews
+	// 	scene.background = bgColor;
+	// });
 	// }
 
 	// This method is being repurposed/renamed. Originally `addModelPreview`.
@@ -262,165 +262,30 @@ export class ModelSelector {
 	}
 
 	public setupModelCycling(): void {
-		const leftButton = document.getElementById("model-prev");
-		const rightButton = document.getElementById("model-right");
+		const prevButton = document.getElementById("prev-model");
+		const nextButton = document.getElementById("next-model");
 
-		if (leftButton && rightButton) {
-			leftButton.addEventListener("click", () => {
-				this.cycleModel(-1);
-			});
-
-			rightButton.addEventListener("click", () => {
-				this.cycleModel(1);
-			});
-		}
-	}
-
-	private cycleModel(direction: number): void {
-		if (this.isModelSwitchInProgress) {
-			return;
-		}
-		if (this.modelSwitchDebounceTimeout !== null) {
-			window.clearTimeout(this.modelSwitchDebounceTimeout);
-			this.modelSwitchDebounceTimeout = null;
-		}
-		this.isModelSwitchInProgress = true;
-		document.body.classList.add("model-loading");
-
-		// Use this.models.length if available, otherwise fallback to previewElements.length
-		const numModels =
-			this.models.length > 0
-				? this.models.length
-				: this.previewElements.length;
-		if (numModels === 0) {
-			this.isModelSwitchInProgress = false;
-			document.body.classList.remove("model-loading");
-			return; // No models to cycle
+		if (prevButton) {
+			// Hide prev button since we only have one model
+			prevButton.style.display = "none";
 		}
 
-		const nextIndex =
-			(this.currentModelIndex + direction + numModels) % numModels;
-
-		const currentPreviewElement = this.selectorElement?.querySelector(
-			`.model-preview-item[data-model-idx="${this.currentModelIndex}"]`
-		);
-		if (currentPreviewElement) {
-			currentPreviewElement.classList.add("loading");
+		if (nextButton) {
+			// Hide next button since we only have one model
+			nextButton.style.display = "none";
 		}
-
-		const targetModelElement = this.selectorElement?.querySelector(
-			`.model-preview-item[data-model-idx="${nextIndex}"]`
-		);
-		const targetModelName =
-			targetModelElement
-				?.getAttribute("data-model-name")
-				?.toLowerCase() || "";
-		const isChickenModel = targetModelName.includes("chicken");
-
-		if (isChickenModel) {
-			console.log(
-				"🐔 Chicken model detected - using extra precautions for transition"
-			);
-		}
-
-		this.modelSwitchDebounceTimeout = window.setTimeout(
-			() => {
-				this.currentModelIndex = nextIndex;
-				this.activeModelIdx = nextIndex;
-				this.updateActivePreview();
-				if (this.modelSelectedCallback) {
-					// Determine the old index for the callback more reliably
-					let oldEffectiveIndex = this.activeModelIdx - direction;
-					if (oldEffectiveIndex < 0)
-						oldEffectiveIndex = numModels - 1;
-					else if (oldEffectiveIndex >= numModels)
-						oldEffectiveIndex = 0;
-
-					this.modelSelectedCallback(
-						oldEffectiveIndex,
-						this.activeModelIdx
-					);
-				}
-				const resetDelay = isChickenModel ? 2000 : 1500;
-				window.setTimeout(() => {
-					this.isModelSwitchInProgress = false;
-					document.body.classList.remove("model-loading");
-					if (currentPreviewElement) {
-						currentPreviewElement.classList.remove("loading");
-					}
-				}, resetDelay);
-			},
-			isChickenModel ? 200 : 100
-		);
 	}
 
 	public setupModelPreviews(): void {
-		const style = document.createElement("style");
-		style.innerHTML = `
-			.model-loading .model-preview-item { /* Updated class name */
-				opacity: 0.5;
-				transition: opacity 0.3s ease;
-			}
-			
-			.model-preview-item.loading { /* Updated class name */
-				position: relative;
-			}
-			
-			.model-preview-item.loading::after { /* Updated class name */
-				content: '';
-				position: absolute;
-				top: 50%;
-				left: 50%;
-				width: 20px;
-				height: 20px;
-				margin: -10px 0 0 -10px;
-				border: 2px solid rgba(99, 102, 241, 0.3);
-				border-top-color: rgba(99, 102, 241, 0.8);
-				border-radius: 50%;
-				animation: model-loading-spin 0.8s linear infinite;
-				z-index: 10;
-			}
-			
-			@keyframes model-loading-spin {
-				to { transform: rotate(360deg); }
-			}
+		const panelToggle = document.getElementById("toggle-model-panel");
+		const selectorContainer = document.getElementById("selector-container");
 
-			/* Styling for scrollable selector container */
-			#selector-container {
-				/* Assuming this is the direct parent of #selector */
-				max-height: 300px; /* Adjusted height, e.g. for 2 rows of 130px items + gaps + padding */
-				overflow-y: auto;
-				overflow-x: hidden; /* Prevent horizontal scroll */
-				padding-right: 8px; /* Space for scrollbar to not overlap content */
-				/* Custom scrollbar styling (optional, webkit-based) */
-				scrollbar-width: thin;
-				scrollbar-color: #4b5563 #1f2937; /* thumb track (zinc-600, zinc-800) */
-			}
+		if (panelToggle && selectorContainer) {
+			// Hide model panel toggle since we only have one model
+			panelToggle.style.display = "none";
 
-			#selector-container::-webkit-scrollbar {
-				width: 8px;
-			}
-
-			#selector-container::-webkit-scrollbar-track {
-				background: #1f2937; /* zinc-800 */
-				border-radius: 10px;
-			}
-
-			#selector-container::-webkit-scrollbar-thumb {
-				background-color: #4b5563; /* zinc-600 */
-				border-radius: 10px;
-				border: 2px solid #1f2937; /* zinc-800, creates padding around thumb */
-			}
-
-			/* Styling for the #selector grid */
-			#selector {
-				display: grid;
-				grid-template-columns: repeat(auto-fill, 130px); /* Creates columns of 130px width */
-				gap: 16px; /* Space between grid items */
-				padding: 16px; /* Padding around the grid */
-				justify-content: center; /* Centers grid items if they don't fill the row */
-			}
-		`;
-		document.head.appendChild(style);
+			// Hide the selector container as well
+			selectorContainer.style.display = "none";
+		}
 	}
 }

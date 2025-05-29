@@ -19,7 +19,7 @@ export class App {
 	private audioVisualizer: AudioVisualizer; // Declare AudioVisualizer property
 	private isInitialized = false;
 	private loaderElement: HTMLElement | null;
-	private activeModelIdx = 1; // Start with Chicken (index 1)
+	private activeModelIdx = 0; // Use first model (chicken)
 	private userModels: { name: string; url: string; model: THREE.Group }[] =
 		[];
 
@@ -60,15 +60,15 @@ export class App {
 		// Listen for custom notification events
 		this.setupNotificationListener();
 
-		// Setup model selector
+		// Setup model selector - simplified as we only have one model
 		this.modelSelector.init((oldIdx, newIdx) => {
-			// Set active model in the model viewer
+			// This callback won't be triggered normally, but keeping it for structure
 			if (this.viewer) {
 				this.viewer.setActiveModel(newIdx);
 			}
 		});
 
-		// Set up model cycling buttons
+		// Keep these for now but they won't do much with only one model
 		this.modelSelector.setupModelCycling();
 		this.modelSelector.setupModelPreviews();
 	}
@@ -95,110 +95,84 @@ export class App {
 			this.viewer.updateWithAudioData(audioData);
 		});
 
-		// Load models
+		// Load the chicken model
 		this.loadModels();
 	}
 
 	private loadModels(): void {
 		// Show loading message
 		if (this.loaderElement) {
-			this.loaderElement.innerHTML = "Loading models...";
+			this.loaderElement.innerHTML = "Loading chicken model...";
 		}
 
-		// Get model URLs
+		// Get model URLs (should be just one now - the chicken)
 		const modelURLs = this.modelLoader.getURLs();
 
 		// Log for debugging
 		console.log(`Loading ${modelURLs.length} models`);
 
-		// Create preview scenes first
-		modelURLs.forEach((_, modelIdx) => {
-			this.modelSelector.createPreviewElement(modelIdx);
-		});
+		// Create preview element for the chicken model
+		this.modelSelector.createPreviewElement(0);
 
-		// Counter for loaded models
-		let modelsLoadedCount = 0;
+		// Load the chicken model
+		const url = modelURLs[0];
+		console.log(`Loading chicken model: ${url}`);
 
-		// Load each model
-		modelURLs.forEach((url, modelIdx) => {
-			console.log(`Loading model ${modelIdx}: ${url}`);
+		this.modelLoader.loadModel(
+			url,
+			(model) => {
+				console.log(`Chicken model loaded successfully`);
 
-			this.modelLoader.loadModel(
-				url,
-				(model) => {
-					console.log(`Model ${modelIdx} loaded successfully`);
+				// Get model name from URL
+				const name = this.modelLoader.getModelNameFromUrl(url);
 
-					// Get model name from URL
-					const name = this.modelLoader.getModelNameFromUrl(url);
+				// Add the model to the selector preview
+				this.modelSelector.addModelDataAndUpdatePreview(
+					{
+						name,
+						url,
+						model,
+					},
+					0
+				);
 
-					// Add the model to the selector preview
-					this.modelSelector.addModelDataAndUpdatePreview(
-						{
-							name,
-							url,
-							model,
-						},
-						modelIdx
-					);
+				// Voxelize the model
+				const modelVoxels = this.voxelizer.voxelizeModel(0, model);
+				console.log(
+					`Chicken model voxelized with ${modelVoxels.length} voxels`
+				);
 
-					// Voxelize the model
-					const modelVoxels = this.voxelizer.voxelizeModel(
-						modelIdx,
-						model
-					);
-					console.log(
-						`Model ${modelIdx} voxelized with ${modelVoxels.length} voxels`
-					);
+				// Add voxels to the viewer
+				this.viewer.addVoxelsForModel(0, modelVoxels);
 
-					// Add voxels to the viewer
-					this.viewer.addVoxelsForModel(modelIdx, modelVoxels);
-
-					// Increment counter
-					modelsLoadedCount++;
-
-					// First model loaded - start rendering
-					if (modelsLoadedCount === 1) {
-						console.log("First model loaded, starting render loop");
-						if (this.loaderElement) {
-							this.loaderElement.innerHTML =
-								"Calculating voxels...";
-						}
-						this.viewer.startRenderLoop();
-					}
-
-					// All models loaded
-					if (modelsLoadedCount === modelURLs.length) {
-						console.log("All models loaded");
-
-						// Fade out loader
-						if (this.loaderElement) {
-							gsap.to(this.loaderElement, {
-								duration: 0.3,
-								opacity: 0,
-								onComplete: () => {
-									if (this.loaderElement) {
-										this.loaderElement.style.display =
-											"none";
-									}
-								},
-							});
-						}
-
-						// Set active model in selector
-						this.modelSelector.setActiveModelIndex(
-							this.activeModelIdx
-						);
-
-						// Animate to initial model (Bonsai)
-						this.viewer.setActiveModel(this.activeModelIdx);
-						this.viewer.animateToModel(0, this.activeModelIdx);
-					}
-				},
-				(error) => {
-					console.error(`Error loading model ${modelIdx}:`, error);
+				// Start rendering
+				console.log("Chicken model loaded, starting render loop");
+				if (this.loaderElement) {
+					this.loaderElement.innerHTML = "Calculating voxels...";
 				}
-			);
-		});
+				this.viewer.startRenderLoop();
+
+				// Fade out loader
+				if (this.loaderElement) {
+					gsap.to(this.loaderElement, {
+						duration: 0.3,
+						opacity: 0,
+						onComplete: () => {
+							if (this.loaderElement) {
+								this.loaderElement.style.display = "none";
+							}
+						},
+					});
+				}
+
+				// Set active model in selector and viewer
+				this.modelSelector.setActiveModelIndex(0);
+				this.viewer.setActiveModel(0);
+			},
+			(error) => {
+				console.error(`Error loading chicken model:`, error);
+			}
+		);
 	}
 
 	/**
@@ -240,34 +214,12 @@ export class App {
 						"success"
 					);
 					try {
-						const frames =
-							await this.viewer.exportTurntableGifFrames();
-						// At this point, `frames` contains an array of PNG data URLs.
-						// TODO: Implement actual GIF encoding and download using a library like gif.js or GIFEncoder.js
-						console.log(
-							"Turntable GIF frames generated:",
-							frames.length
-						);
-						if (frames.length > 0) {
-							this.showNotification(
-								`Generated ${frames.length} frames for GIF. Ready for encoding.`,
-								"success"
-							);
-							// For now, you can inspect the first frame by opening its data URL in a browser tab.
-							// console.log("First frame data URL (copy and paste in browser to view):");
-							// console.log(frames[0]);
-						} else {
-							this.showNotification(
-								"Could not generate GIF frames.",
-								"error"
-							);
-						}
+						await this.viewer.exportTurntableGifFrames();
+						// The method no longer returns frames, it handles the download directly
+						console.log("Turntable GIF generation completed");
 					} catch (error) {
-						console.error("Error generating GIF frames:", error);
-						this.showNotification(
-							"Error generating GIF frames.",
-							"error"
-						);
+						console.error("Error generating GIF:", error);
+						this.showNotification("Error generating GIF", "error");
 					} finally {
 						// Re-enable button
 						gifButton.removeAttribute("disabled");
@@ -276,11 +228,6 @@ export class App {
 							"cursor-not-allowed"
 						);
 					}
-				} else {
-					this.showNotification(
-						"Viewer not available for GIF export.",
-						"error"
-					);
 				}
 			});
 		}
