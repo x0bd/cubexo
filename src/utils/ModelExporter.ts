@@ -173,6 +173,10 @@ export class ModelExporter {
 		format: ExportFormat,
 		filename: string
 	): void {
+		console.log(
+			`Creating exact viewport match GLB with ${voxels.length} voxels`
+		);
+
 		// Create a minimal BoxGeometry to use as template
 		const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 
@@ -225,7 +229,7 @@ export class ModelExporter {
 				normals[destOffset + 1] = normalAttribute.getY(v);
 				normals[destOffset + 2] = normalAttribute.getZ(v);
 
-				// Set colors - ensure full intensity to match the voxel viewer
+				// Set colors - use exact colors without any modification
 				colors[destOffset] = voxel.color.r;
 				colors[destOffset + 1] = voxel.color.g;
 				colors[destOffset + 2] = voxel.color.b;
@@ -253,16 +257,15 @@ export class ModelExporter {
 		);
 		mergedGeometry.setIndex(indices);
 
-		// Create a material that uses vertex colors and has optimized PBR properties
-		// Use MeshStandardMaterial which is better supported in GLB/GLTF
+		// Create material that perfectly matches what's in the VoxelModelViewer
 		const material = new THREE.MeshStandardMaterial({
 			vertexColors: true, // Enable vertex colors - crucial for color display
-			flatShading: true, // Flat shading to match voxel style
-			roughness: 0.7, // Moderate roughness for better visibility
-			metalness: 0.0, // No metalness to ensure colors are not altered
-			emissive: new THREE.Color(0x000000), // No emission
-			transparent: false, // No transparency
-			name: "VoxelMaterial", // Named material for better identification
+			flatShading: false, // Match the default in VoxelModelViewer
+			roughness: 0.3, // Match the default in VoxelModelViewer (setupGeometries)
+			metalness: 0.15, // Match the default in VoxelModelViewer (setupGeometries)
+			emissive: new THREE.Color(0x000000),
+			transparent: false,
+			name: "VoxelMaterial",
 		});
 
 		// Create mesh with the merged geometry
@@ -275,12 +278,15 @@ export class ModelExporter {
 		const scene = new THREE.Scene();
 		scene.add(mesh);
 
-		// Add a basic light to the scene so viewers with default lighting can still see the model
+		// Add lighting that matches the VoxelModelViewer
 		const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 		scene.add(ambientLight);
-		const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-		directionalLight.position.set(1, 2, 3);
+		const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+		directionalLight.position.set(10, 15, 10);
 		scene.add(directionalLight);
+		const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+		fillLight.position.set(-10, 5, -5);
+		scene.add(fillLight);
 
 		// Export using GLTFExporter with improved options
 		const gltfExporter = new GLTFExporter();
@@ -315,7 +321,7 @@ export class ModelExporter {
 				console.log(
 					`Exported ${format.toUpperCase()} with ${
 						voxels.length
-					} voxels and preserved colors`
+					} voxels - exact viewport match`
 				);
 
 				// Clean up
