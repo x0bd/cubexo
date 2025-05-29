@@ -261,6 +261,17 @@ export class ModelSelector {
 		this.updateActivePreview();
 	}
 
+	/**
+	 * Store model data in the models array
+	 * This allows us to keep track of models without needing the preview UI
+	 */
+	public storeModelData(modelData: ModelData, modelIdx: number): void {
+		this.models[modelIdx] = modelData;
+		console.log(
+			`Model data stored at index ${modelIdx}: ${modelData.name}`
+		);
+	}
+
 	public setupModelCycling(): void {
 		const prevButton = document.getElementById("prev-model");
 		const nextButton = document.getElementById("next-model");

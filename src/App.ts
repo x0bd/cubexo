@@ -44,15 +44,18 @@ export class App {
 		this.modelUploader = new ModelUploader();
 		this.audioVisualizer = new AudioVisualizer(); // Initialize AudioVisualizer
 
+		// Remove model panel elements completely
+		this.removeModelPanel();
+
 		// Setup export panel buttons
 		this.setupExportPanelButtons();
 
 		// Setup theme toggle and utility buttons
 		this.setupThemeToggle();
-		this.setupUploadButton();
 
-		// Setup model uploader
-		this.setupModelUploader();
+		// No need for model uploading since we're simplifying to just the chicken model
+		// this.setupUploadButton();
+		// this.setupModelUploader();
 
 		// Setup effect buttons
 		this.setupEffectButtons();
@@ -60,17 +63,16 @@ export class App {
 		// Listen for custom notification events
 		this.setupNotificationListener();
 
-		// Setup model selector - simplified as we only have one model
+		// Minimal setup for modelSelector - we only need it for the active model tracking
 		this.modelSelector.init((oldIdx, newIdx) => {
-			// This callback won't be triggered normally, but keeping it for structure
 			if (this.viewer) {
 				this.viewer.setActiveModel(newIdx);
 			}
 		});
 
-		// Keep these for now but they won't do much with only one model
-		this.modelSelector.setupModelCycling();
-		this.modelSelector.setupModelPreviews();
+		// No need to call these since we've removed the model panel
+		// this.modelSelector.setupModelCycling();
+		// this.modelSelector.setupModelPreviews();
 	}
 
 	public async init(): Promise<void> {
@@ -111,8 +113,8 @@ export class App {
 		// Log for debugging
 		console.log(`Loading ${modelURLs.length} models`);
 
-		// Create preview element for the chicken model
-		this.modelSelector.createPreviewElement(0);
+		// No need to create preview element since we've removed the model panel
+		// this.modelSelector.createPreviewElement(0);
 
 		// Load the chicken model
 		const url = modelURLs[0];
@@ -126,15 +128,15 @@ export class App {
 				// Get model name from URL
 				const name = this.modelLoader.getModelNameFromUrl(url);
 
-				// Add the model to the selector preview
-				this.modelSelector.addModelDataAndUpdatePreview(
-					{
-						name,
-						url,
-						model,
-					},
-					0
-				);
+				// Store model data but don't create preview
+				const modelData = {
+					name,
+					url,
+					model,
+				};
+
+				// Store in modelSelector using the proper method
+				this.modelSelector.storeModelData(modelData, 0);
 
 				// Voxelize the model
 				const modelVoxels = this.voxelizer.voxelizeModel(0, model);
@@ -165,8 +167,7 @@ export class App {
 					});
 				}
 
-				// Set active model in selector and viewer
-				this.modelSelector.setActiveModelIndex(0);
+				// Set active model in viewer directly
 				this.viewer.setActiveModel(0);
 			},
 			(error) => {
@@ -293,123 +294,6 @@ export class App {
 		console.log(`Exporting model ${this.activeModelIdx} as PNG`);
 		this.viewer.exportAsPng();
 		this.showNotification("Image exported");
-	}
-
-	/**
-	 * Setup the model upload button
-	 */
-	private setupModelUploader(): void {
-		const uploadInput = document.getElementById(
-			"model-upload"
-		) as HTMLInputElement;
-		if (!uploadInput) return;
-
-		uploadInput.addEventListener("change", async (event) => {
-			const target = event.target as HTMLInputElement;
-			const files = target.files;
-
-			if (!files || files.length === 0) return;
-
-			const file = files[0];
-
-			// Show loading message
-			if (this.loaderElement) {
-				this.loaderElement.innerHTML = "Processing uploaded model...";
-				this.loaderElement.style.display = "block";
-				this.loaderElement.style.opacity = "1";
-			}
-
-			try {
-				// Load the model
-				const model = await this.modelUploader.loadUserModel(file);
-
-				// Get model name from file
-				const name = ModelUploader.getModelNameFromFile(file);
-
-				// Create a data URL as a placeholder "url" for the model
-				// Add a prefix to indicate this is a user-uploaded model for proper scaling
-				const modelData = {
-					name: `user-model-${name}`, // Add prefix to help with identification
-					url: `user-model://${name}`,
-					model,
-				};
-
-				// Add to user models
-				this.userModels.push(modelData);
-
-				// Create a new index for this model
-				const modelIdx =
-					this.modelLoader.getURLs().length +
-					this.userModels.length -
-					1;
-
-				// Create preview scene for the model
-				this.modelSelector.createPreviewElement(modelIdx);
-
-				// Add the model to the selector preview
-				this.modelSelector.addModelDataAndUpdatePreview(
-					modelData,
-					modelIdx
-				);
-
-				// Voxelize the model
-				const modelVoxels = this.voxelizer.voxelizeModel(
-					modelIdx,
-					model
-				);
-				console.log(
-					`User model voxelized with ${modelVoxels.length} voxels`
-				);
-
-				// Add voxels to the viewer
-				this.viewer.addVoxelsForModel(modelIdx, modelVoxels);
-
-				// Switch to the new model
-				this.modelSelector.setActiveModelIndex(modelIdx);
-				this.viewer.animateToModel(this.activeModelIdx, modelIdx);
-				this.activeModelIdx = modelIdx;
-
-				// Hide the loader
-				if (this.loaderElement) {
-					gsap.to(this.loaderElement, {
-						duration: 0.3,
-						opacity: 0,
-						onComplete: () => {
-							if (this.loaderElement) {
-								this.loaderElement.style.display = "none";
-							}
-						},
-					});
-				}
-
-				// Show success notification
-				this.showNotification(`${name} uploaded successfully`);
-			} catch (error) {
-				console.error("Error processing uploaded model:", error);
-
-				// Show error message
-				if (this.loaderElement) {
-					this.loaderElement.innerHTML = "Error processing model";
-					setTimeout(() => {
-						if (this.loaderElement) {
-							gsap.to(this.loaderElement, {
-								duration: 0.3,
-								opacity: 0,
-								onComplete: () => {
-									if (this.loaderElement) {
-										this.loaderElement.style.display =
-											"none";
-									}
-								},
-							});
-						}
-					}, 2000);
-				}
-			} finally {
-				// Reset the file input value so the same file can be uploaded again if needed
-				uploadInput.value = "";
-			}
-		});
 	}
 
 	/**
@@ -555,21 +439,51 @@ export class App {
 	}
 
 	/**
-	 * Setup upload button in the dock
+	 * Remove all model panel elements from the DOM
 	 */
-	private setupUploadButton(): void {
-		const uploadBtn = document.getElementById("upload-btn");
-		if (!uploadBtn) return;
+	private removeModelPanel(): void {
+		// Remove model panel elements
+		const modelPanel = document.getElementById("model-panel");
+		if (modelPanel) {
+			modelPanel.remove();
+		}
 
-		uploadBtn.addEventListener("click", () => {
-			console.log("Triggering model upload");
-			// Trigger the file input click
-			const fileInput = document.getElementById(
-				"model-upload"
-			) as HTMLInputElement;
-			if (fileInput) {
-				fileInput.click();
-			}
-		});
+		// Remove selector container
+		const selectorContainer = document.getElementById("selector-container");
+		if (selectorContainer) {
+			selectorContainer.remove();
+		}
+
+		// Remove model navigation buttons
+		const prevModel = document.getElementById("prev-model");
+		if (prevModel) {
+			prevModel.remove();
+		}
+
+		const nextModel = document.getElementById("next-model");
+		if (nextModel) {
+			nextModel.remove();
+		}
+
+		// Remove model panel toggle
+		const toggleModelPanel = document.getElementById("toggle-model-panel");
+		if (toggleModelPanel) {
+			toggleModelPanel.remove();
+		}
+
+		// Adjust layout if needed to give more space to the main viewport
+		const mainContainer = document.getElementById("main-container");
+		if (mainContainer) {
+			mainContainer.classList.remove("grid-cols-[1fr_auto]");
+			mainContainer.classList.add("grid-cols-1");
+		}
+
+		// Ensure export panel is still visible and properly positioned
+		const exportPanel = document.getElementById("export-panel");
+		if (exportPanel) {
+			exportPanel.classList.add("fixed", "top-6", "right-6", "z-30");
+		}
+
+		console.log("Model panel elements removed, only export panel remains");
 	}
 }
