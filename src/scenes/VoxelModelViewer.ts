@@ -1458,7 +1458,7 @@ export class VoxelModelViewer {
 	 * Export the currently visible voxel model
 	 * @param format The format to export as
 	 */
-	public exportCurrentModel(format: ExportFormat = ExportFormat.OBJ): void {
+	public exportCurrentModel(format: ExportFormat = ExportFormat.GLB): void {
 		if (
 			!this.instancedMesh ||
 			this.instancedMesh.count === 0 ||
@@ -1508,7 +1508,9 @@ export class VoxelModelViewer {
 
 		// Use the new direct voxel export functionality instead of converting to a group of meshes
 		this.showExportNotification(
-			`Preparing ${currentVoxels.length} voxels for export...`,
+			`Preparing ${
+				currentVoxels.length
+			} voxels for export as ${format.toUpperCase()}...`,
 			"success"
 		);
 
@@ -1520,7 +1522,7 @@ export class VoxelModelViewer {
 		);
 
 		this.showExportNotification(
-			`Model exported as ${format.toUpperCase()}`,
+			`Model exported as ${format.toUpperCase()} with colors preserved`,
 			"success"
 		);
 	}
