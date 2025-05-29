@@ -53,9 +53,9 @@ export class App {
 		// Setup theme toggle and utility buttons
 		this.setupThemeToggle();
 
-		// No need for model uploading since we're simplifying to just the chicken model
-		// this.setupUploadButton();
-		// this.setupModelUploader();
+		// Restore these important functions for uploading from the dock
+		this.setupUploadButton();
+		this.setupModelUploader();
 
 		// Setup effect buttons
 		this.setupEffectButtons();
@@ -216,7 +216,6 @@ export class App {
 					);
 					try {
 						await this.viewer.exportTurntableGifFrames();
-						// The method no longer returns frames, it handles the download directly
 						console.log("Turntable GIF generation completed");
 					} catch (error) {
 						console.error("Error generating GIF:", error);
@@ -266,23 +265,27 @@ export class App {
 	}
 
 	/**
-	 * Set up listener for custom notification events
+	 * Setup notification listener for custom events
 	 */
 	private setupNotificationListener(): void {
-		window.addEventListener("show-notification", ((event: CustomEvent) => {
-			const { message, type } = event.detail;
-			this.showNotification(message, type);
-		}) as EventListener);
+		window.addEventListener("showNotification", (e: Event) => {
+			const customEvent = e as CustomEvent;
+			if (customEvent.detail) {
+				this.showNotification(
+					customEvent.detail.message,
+					customEvent.detail.type || "success"
+				);
+			}
+		});
 	}
 
 	/**
-	 * Export the current model as GLB
+	 * Export current model in the selected format
 	 */
 	private exportCurrentModel(): void {
-		if (!this.viewer) return;
-
-		console.log(`Exporting model ${this.activeModelIdx} as GLB`);
-		this.viewer.exportCurrentModel(ExportFormat.GLB);
+		// The format is determined inside the viewer method with a default of ExportFormat.OBJ
+		this.viewer.exportCurrentModel();
+		this.showNotification("Model exported successfully");
 	}
 
 	/**
@@ -485,5 +488,137 @@ export class App {
 		}
 
 		console.log("Model panel elements removed, only export panel remains");
+	}
+
+	/**
+	 * Setup the model upload button
+	 */
+	private setupModelUploader(): void {
+		const uploadInput = document.getElementById(
+			"model-upload"
+		) as HTMLInputElement;
+		if (!uploadInput) return;
+
+		uploadInput.addEventListener("change", async (event) => {
+			const target = event.target as HTMLInputElement;
+			const files = target.files;
+
+			if (!files || files.length === 0) return;
+
+			const file = files[0];
+
+			// Show loading message
+			if (this.loaderElement) {
+				this.loaderElement.innerHTML = "Processing uploaded model...";
+				this.loaderElement.style.display = "block";
+				this.loaderElement.style.opacity = "1";
+			}
+
+			try {
+				// Load the model
+				const model = await this.modelUploader.loadUserModel(file);
+
+				// Get model name from file
+				const name = ModelUploader.getModelNameFromFile(file);
+
+				// Create a data URL as a placeholder "url" for the model
+				// Add a prefix to indicate this is a user-uploaded model for proper scaling
+				const modelData = {
+					name: `user-model-${name}`, // Add prefix to help with identification
+					url: `user-model://${name}`,
+					model,
+				};
+
+				// Add to user models
+				this.userModels.push(modelData);
+
+				// Create a new index for this model
+				const modelIdx =
+					this.modelLoader.getURLs().length +
+					this.userModels.length -
+					1;
+
+				// Store model data (even though we don't show previews)
+				this.modelSelector.storeModelData(modelData, modelIdx);
+
+				// Voxelize the model
+				const modelVoxels = this.voxelizer.voxelizeModel(
+					modelIdx,
+					model
+				);
+				console.log(
+					`User model voxelized with ${modelVoxels.length} voxels`
+				);
+
+				// Add voxels to the viewer
+				this.viewer.addVoxelsForModel(modelIdx, modelVoxels);
+
+				// Switch to the new model - use setActiveModel instead of animateToModel
+				// to avoid transition glitches
+				this.viewer.setActiveModel(modelIdx);
+				this.activeModelIdx = modelIdx;
+
+				// Hide the loader
+				if (this.loaderElement) {
+					gsap.to(this.loaderElement, {
+						duration: 0.3,
+						opacity: 0,
+						onComplete: () => {
+							if (this.loaderElement) {
+								this.loaderElement.style.display = "none";
+							}
+						},
+					});
+				}
+
+				// Show success notification
+				this.showNotification(`${name} uploaded successfully`);
+			} catch (error) {
+				console.error("Error processing uploaded model:", error);
+
+				// Show error message
+				if (this.loaderElement) {
+					this.loaderElement.innerHTML = "Error processing model";
+					setTimeout(() => {
+						if (this.loaderElement) {
+							gsap.to(this.loaderElement, {
+								duration: 0.3,
+								opacity: 0,
+								onComplete: () => {
+									if (this.loaderElement) {
+										this.loaderElement.style.display =
+											"none";
+									}
+								},
+							});
+						}
+					}, 2000);
+				}
+
+				this.showNotification("Error processing model", "error");
+			} finally {
+				// Reset the file input value so the same file can be uploaded again if needed
+				uploadInput.value = "";
+			}
+		});
+	}
+
+	/**
+	 * Setup upload button in the dock
+	 */
+	private setupUploadButton(): void {
+		const uploadBtn = document.getElementById("upload-btn");
+		if (!uploadBtn) return;
+
+		uploadBtn.addEventListener("click", () => {
+			console.log("Triggering model upload from dock button");
+			// Trigger the file input click
+			const fileInput = document.getElementById(
+				"model-upload"
+			) as HTMLInputElement;
+			if (fileInput) {
+				fileInput.click();
+			}
+		});
 	}
 }

@@ -4,7 +4,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import gsap from "gsap";
 import type { Voxel, AppParameters } from "../types/types";
 import { ModelExporter, ExportFormat } from "../utils/ModelExporter";
-import GIF from "gif.js.optimized"; // Import gif.js
+import { GIFEncoder, quantize, applyPalette } from "gifenc"; // Add the gifenc import
 
 export class VoxelModelViewer {
 	private matrixUpdateTween: gsap.core.Tween | null = null;
@@ -2114,7 +2114,13 @@ export class VoxelModelViewer {
 		this.camera.aspect = exportWidth / exportHeight;
 		this.camera.updateProjectionMatrix();
 
-		const capturedFramesDataUrls: string[] = [];
+		// Create the GIF encoder
+		const gifEncoder = GIFEncoder();
+
+		// We'll use the same palette for all frames to avoid flicker
+		let globalPalette: number[][] | null = null;
+
+		// Calculate rotation step for the full 360° rotation
 		const rotationStep = (Math.PI * 2) / numFrames;
 
 		if (this.controls) {
@@ -2124,16 +2130,79 @@ export class VoxelModelViewer {
 		for (let i = 0; i < numFrames; i++) {
 			this.scene.rotation.y = originalSceneRotationY + i * rotationStep;
 			this.renderer.render(this.scene, this.camera);
-			capturedFramesDataUrls.push(
-				this.renderer.domElement.toDataURL("image/png")
+
+			// We can't directly get a 2D context from a WebGL canvas,
+			// so we need to create a temporary 2D canvas to get the pixel data
+			const tempCanvas = document.createElement("canvas");
+			tempCanvas.width = exportWidth;
+			tempCanvas.height = exportHeight;
+			const tempContext = tempCanvas.getContext("2d");
+
+			if (!tempContext) {
+				console.error("Cannot create 2D context for temporary canvas");
+				continue;
+			}
+
+			// Draw the WebGL canvas onto the 2D canvas
+			tempContext.drawImage(this.renderer.domElement, 0, 0);
+
+			// Now we can get the pixel data
+			const imageData = tempContext.getImageData(
+				0,
+				0,
+				exportWidth,
+				exportHeight
 			);
-			console.log(`Captured frame ${i + 1}/${numFrames} for GIF`);
+			const rgba = imageData.data;
+
+			// On the first frame, quantize to get a global palette
+			if (i === 0) {
+				this.showExportNotification(
+					`Generating color palette...`,
+					"success"
+				);
+				globalPalette = quantize(rgba, 256);
+			}
+
+			// Apply the palette to get indexed bitmap
+			if (!globalPalette) {
+				console.error("Failed to generate palette");
+				continue;
+			}
+
+			const indexedPixels = applyPalette(rgba, globalPalette);
+
+			// Write frame to the GIF
+			const frameOptions: any = {
+				palette: globalPalette,
+				delay: delayPerFrame / 10, // gifenc uses 1/100th of a second
+			};
+
+			// Mark first frame appropriately
+			if (i === 0) {
+				frameOptions.first = true;
+				frameOptions.repeat = 0; // 0 = loop forever
+			}
+
+			gifEncoder.writeFrame(
+				indexedPixels,
+				exportWidth,
+				exportHeight,
+				frameOptions
+			);
+
+			console.log(`Processed frame ${i + 1}/${numFrames} for GIF`);
+
+			// Yield to browser to keep it responsive
 			if (i % 10 === 0) {
 				await new Promise((resolve) => setTimeout(resolve, 0));
 			}
 		}
 
-		// Restore original settings BEFORE starting GIF encoding
+		// Complete the GIF
+		gifEncoder.finish();
+
+		// Restore original settings after capturing frames
 		this.scene.rotation.y = originalSceneRotationY;
 		this.renderer.setSize(originalWidth, originalHeight, true);
 		this.camera.aspect = originalAspect;
@@ -2142,81 +2211,34 @@ export class VoxelModelViewer {
 			this.controls.update();
 		}
 
-		console.log("GIF frames captured, starting encoding...");
-		this.showExportNotification("Encoding GIF... please wait.", "success");
+		console.log("GIF encoding completed");
+		this.showExportNotification("GIF encoding finished", "success");
 
-		const gif = new GIF({
-			workers: 2, // Number of web workers to use
-			quality: 10, // Lower numbers = better quality
-			width: exportWidth,
-			height: exportHeight,
-			// IMPORTANT: Ensure 'gif.worker.js' is available at this path in your built/served application.
-			// You might need to copy it from 'node_modules/gif.js.optimized/dist/' to your public assets folder.
-			workerScript: "gif.worker.js",
-		});
+		// Get GIF data and create a download
+		const gifData = gifEncoder.bytes();
+		const blob = new Blob([gifData], { type: "image/gif" });
+		const url = URL.createObjectURL(blob);
 
-		// Sequentially load images and add frames to ensure order and complete loading
-		for (const frameDataUrl of capturedFramesDataUrls) {
-			await new Promise<void>((resolve) => {
-				const img = new Image();
-				img.onload = () => {
-					gif.addFrame(img, { delay: delayPerFrame });
-					console.log("Frame added to GIF encoder");
-					resolve();
-				};
-				img.onerror = () => {
-					console.error("Error loading frame image for GIF encoding");
-					resolve(); // Resolve anyway to not block the process, though GIF might be incomplete
-				};
-				img.src = frameDataUrl;
-			});
+		// Create and trigger download
+		const a = document.createElement("a");
+		a.href = url;
+
+		// Generate a filename with the active model name if possible
+		let filename = "turntable_export.gif";
+		const activeModelData = this.voxelsPerModel[this.activeModelIndex];
+
+		if (activeModelData && (activeModelData as any).name) {
+			filename = `${(activeModelData as any).name
+				.replace(/[^a-z0-9]/gi, "_")
+				.toLowerCase()}_turntable.gif`;
 		}
 
-		gif.on("finished", (blob: Blob) => {
-			// Added Blob type
-			console.log("GIF encoding finished. Blob size:", blob.size);
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement("a");
-			a.href = url;
-			// Generate a filename with the active model name if possible
-			let filename = "turntable_export.gif";
-			const activeModelData = this.voxelsPerModel[this.activeModelIndex];
-			// This assumes that your Voxel data structure or related metadata might have a name.
-			// If voxelsPerModel[activeModelIndex] is just an array of Voxel objects,
-			// you might need to fetch the name from where models are defined (e.g., ModelLoader or App state)
-			// For now, we'll use a generic name or try to find a name if it's part of the data.
-			if (activeModelData && (activeModelData as any).name) {
-				// Check if name property exists
-				filename = `${(activeModelData as any).name
-					.replace(/[^a-z0-9]/gi, "_")
-					.toLowerCase()}_turntable.gif`;
-			}
-			a.download = filename;
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-			URL.revokeObjectURL(url);
-			this.showExportNotification("GIF downloaded!", "success");
-		});
+		a.download = filename;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
 
-		gif.on("progress", (p: number) => {
-			console.log(`GIF encoding progress: ${Math.round(p * 100)}%`);
-			// Assuming showExportNotification takes (message, type, persistentNotification)
-			// If it only takes (message, type), the third argument should be removed.
-			// For now, let's assume it's (message, type) as per previous definition if the third arg was an addition.
-			// Re-checking the definition. The method showExportNotification was used before with 2 args.
-			// Let's adjust this call to use the two-argument version if that was the original intent.
-			// this.showExportNotification(`Encoding GIF: ${Math.round(p * 100)}%`, "success", false); // Potential issue here
-			// Correcting based on typical notification pattern (message, type)
-			this.showExportNotification(
-				`Encoding GIF: ${Math.round(p * 100)}%`,
-				"success"
-			);
-		});
-
-		console.log("Rendering GIF...");
-		gif.render();
-
-		// The method is now Promise<void> and doesn't return frames
+		this.showExportNotification("GIF downloaded!", "success");
 	}
 }
