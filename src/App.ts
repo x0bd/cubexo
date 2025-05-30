@@ -232,17 +232,6 @@ export class App {
 			});
 		}
 
-		// Audio reactive button
-		const audioReactiveButton = document.getElementById(
-			"export-audio-reactive"
-		);
-		if (audioReactiveButton) {
-			audioReactiveButton.addEventListener("click", () => {
-				console.log("Opening audio visualizer panel");
-				this.audioVisualizer.showPanel();
-			});
-		}
-
 		// Download button
 		const downloadButton = document.getElementById("export-download");
 		if (downloadButton) {
@@ -260,6 +249,15 @@ export class App {
 				console.log("Share current model");
 				// TODO: Implement sharing functionality
 				this.showNotification("Sharing coming soon");
+			});
+		}
+
+		// AR Mode button (coming soon)
+		const arModeButton = document.getElementById("export-ar-mode");
+		if (arModeButton) {
+			arModeButton.addEventListener("click", () => {
+				console.log("AR Mode button clicked");
+				this.showNotification("AR Mode coming soon");
 			});
 		}
 	}
@@ -413,6 +411,29 @@ export class App {
 						"border-indigo-600/70"
 					);
 				}, 900); // Duration slightly longer than the effect (explode is 0.3s + 0.1s + 0.5s animation)
+			});
+		}
+
+		// Setup audio reactive button
+		const audioReactiveButton = document.getElementById(
+			"effect-audio-reactive"
+		);
+		if (audioReactiveButton) {
+			audioReactiveButton.addEventListener("click", () => {
+				console.log("Opening audio visualizer panel");
+				this.audioVisualizer.showPanel();
+
+				// Add active state to button
+				audioReactiveButton.classList.add(
+					"bg-indigo-700/90",
+					"border-indigo-600/70"
+				);
+				setTimeout(() => {
+					audioReactiveButton.classList.remove(
+						"bg-indigo-700/90",
+						"border-indigo-600/70"
+					);
+				}, 300);
 			});
 		}
 
