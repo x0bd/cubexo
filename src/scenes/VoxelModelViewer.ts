@@ -1473,6 +1473,7 @@ export class VoxelModelViewer {
 		}
 
 		// Use liveVoxels which represent the current state of the model in the scene
+		// Only take the active voxels (up to instancedMesh.count)
 		const currentVoxels = this.liveVoxels.slice(
 			0,
 			this.instancedMesh.count
@@ -1487,6 +1488,7 @@ export class VoxelModelViewer {
 			return;
 		}
 
+		// Get the current model name for the filename
 		let modelName = "exported_model";
 		const activeModelContainer = this.voxelsPerModel[this.activeModelIndex];
 		if (activeModelContainer && (activeModelContainer as any).name) {
@@ -1503,18 +1505,18 @@ export class VoxelModelViewer {
 			.toLowerCase()}`;
 
 		console.log(
-			`Exporting model with ${currentVoxels.length} voxels as ${format}`
+			`Exporting exact voxel model with ${currentVoxels.length} voxels as ${format}`
 		);
 
-		// Use the new direct voxel export functionality instead of converting to a group of meshes
+		// Show notification
 		this.showExportNotification(
 			`Preparing ${
 				currentVoxels.length
-			} voxels for export as ${format.toUpperCase()}...`,
+			} voxels for exact export as ${format.toUpperCase()}...`,
 			"success"
 		);
 
-		// Use the new exportVoxelModel function which is optimized for voxel models
+		// Export voxels exactly as they appear in the viewer
 		ModelExporter.exportVoxelModel(
 			currentVoxels,
 			format,
@@ -1522,7 +1524,7 @@ export class VoxelModelViewer {
 		);
 
 		this.showExportNotification(
-			`Model exported as ${format.toUpperCase()} with colors preserved`,
+			`Model exported as ${format.toUpperCase()} - exact match to what you see in the viewer`,
 			"success"
 		);
 	}

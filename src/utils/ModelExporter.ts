@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter.js";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 export enum ExportFormat {
@@ -60,30 +61,28 @@ export class ModelExporter {
 		voxels: { position: THREE.Vector3; color: THREE.Color }[],
 		filename: string
 	): void {
-		// Start building OBJ string with header
-		let objContent = "# Exported Voxel Model\n";
+		// Create a RoundedBoxGeometry that exactly matches what's in the viewer
+		const boxSize = 0.24; // Must match params.boxSize in VoxelModelViewer
+		const boxRoundness = 0.03; // Must match params.boxRoundness in VoxelModelViewer
+		const boxGeometry = new RoundedBoxGeometry(
+			boxSize,
+			boxSize,
+			boxSize,
+			3, // Segments - match VoxelModelViewer
+			boxRoundness
+		);
 
-		// Define a standard unit cube vertices (8 vertices)
-		const cubeVertices = [
-			[-0.5, -0.5, -0.5], // 0: left bottom back
-			[0.5, -0.5, -0.5], // 1: right bottom back
-			[0.5, 0.5, -0.5], // 2: right top back
-			[-0.5, 0.5, -0.5], // 3: left top back
-			[-0.5, -0.5, 0.5], // 4: left bottom front
-			[0.5, -0.5, 0.5], // 5: right bottom front
-			[0.5, 0.5, 0.5], // 6: right top front
-			[-0.5, 0.5, 0.5], // 7: left top front
-		];
+		// Create material for OBJ export
+		const material = new THREE.MeshStandardMaterial({
+			roughness: 0.3, // Match VoxelModelViewer
+			metalness: 0.15, // Match VoxelModelViewer
+			flatShading: false,
+		});
 
-		// Define material library
-		objContent += "mtllib voxel_colors.mtl\n\n";
-
-		// Create a map of colors to material names to avoid duplicates
+		// Create MTL content for all materials
+		let mtlContent = "# Voxel Colors Material Library\n";
 		const colorMaterials = new Map<string, string>();
 		let materialIndex = 0;
-
-		// Create MTL content
-		let mtlContent = "# Voxel Colors Material Library\n";
 
 		// First pass: Define all unique materials
 		for (let i = 0; i < voxels.length; i++) {
@@ -107,60 +106,56 @@ export class ModelExporter {
 			}
 		}
 
-		// Write group header
-		objContent += "g voxel_model\n\n";
+		// Save MTL file
+		const mtlBlob = new Blob([mtlContent], { type: "text/plain" });
+		this.saveFile(mtlBlob, `${filename}_materials.mtl`);
 
-		// Second pass: Create voxel instances with transforms
+		// Create a group to hold all the individual voxel meshes
+		const voxelGroup = new THREE.Group();
+		voxelGroup.name = "voxel_model";
+
+		// Process each voxel and create an individual mesh for each
 		for (let i = 0; i < voxels.length; i++) {
 			const voxel = voxels[i];
-			const position = voxel.position;
-			const colorHex = "#" + voxel.color.getHexString();
-			const materialName = colorMaterials.get(colorHex);
 
-			// Starting vertex index for this voxel (1-based for OBJ format)
-			const vIndex = i * 8 + 1;
+			// Clone the geometry for this voxel
+			const voxelGeometry = boxGeometry.clone();
 
-			// Use material for this voxel
-			objContent += `usemtl ${materialName}\n`;
+			// Create material for this voxel with its exact color
+			const voxelMaterial = material.clone();
+			voxelMaterial.color = voxel.color.clone();
 
-			// Define transformed vertices for this voxel
-			for (const [x, y, z] of cubeVertices) {
-				objContent += `v ${x + position.x} ${y + position.y} ${
-					z + position.z
-				}\n`;
-			}
+			// Create a mesh for this voxel
+			const voxelMesh = new THREE.Mesh(voxelGeometry, voxelMaterial);
 
-			// Define the 6 faces of the cube (12 triangles)
-			// Front face
-			objContent += `f ${vIndex + 4} ${vIndex + 5} ${vIndex + 6}\n`;
-			objContent += `f ${vIndex + 4} ${vIndex + 6} ${vIndex + 7}\n`;
-			// Back face
-			objContent += `f ${vIndex + 1} ${vIndex + 2} ${vIndex + 3}\n`;
-			objContent += `f ${vIndex + 1} ${vIndex + 3} ${vIndex + 0}\n`;
-			// Right face
-			objContent += `f ${vIndex + 1} ${vIndex + 5} ${vIndex + 6}\n`;
-			objContent += `f ${vIndex + 1} ${vIndex + 6} ${vIndex + 2}\n`;
-			// Left face
-			objContent += `f ${vIndex + 0} ${vIndex + 3} ${vIndex + 7}\n`;
-			objContent += `f ${vIndex + 0} ${vIndex + 7} ${vIndex + 4}\n`;
-			// Top face
-			objContent += `f ${vIndex + 3} ${vIndex + 2} ${vIndex + 6}\n`;
-			objContent += `f ${vIndex + 3} ${vIndex + 6} ${vIndex + 7}\n`;
-			// Bottom face
-			objContent += `f ${vIndex + 0} ${vIndex + 4} ${vIndex + 5}\n`;
-			objContent += `f ${vIndex + 0} ${vIndex + 5} ${vIndex + 1}\n\n`;
+			// Position the voxel at its exact position
+			voxelMesh.position.copy(voxel.position);
+
+			// Add to the group
+			voxelGroup.add(voxelMesh);
 		}
+
+		// Export the group using OBJExporter
+		const objExporter = new OBJExporter();
+		const objContent = objExporter.parse(voxelGroup);
 
 		// Save OBJ file
 		const objBlob = new Blob([objContent], { type: "text/plain" });
 		this.saveFile(objBlob, `${filename}.obj`);
 
-		// Save MTL file
-		const mtlBlob = new Blob([mtlContent], { type: "text/plain" });
-		this.saveFile(mtlBlob, `${filename}_materials.mtl`);
+		// Clean up
+		boxGeometry.dispose();
+		voxelGroup.traverse((child) => {
+			if (child instanceof THREE.Mesh) {
+				child.geometry.dispose();
+				if (child.material instanceof THREE.Material) {
+					child.material.dispose();
+				}
+			}
+		});
 
 		console.log(
-			`Exported OBJ with ${voxels.length} voxels and ${colorMaterials.size} unique materials`
+			`Exported OBJ with ${voxels.length} individual voxel blocks and ${colorMaterials.size} unique materials`
 		);
 	}
 
@@ -177,118 +172,77 @@ export class ModelExporter {
 			`Creating exact viewport match GLB with ${voxels.length} voxels`
 		);
 
-		// Create a minimal BoxGeometry to use as template
-		const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+		// Create a BoxGeometry with rounded corners to exactly match the VoxelModelViewer
+		// The VoxelModelViewer uses RoundedBoxGeometry with these parameters
+		const boxSize = 0.24; // Must match params.boxSize in VoxelModelViewer
+		const boxRoundness = 0.03; // Must match params.boxRoundness in VoxelModelViewer
 
-		// Create a geometry with buffer attributes to store all voxel data
-		const mergedGeometry = new THREE.BufferGeometry();
-
-		// Get attributes from the template box
-		const positionAttribute = boxGeometry.getAttribute("position");
-		const normalAttribute = boxGeometry.getAttribute("normal");
-		const indexAttribute = boxGeometry.getIndex();
-
-		if (!positionAttribute || !normalAttribute || !indexAttribute) {
-			console.error("Missing attributes on box geometry");
-			return;
-		}
-
-		// Allocate buffers for the merged geometry
-		const vertexCount = positionAttribute.count * voxels.length;
-		const positions = new Float32Array(vertexCount * 3);
-		const normals = new Float32Array(vertexCount * 3);
-		const colors = new Float32Array(vertexCount * 3);
-
-		// Number of vertices per box
-		const verticesPerBox = positionAttribute.count;
-
-		// Create combined index array - each box has its own set of indices
-		const indices = [];
-		const indexCount = indexAttribute.count;
-
-		// Process each voxel
-		for (let i = 0; i < voxels.length; i++) {
-			const voxel = voxels[i];
-			const posOffset = i * verticesPerBox * 3;
-
-			// Copy and transform positions from template
-			for (let v = 0; v < verticesPerBox; v++) {
-				const srcOffset = v * 3;
-				const destOffset = posOffset + srcOffset;
-
-				// Get position from template
-				positions[destOffset] =
-					positionAttribute.getX(v) + voxel.position.x;
-				positions[destOffset + 1] =
-					positionAttribute.getY(v) + voxel.position.y;
-				positions[destOffset + 2] =
-					positionAttribute.getZ(v) + voxel.position.z;
-
-				// Copy normals
-				normals[destOffset] = normalAttribute.getX(v);
-				normals[destOffset + 1] = normalAttribute.getY(v);
-				normals[destOffset + 2] = normalAttribute.getZ(v);
-
-				// Set colors - use exact colors without any modification
-				colors[destOffset] = voxel.color.r;
-				colors[destOffset + 1] = voxel.color.g;
-				colors[destOffset + 2] = voxel.color.b;
-			}
-
-			// Create indices for this box with correct offset
-			const vertexOffset = i * verticesPerBox;
-			for (let j = 0; j < indexCount; j++) {
-				indices.push(indexAttribute.getX(j) + vertexOffset);
-			}
-		}
-
-		// Set attributes on the merged geometry
-		mergedGeometry.setAttribute(
-			"position",
-			new THREE.BufferAttribute(positions, 3)
+		// Create rounded box geometry to exactly match what's in the VoxelModelViewer
+		const boxGeometry = new RoundedBoxGeometry(
+			boxSize,
+			boxSize,
+			boxSize,
+			3, // Segments - match VoxelModelViewer
+			boxRoundness
 		);
-		mergedGeometry.setAttribute(
-			"normal",
-			new THREE.BufferAttribute(normals, 3)
-		);
-		mergedGeometry.setAttribute(
-			"color",
-			new THREE.BufferAttribute(colors, 3)
-		);
-		mergedGeometry.setIndex(indices);
 
-		// Create material that perfectly matches what's in the VoxelModelViewer
+		// Create a group to hold all the individual voxel meshes
+		// This approach ensures we get EXACTLY what is shown in the viewer
+		const voxelGroup = new THREE.Group();
+		voxelGroup.name = "voxel_model";
+
+		// Create a material that perfectly matches what's in the VoxelModelViewer
 		const material = new THREE.MeshStandardMaterial({
-			vertexColors: true, // Enable vertex colors - crucial for color display
-			flatShading: false, // Match the default in VoxelModelViewer
-			roughness: 0.3, // Match the default in VoxelModelViewer (setupGeometries)
-			metalness: 0.15, // Match the default in VoxelModelViewer (setupGeometries)
-			emissive: new THREE.Color(0x000000),
-			transparent: false,
-			name: "VoxelMaterial",
+			roughness: 0.3, // Match VoxelModelViewer (setupGeometries)
+			metalness: 0.15, // Match VoxelModelViewer (setupGeometries)
+			flatShading: false,
+			envMapIntensity: 1.0,
 		});
 
-		// Create mesh with the merged geometry
-		const mesh = new THREE.Mesh(mergedGeometry, material);
-		mesh.name = "voxel_model";
-		mesh.castShadow = true;
-		mesh.receiveShadow = true;
+		// Process each voxel and create an individual mesh for each
+		// This is less optimized but ensures we get EXACTLY what's shown in the viewer
+		for (let i = 0; i < voxels.length; i++) {
+			const voxel = voxels[i];
 
-		// Add to a scene for export
+			// Clone the geometry for this voxel - each voxel gets its own instance
+			const voxelGeometry = boxGeometry.clone();
+
+			// Create a material specific to this voxel with its exact color
+			const voxelMaterial = material.clone();
+			voxelMaterial.color = voxel.color.clone();
+
+			// Create a mesh for this voxel
+			const voxelMesh = new THREE.Mesh(voxelGeometry, voxelMaterial);
+
+			// Position the voxel at its exact position
+			voxelMesh.position.copy(voxel.position);
+
+			// Enable shadows exactly as in the viewer
+			voxelMesh.castShadow = true;
+			voxelMesh.receiveShadow = true;
+
+			// Add to the group
+			voxelGroup.add(voxelMesh);
+		}
+
+		// Create a scene for export with lighting identical to the viewer
 		const scene = new THREE.Scene();
-		scene.add(mesh);
+		scene.add(voxelGroup);
 
-		// Add lighting that matches the VoxelModelViewer
+		// Add lighting that exactly matches the VoxelModelViewer
 		const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 		scene.add(ambientLight);
+
 		const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
 		directionalLight.position.set(10, 15, 10);
+		directionalLight.castShadow = true;
 		scene.add(directionalLight);
+
 		const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
 		fillLight.position.set(-10, 5, -5);
 		scene.add(fillLight);
 
-		// Export using GLTFExporter with improved options
+		// Export using GLTFExporter with the exact scene setup
 		const gltfExporter = new GLTFExporter();
 		const options = {
 			binary: format === ExportFormat.GLB,
@@ -321,13 +275,19 @@ export class ModelExporter {
 				console.log(
 					`Exported ${format.toUpperCase()} with ${
 						voxels.length
-					} voxels - exact viewport match`
+					} voxels - exact block-by-block match with individual meshes`
 				);
 
 				// Clean up
-				mergedGeometry.dispose();
 				boxGeometry.dispose();
-				material.dispose();
+				voxelGroup.traverse((child) => {
+					if (child instanceof THREE.Mesh) {
+						child.geometry.dispose();
+						if (child.material instanceof THREE.Material) {
+							child.material.dispose();
+						}
+					}
+				});
 			},
 			(error) => {
 				console.error("An error occurred during export:", error);
@@ -344,57 +304,70 @@ export class ModelExporter {
 		voxels: { position: THREE.Vector3; color: THREE.Color }[],
 		filename: string
 	): void {
-		// For STL we create a merged geometry since STL doesn't support colors anyway
-		const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
-		const geometriesToMerge: THREE.BufferGeometry[] = [];
+		// Create a RoundedBoxGeometry that exactly matches what's in the viewer
+		const boxSize = 0.24; // Must match params.boxSize in VoxelModelViewer
+		const boxRoundness = 0.03; // Must match params.boxRoundness in VoxelModelViewer
+		const boxGeometry = new RoundedBoxGeometry(
+			boxSize,
+			boxSize,
+			boxSize,
+			3, // Segments - match VoxelModelViewer
+			boxRoundness
+		);
 
-		// Process each voxel
+		// Create a group to hold all the individual voxel meshes
+		const voxelGroup = new THREE.Group();
+		voxelGroup.name = "voxel_model";
+
+		// Process each voxel and create an individual mesh for each
 		for (let i = 0; i < voxels.length; i++) {
 			const voxel = voxels[i];
 
-			// Clone the template geometry
-			const boxClone = boxGeometry.clone();
+			// Clone the geometry for this voxel - each voxel gets its own instance
+			const voxelGeometry = boxGeometry.clone();
 
-			// Apply position transform
-			boxClone.translate(
-				voxel.position.x,
-				voxel.position.y,
-				voxel.position.z
-			);
+			// Create a mesh for this voxel
+			const voxelMesh = new THREE.Mesh(voxelGeometry);
 
-			// Add to merge list
-			geometriesToMerge.push(boxClone);
+			// Position the voxel at its exact position
+			voxelMesh.position.copy(voxel.position);
+
+			// Add to the group
+			voxelGroup.add(voxelMesh);
 
 			// Process in batches to avoid memory issues
-			if (geometriesToMerge.length >= 1000 || i === voxels.length - 1) {
-				// We have a batch to process
-				const batchGeometry =
-					BufferGeometryUtils.mergeGeometries(geometriesToMerge);
-
-				// Create a mesh with the merged geometry
-				const mesh = new THREE.Mesh(batchGeometry);
-
+			if (i % 1000 === 999 || i === voxels.length - 1) {
 				// Export this batch
 				const stlExporter = new STLExporter();
-				const result = stlExporter.parse(mesh) as string;
+				const result = stlExporter.parse(voxelGroup) as string;
 
 				// Save the STL file for this batch
 				const blob = new Blob([result], { type: "text/plain" });
 				const batchNum = Math.floor(i / 1000);
-				this.saveFile(blob, `${filename}_part${batchNum}.stl`);
+				const batchFilename =
+					voxels.length > 1000
+						? `${filename}_part${batchNum}.stl`
+						: `${filename}.stl`;
 
-				// Clean up
-				batchGeometry.dispose();
-				geometriesToMerge.length = 0;
+				this.saveFile(blob, batchFilename);
+
+				// Clear the group for the next batch
+				voxelGroup.clear();
 
 				console.log(
-					`Exported STL batch ${batchNum} with up to 1000 voxels`
+					`Exported STL batch ${batchNum} with ${
+						(i % 1000) + 1
+					} voxels`
 				);
 			}
 		}
 
-		// Clean up the template geometry
+		// Clean up
 		boxGeometry.dispose();
+
+		console.log(
+			`Exported STL with ${voxels.length} individual voxel blocks`
+		);
 	}
 
 	/**
