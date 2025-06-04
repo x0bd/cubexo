@@ -1906,6 +1906,132 @@ export class VoxelModelViewer {
 	}
 
 	/**
+	 * Apply a pulse effect to the model
+	 * Creates a synchronized pulsing animation where all voxels move outward from center then back
+	 */
+	public applyPulseEffect(): void {
+		if (!this.instancedMesh) return;
+
+		// Kill any ongoing global matrix update tween from a previous effect
+		if (this.matrixUpdateTween) {
+			this.matrixUpdateTween.kill();
+			this.matrixUpdateTween = null;
+		}
+
+		// Kill existing tweens for all voxel positions to prevent conflicts
+		for (let i = 0; i < this.instancedMesh.count; i++) {
+			if (this.liveVoxels[i]) {
+				gsap.killTweensOf(this.liveVoxels[i].position);
+			}
+		}
+
+		// Calculate the center of the model
+		const center = new THREE.Vector3();
+		let count = 0;
+		for (let i = 0; i < this.instancedMesh.count; i++) {
+			if (this.liveVoxels[i]) {
+				center.add(this.liveVoxels[i].position);
+				count++;
+			}
+		}
+		if (count > 0) {
+			center.divideScalar(count);
+		}
+
+		// Pulse parameters
+		const pulseDuration = 0.5; // Time to expand outward
+		const returnDuration = 0.7; // Time to return to original position
+		const pulseDelay = 0.0; // Delay between pulses
+		const numPulses = 2; // Number of pulse cycles
+		const maxPulseDistance = 0.4; // Maximum distance to move outward
+
+		const totalDuration =
+			(pulseDuration + returnDuration + pulseDelay) * numPulses;
+
+		for (let i = 0; i < this.instancedMesh.count; i++) {
+			const voxelInfo = this.liveVoxels[i];
+			if (!voxelInfo) continue;
+
+			const originalPosition = voxelInfo.position.clone();
+
+			// Calculate direction from center to voxel
+			const direction = new THREE.Vector3()
+				.subVectors(originalPosition, center)
+				.normalize();
+
+			// Create timeline for this voxel
+			const tl = gsap.timeline({
+				onUpdate: () => {
+					this.updateMatrix(i);
+				},
+			});
+
+			// Add pulse cycles
+			for (let j = 0; j < numPulses; j++) {
+				// Calculate pulse position (outward from center)
+				const pulsePosition = new THREE.Vector3()
+					.copy(originalPosition)
+					.add(direction.clone().multiplyScalar(maxPulseDistance));
+
+				// Pulse outward
+				tl.to(voxelInfo.position, {
+					x: pulsePosition.x,
+					y: pulsePosition.y,
+					z: pulsePosition.z,
+					duration: pulseDuration,
+					ease: "power2.out",
+				});
+
+				// Return to original position
+				tl.to(voxelInfo.position, {
+					x: originalPosition.x,
+					y: originalPosition.y,
+					z: originalPosition.z,
+					duration: returnDuration,
+					ease: "elastic.out(1.2, 0.4)",
+				});
+
+				// Add delay between pulses if not the last pulse
+				if (j < numPulses - 1) {
+					tl.to({}, { duration: pulseDelay });
+				}
+			}
+		}
+
+		// Ensure instanceMatrix.needsUpdate is set throughout the animations
+		if (this.instancedMesh) {
+			this.matrixUpdateTween = gsap.to(
+				{},
+				{
+					duration: totalDuration,
+					onUpdate: () => {
+						if (this.instancedMesh) {
+							this.instancedMesh.instanceMatrix.needsUpdate =
+								true;
+						}
+					},
+					onComplete: () => {
+						// Final update to ensure all matrices are correct
+						if (this.instancedMesh) {
+							for (let k = 0; k < this.instancedMesh.count; k++) {
+								if (this.liveVoxels[k]) {
+									this.updateMatrix(k);
+								}
+							}
+							this.instancedMesh.instanceMatrix.needsUpdate =
+								true;
+						}
+						this.matrixUpdateTween = null; // Clear the reference
+					},
+				}
+			);
+		}
+
+		// Show a notification that the effect was applied
+		this.showEffectNotification("Pulse effect applied");
+	}
+
+	/**
 	 * Show notification for effects with Tailwind classes (indigo theme)
 	 */
 	private showEffectNotification(message: string): void {

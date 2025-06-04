@@ -414,6 +414,28 @@ export class App {
 			});
 		}
 
+		// Setup pulse effect button
+		const pulseButton = document.getElementById("effect-pulse");
+		if (pulseButton) {
+			pulseButton.addEventListener("click", () => {
+				console.log("Applying pulse effect");
+				// Apply the pulse effect to the current model
+				this.viewer.applyPulseEffect();
+
+				// Add active state to button
+				pulseButton.classList.add(
+					"bg-indigo-700/90",
+					"border-indigo-600/70"
+				);
+				setTimeout(() => {
+					pulseButton.classList.remove(
+						"bg-indigo-700/90",
+						"border-indigo-600/70"
+					);
+				}, 1200); // Duration slightly longer than the effect (pulse is 0.5s + 0.7s per cycle × 2 cycles)
+			});
+		}
+
 		// Setup audio reactive button
 		const audioReactiveButton = document.getElementById(
 			"effect-audio-reactive"
