@@ -7,7 +7,6 @@ import gsap from "gsap";
 import { ExportFormat } from "./utils/ModelExporter";
 import { ModelUploader } from "./utils/ModelUploader";
 import { ThemeManager } from "./utils/theme"; // Added import for ThemeManager
-import { AudioVisualizer } from "./utils/AudioVisualizer"; // Import the AudioVisualizer
 
 export class App {
 	private viewer: VoxelModelViewer;
@@ -16,7 +15,6 @@ export class App {
 	private voxelizer: Voxelizer;
 	private modelUploader: ModelUploader;
 	private themeManager: ThemeManager; // Declared themeManager property
-	private audioVisualizer: AudioVisualizer; // Declare AudioVisualizer property
 	private isInitialized = false;
 	private loaderElement: HTMLElement | null;
 	private activeModelIdx = 0; // Use first model (chicken)
@@ -42,7 +40,6 @@ export class App {
 		this.voxelizer = new Voxelizer();
 		this.modelSelector = new ModelSelector();
 		this.modelUploader = new ModelUploader();
-		this.audioVisualizer = new AudioVisualizer(); // Initialize AudioVisualizer
 
 		// Remove model panel elements completely
 		this.removeModelPanel();
@@ -90,11 +87,6 @@ export class App {
 			console.log(`Model selected: ${oldIndex} -> ${newIndex}`);
 			this.viewer.animateToModel(oldIndex, newIndex);
 			this.activeModelIdx = newIndex;
-		});
-
-		// Set audio data callback for the viewer
-		this.audioVisualizer.setCallback((audioData) => {
-			this.viewer.updateWithAudioData(audioData);
 		});
 
 		// Load the chicken model
@@ -433,29 +425,6 @@ export class App {
 						"border-indigo-600/70"
 					);
 				}, 1200); // Duration slightly longer than the effect (pulse is 0.5s + 0.7s per cycle × 2 cycles)
-			});
-		}
-
-		// Setup audio reactive button
-		const audioReactiveButton = document.getElementById(
-			"effect-audio-reactive"
-		);
-		if (audioReactiveButton) {
-			audioReactiveButton.addEventListener("click", () => {
-				console.log("Opening audio visualizer panel");
-				this.audioVisualizer.showPanel();
-
-				// Add active state to button
-				audioReactiveButton.classList.add(
-					"bg-indigo-700/90",
-					"border-indigo-600/70"
-				);
-				setTimeout(() => {
-					audioReactiveButton.classList.remove(
-						"bg-indigo-700/90",
-						"border-indigo-600/70"
-					);
-				}, 300);
 			});
 		}
 
