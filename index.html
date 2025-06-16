@@ -519,6 +519,70 @@
 					pointer-events: auto;
 				}
 			}
+
+			/* Export panel toggle button styling */
+			#export-panel-toggle {
+				backdrop-filter: blur(12px);
+				transition: all 0.2s ease;
+			}
+
+			#export-panel-toggle.active-toggle {
+				background-color: rgba(239, 68, 68, 0.1);
+				border-color: rgba(239, 68, 68, 0.2);
+			}
+
+			#export-panel-toggle.active-toggle:hover {
+				background-color: rgba(239, 68, 68, 0.15);
+				border-color: rgba(239, 68, 68, 0.25);
+			}
+
+			#export-panel-toggle.active-toggle svg {
+				color: rgba(239, 68, 68, 0.8);
+			}
+
+			#export-panel-toggle:not(.active-toggle) {
+				background-color: rgba(79, 70, 229, 0.1);
+				border-color: rgba(79, 70, 229, 0.2);
+			}
+
+			#export-panel-toggle:not(.active-toggle):hover {
+				background-color: rgba(79, 70, 229, 0.15);
+				border-color: rgba(79, 70, 229, 0.25);
+			}
+
+			#export-panel-toggle:not(.active-toggle) svg {
+				color: rgba(99, 102, 241, 0.8);
+			}
+
+			.toggle-icon-share,
+			.toggle-icon-close {
+				transition: opacity 0.2s ease, transform 0.2s ease;
+			}
+
+			/* Export panel toggle button styling */
+			#export-panel-show {
+				backdrop-filter: blur(12px);
+				transition: all 0.2s ease;
+				background-color: rgba(79, 70, 229, 0.1);
+				border-color: rgba(79, 70, 229, 0.2);
+			}
+
+			#export-panel-show:hover {
+				background-color: rgba(79, 70, 229, 0.15);
+				border-color: rgba(79, 70, 229, 0.25);
+			}
+
+			#export-panel-show svg {
+				color: rgba(99, 102, 241, 0.8);
+			}
+
+			#export-panel-close:hover {
+				background-color: rgba(239, 68, 68, 0.15);
+			}
+
+			#export-panel-close:hover svg {
+				color: rgba(239, 68, 68, 0.9);
+			}
 		</style>
 	</head>
 	<body
@@ -582,11 +646,12 @@
 				</svg>
 			</button>
 
-			<!-- Export Panel Toggle Button (visible on desktop) -->
+			<!-- Export Panel Show Button (appears when panel is hidden) -->
 			<button
-				id="export-panel-toggle"
-				class="fixed top-3 right-3 w-10 h-10 hidden md:flex items-center justify-center rounded-xl glass-panel bg-zinc-900/80 border-zinc-700/50 shadow-xl pointer-events-auto z-50 hover:bg-zinc-800 transition-all active-toggle"
-				aria-label="Toggle Export Panel"
+				id="export-panel-show"
+				class="fixed top-3 right-3 w-10 h-10 hidden md:flex items-center justify-center rounded-xl glass-panel bg-zinc-900/80 border-zinc-700/50 shadow-xl pointer-events-auto z-50 hover:bg-zinc-800 transition-all pointer-events-none"
+				aria-label="Show Export Panel"
+				style="opacity: 0; transform-origin: center center"
 			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
@@ -717,6 +782,7 @@
 			<div
 				id="right-panel-container"
 				class="fixed top-6 right-6 bottom-20 sm:bottom-6 w-full md:w-[320px] flex flex-col gap-3 pointer-events-auto translate-x-full md:translate-x-0 transition-all duration-300 ease-in-out"
+				style="opacity: 1; transform-origin: top right"
 			>
 				<!-- Hidden file input for model uploads -->
 				<input type="file" id="model-upload" accept=".glb" hidden />
@@ -764,7 +830,8 @@
 							>
 						</div>
 						<button
-							class="export-panel-close w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-800/90 text-zinc-400 hover:text-zinc-200 transition-all md:hidden"
+							id="export-panel-close"
+							class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-800/90 text-zinc-400 hover:text-red-400 transition-colors"
 							aria-label="Close Export Panel"
 						>
 							<svg
@@ -1229,6 +1296,9 @@
 
 		<script type="module" src="/src/main.ts"></script>
 
+		<!-- GSAP CDN -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
 		<!-- Mobile responsiveness script -->
 		<script>
 			document.addEventListener("DOMContentLoaded", function () {
@@ -1321,54 +1391,100 @@
 				}
 
 				// Export panel toggle functionality
-				const exportPanelToggle = document.getElementById(
-					"export-panel-toggle"
-				);
-				const exportPanelCloseButtons = document.querySelectorAll(
-					".export-panel-close"
-				);
+				const exportPanelClose =
+					document.getElementById("export-panel-close");
+				const exportPanelShow =
+					document.getElementById("export-panel-show");
 
-				// Function to toggle export panel visibility
-				function toggleExportPanel() {
+				// Function to hide export panel
+				function hideExportPanel() {
 					if (rightPanel) {
-						// On desktop, we use opacity and pointer-events instead of translate
-						// This ensures the panel doesn't shift the layout when hidden
-						if (rightPanel.classList.contains("md:opacity-0")) {
-							rightPanel.classList.remove(
-								"md:opacity-0",
-								"md:pointer-events-none"
-							);
-							if (exportPanelToggle) {
-								exportPanelToggle.classList.add(
-									"active-toggle"
+						// Use GSAP for smooth animation
+						gsap.to(rightPanel, {
+							opacity: 0,
+							scale: 0.98,
+							duration: 0.3,
+							ease: "power2.out",
+							onComplete: () => {
+								rightPanel.classList.add(
+									"md:pointer-events-none"
 								);
-							}
-						} else {
-							rightPanel.classList.add(
-								"md:opacity-0",
-								"md:pointer-events-none"
-							);
-							if (exportPanelToggle) {
-								exportPanelToggle.classList.remove(
-									"active-toggle"
-								);
-							}
+							},
+						});
+
+						// Show the show button with GSAP
+						if (exportPanelShow) {
+							gsap.to(exportPanelShow, {
+								opacity: 1,
+								scale: 1,
+								duration: 0.3,
+								delay: 0.1,
+								ease: "back.out(1.5)",
+								onStart: () => {
+									exportPanelShow.classList.remove(
+										"pointer-events-none"
+									);
+								},
+							});
 						}
 					}
 				}
 
-				// Add click handler to the export panel toggle button
-				if (exportPanelToggle) {
-					exportPanelToggle.addEventListener(
-						"click",
-						toggleExportPanel
-					);
+				// Function to show export panel
+				function showExportPanel() {
+					if (rightPanel) {
+						// Remove pointer-events-none first to make panel interactive immediately
+						rightPanel.classList.remove("md:pointer-events-none");
+
+						// Show the panel with GSAP
+						gsap.fromTo(
+							rightPanel,
+							{ opacity: 0, scale: 0.98 },
+							{
+								opacity: 1,
+								scale: 1,
+								duration: 0.4,
+								ease: "power2.out",
+							}
+						);
+
+						// Hide the show button with GSAP
+						if (exportPanelShow) {
+							gsap.to(exportPanelShow, {
+								opacity: 0,
+								scale: 0.9,
+								duration: 0.2,
+								ease: "power2.in",
+								onComplete: () => {
+									exportPanelShow.classList.add(
+										"pointer-events-none"
+									);
+								},
+							});
+						}
+					}
 				}
 
-				// Add click handlers to all export panel close buttons
-				exportPanelCloseButtons.forEach((button) => {
-					button.addEventListener("click", function () {
-						if (window.innerWidth < 768 && rightPanel) {
+				// Add click handler to the export panel close button with animation
+				if (exportPanelClose) {
+					exportPanelClose.addEventListener("click", function () {
+						// Add click animation to the close button
+						gsap.fromTo(
+							exportPanelClose,
+							{ scale: 1 },
+							{
+								scale: 0.8,
+								duration: 0.1,
+								ease: "power1.in",
+								yoyo: true,
+								repeat: 1,
+							}
+						);
+
+						if (window.innerWidth >= 768) {
+							// On desktop, hide with opacity
+							hideExportPanel();
+						} else {
 							// On mobile, use the existing mobile panel hide mechanism
 							rightPanel.classList.add("translate-x-full");
 							rightPanel.classList.remove("translate-x-0");
@@ -1380,11 +1496,27 @@
 							}
 						}
 					});
-				});
+				}
 
-				// Initialize export panel visibility state (visible by default)
-				// You can change this to start with the panel hidden by uncommenting the next line
-				// if (rightPanel) rightPanel.classList.add("md:opacity-0", "md:pointer-events-none");
+				// Add click handler to the export panel show button with animation
+				if (exportPanelShow) {
+					exportPanelShow.addEventListener("click", function () {
+						// Add click animation to the show button
+						gsap.fromTo(
+							exportPanelShow,
+							{ scale: 1 },
+							{
+								scale: 0.8,
+								duration: 0.1,
+								ease: "power1.in",
+								yoyo: true,
+								repeat: 1,
+							}
+						);
+
+						showExportPanel();
+					});
+				}
 			});
 		</script>
 	</body>
