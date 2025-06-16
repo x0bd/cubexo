@@ -57,6 +57,9 @@ export class App {
 		// Setup effect buttons
 		this.setupEffectButtons();
 
+		// Add free models question mark toggle
+		this.createFreeModelsToggle();
+
 		// Listen for custom notification events
 		this.setupNotificationListener();
 
@@ -632,5 +635,96 @@ export class App {
 				fileInput.click();
 			}
 		});
+	}
+
+	/**
+	 * Create a question mark toggle button on the bottom left for finding free models
+	 */
+	private createFreeModelsToggle(): void {
+		// Create the toggle button
+		const toggleButton = document.createElement("button");
+		toggleButton.id = "free-models-toggle";
+		toggleButton.className =
+			"fixed bottom-6 left-6 z-30 w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900/80 backdrop-blur-md border border-zinc-700/50 text-zinc-200 hover:bg-indigo-700/90 hover:border-indigo-600/70 transition-colors duration-200";
+		toggleButton.innerHTML = `
+			<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-help-circle">
+				<circle cx="12" cy="12" r="10"/>
+				<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+				<line x1="12" y1="17" x2="12.01" y2="17"/>
+			</svg>
+		`;
+
+		// Create the free models panel (initially hidden)
+		const modelsPanel = document.createElement("div");
+		modelsPanel.id = "free-models-panel";
+		modelsPanel.className =
+			"fixed bottom-20 left-6 z-30 w-80 rounded-lg shadow-xl bg-zinc-900/80 backdrop-blur-md border border-zinc-700/50 text-zinc-200 p-4 opacity-0 pointer-events-none transition-opacity duration-200";
+		modelsPanel.innerHTML = `
+			<h3 class="text-sm font-medium mb-3">Find Free 3D Models</h3>
+			<p class="text-xs text-zinc-400 mb-3">Browse these sites for free 3D models to upload:</p>
+			<ul class="space-y-2 text-xs text-zinc-300">
+				<li><a href="https://sketchfab.com/features/free-3d-models" target="_blank" class="text-indigo-400 hover:underline flex items-center">
+					<span class="mr-1">⭐</span> Sketchfab Free Models
+				</a></li>
+				<li><a href="https://www.turbosquid.com/Search/3D-Models/free" target="_blank" class="text-indigo-400 hover:underline flex items-center">
+					<span class="mr-1">⭐</span> TurboSquid Free Models
+				</a></li>
+				<li><a href="https://free3d.com/" target="_blank" class="text-indigo-400 hover:underline flex items-center">
+					<span class="mr-1">⭐</span> Free3D
+				</a></li>
+				<li><a href="https://www.cgtrader.com/free-3d-models" target="_blank" class="text-indigo-400 hover:underline flex items-center">
+					<span class="mr-1">⭐</span> CGTrader Free Models
+				</a></li>
+			</ul>
+			<p class="text-xs text-zinc-500 mt-3">Download models in OBJ, GLB or FBX format for best results.</p>
+		`;
+
+		// Append elements to the body
+		document.body.appendChild(toggleButton);
+		document.body.appendChild(modelsPanel);
+
+		// Set up toggle functionality
+		let isPanelVisible = false;
+		toggleButton.addEventListener("click", () => {
+			isPanelVisible = !isPanelVisible;
+
+			if (isPanelVisible) {
+				modelsPanel.classList.remove(
+					"opacity-0",
+					"pointer-events-none"
+				);
+				modelsPanel.classList.add("opacity-100");
+				toggleButton.classList.add(
+					"bg-indigo-700/90",
+					"border-indigo-600/70"
+				);
+			} else {
+				modelsPanel.classList.remove("opacity-100");
+				modelsPanel.classList.add("opacity-0", "pointer-events-none");
+				toggleButton.classList.remove(
+					"bg-indigo-700/90",
+					"border-indigo-600/70"
+				);
+			}
+		});
+
+		// Close panel when clicking outside
+		document.addEventListener("click", (event) => {
+			if (
+				isPanelVisible &&
+				!modelsPanel.contains(event.target as Node) &&
+				!toggleButton.contains(event.target as Node)
+			) {
+				isPanelVisible = false;
+				modelsPanel.classList.remove("opacity-100");
+				modelsPanel.classList.add("opacity-0", "pointer-events-none");
+				toggleButton.classList.remove(
+					"bg-indigo-700/90",
+					"border-indigo-600/70"
+				);
+			}
+		});
+
+		console.log("Free models toggle created");
 	}
 }
