@@ -660,9 +660,29 @@ export class App {
 		modelsPanel.className =
 			"fixed bottom-20 left-6 z-30 w-80 rounded-lg shadow-xl bg-zinc-900/80 backdrop-blur-md border border-zinc-700/50 text-zinc-200 p-4 opacity-0 pointer-events-none transition-opacity duration-200";
 		modelsPanel.innerHTML = `
-			<h3 class="text-sm font-medium mb-3">Find Free 3D Models</h3>
-			<p class="text-xs text-zinc-400 mb-3">Browse these sites for free 3D models to upload:</p>
+			<div class="flex items-center gap-2 mb-3">
+				<span class="text-indigo-300">
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-info">
+						<circle cx="12" cy="12" r="10" />
+						<path d="M12 16v-4" />
+						<path d="M12 8h.01" />
+					</svg>
+				</span>
+				<h3 class="text-sm font-medium">INFORMATION</h3>
+			</div>
+			
+			<div class="space-y-2 text-[11px] sm:text-xs text-zinc-300 mb-4">
+				<p>• Only <span class="text-indigo-300 font-medium">.GLB</span> models are currently supported.</p>
+				<p>• For best results, use models from <a href="https://poly.pizza" target="_blank" class="text-indigo-400 hover:underline">poly.pizza</a>.</p>
+				<p>• This is a pre-release version and may be unstable.</p>
+				<p class="text-zinc-400 text-[10px] sm:text-[11px] pt-1">Concept inspired by a <a href="https://tympanus.net/codrops/2023/03/28/turning-3d-models-to-voxel-art-with-three-js/" target="_blank" class="text-indigo-400 hover:underline">tutorial</a> by Ksenia K. at Codrops.</p>
+			</div>
+			
+			<h4 class="text-xs font-medium text-indigo-300 mb-2">Free Model Resources</h4>
 			<ul class="space-y-2 text-xs text-zinc-300">
+				<li><a href="https://poly.pizza" target="_blank" class="text-indigo-400 hover:underline flex items-center">
+					<span class="mr-1">⭐</span> Poly Pizza (Recommended)
+				</a></li>
 				<li><a href="https://sketchfab.com/features/free-3d-models" target="_blank" class="text-indigo-400 hover:underline flex items-center">
 					<span class="mr-1">⭐</span> Sketchfab Free Models
 				</a></li>
@@ -672,11 +692,7 @@ export class App {
 				<li><a href="https://free3d.com/" target="_blank" class="text-indigo-400 hover:underline flex items-center">
 					<span class="mr-1">⭐</span> Free3D
 				</a></li>
-				<li><a href="https://www.cgtrader.com/free-3d-models" target="_blank" class="text-indigo-400 hover:underline flex items-center">
-					<span class="mr-1">⭐</span> CGTrader Free Models
-				</a></li>
 			</ul>
-			<p class="text-xs text-zinc-500 mt-3">Download models in OBJ, GLB or FBX format for best results.</p>
 		`;
 
 		// Append elements to the body
