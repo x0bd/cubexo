@@ -476,6 +476,18 @@
 					width: 92% !important;
 					max-width: 400px;
 					margin-left: auto;
+					transform: translateX(0) !important;
+					opacity: 1 !important;
+					pointer-events: auto !important;
+					display: flex !important;
+				}
+
+				#right-panel-container.translate-x-full {
+					transform: translateX(100%) !important;
+				}
+
+				#right-panel-container.translate-x-0 {
+					transform: translateX(0) !important;
 				}
 
 				#right-panel-container .panel {
@@ -785,7 +797,7 @@
 			<!-- Right Panel Container -->
 			<div
 				id="right-panel-container"
-				class="fixed top-6 right-6 bottom-20 sm:bottom-6 w-full md:w-[320px] flex flex-col gap-3 pointer-events-auto translate-x-full md:translate-x-0 transition-all duration-300 ease-in-out"
+				class="fixed top-6 right-6 bottom-20 sm:bottom-6 w-full md:w-[320px] flex flex-col gap-3 pointer-events-auto translate-x-full md:translate-x-0 transition-all duration-300 ease-in-out z-40"
 				style="opacity: 1; transform-origin: top right"
 			>
 				<!-- Hidden file input for model uploads -->
@@ -1314,6 +1326,10 @@
 				);
 				const mobileBackdrop =
 					document.getElementById("mobile-backdrop");
+				const exportPanelClose =
+					document.getElementById("export-panel-close");
+				const exportPanelShow =
+					document.getElementById("export-panel-show");
 
 				if (mobileToggle && rightPanel) {
 					// Add active state visual for the toggle button
@@ -1392,13 +1408,11 @@
 				if (window.innerWidth >= 768 && rightPanel) {
 					rightPanel.classList.remove("translate-x-full");
 					rightPanel.classList.add("translate-x-0");
+				} else if (window.innerWidth < 768 && rightPanel) {
+					// Ensure panel is hidden on mobile by default
+					rightPanel.classList.add("translate-x-full");
+					rightPanel.classList.remove("translate-x-0");
 				}
-
-				// Export panel toggle functionality
-				const exportPanelClose =
-					document.getElementById("export-panel-close");
-				const exportPanelShow =
-					document.getElementById("export-panel-show");
 
 				// Function to hide export panel
 				function hideExportPanel() {

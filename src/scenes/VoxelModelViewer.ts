@@ -557,6 +557,12 @@ export class VoxelModelViewer {
 		this.controls.autoRotateSpeed = 0.4;
 		this.controls.target.set(0, 0, 0); // Explicitly set target to origin
 
+		// Enable touch support for mobile devices
+		this.controls.touches = {
+			ONE: THREE.TOUCH.ROTATE,
+			TWO: THREE.TOUCH.DOLLY_PAN,
+		};
+
 		// Stop auto-rotation on user interaction
 		this.controls.addEventListener("start", () => {
 			if (this.controls) this.controls.autoRotate = false;
@@ -965,6 +971,57 @@ export class VoxelModelViewer {
 					"cursor-grabbing",
 					"cursor-grab"
 				);
+		});
+
+		// Touch events for mobile devices
+		this.canvasElement.addEventListener("touchstart", (event) => {
+			if (!this.isInteractionEnabled || !event.touches[0]) return;
+
+			// Store initial position
+			mouseDownX = event.touches[0].clientX;
+			mouseDownY = event.touches[0].clientY;
+			isDragging = false;
+
+			// Update mouse position for raycasting
+			const rect = this.canvasElement!.getBoundingClientRect();
+			this.mouse.x =
+				((event.touches[0].clientX - rect.left) / rect.width) * 2 - 1;
+			this.mouse.y =
+				-((event.touches[0].clientY - rect.top) / rect.height) * 2 + 1;
+		});
+
+		this.canvasElement.addEventListener("touchmove", (event) => {
+			if (!this.canvasElement || !event.touches[0]) return;
+
+			// Calculate mouse position in normalized device coordinates (-1 to +1)
+			const rect = this.canvasElement.getBoundingClientRect();
+			this.mouse.x =
+				((event.touches[0].clientX - rect.left) / rect.width) * 2 - 1;
+			this.mouse.y =
+				-((event.touches[0].clientY - rect.top) / rect.height) * 2 + 1;
+
+			// Detect if dragging based on movement distance
+			if (
+				!isDragging &&
+				(Math.abs(event.touches[0].clientX - mouseDownX) >
+					dragThreshold ||
+					Math.abs(event.touches[0].clientY - mouseDownY) >
+						dragThreshold)
+			) {
+				isDragging = true;
+			}
+		});
+
+		this.canvasElement.addEventListener("touchend", (event) => {
+			if (!this.isInteractionEnabled) return;
+
+			// Only trigger click if not dragging and a voxel is hovered
+			if (!isDragging && this.hoveredVoxelIndex !== -1) {
+				this.handleVoxelClick(this.hoveredVoxelIndex);
+			}
+
+			// Reset drag state
+			isDragging = false;
 		});
 	}
 
