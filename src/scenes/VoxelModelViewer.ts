@@ -1744,9 +1744,9 @@ export class VoxelModelViewer {
 		let maxIndividualAnimationDuration = 0;
 
 		const shakeIntensity = 0.15; // Max displacement for a single shake component (e.g., 0.15 units)
-		const numShakeCycles = 3; // Number of back-and-forth shake cycles
-		const shakeCycleDuration = 0.06; // Duration of one full shake cycle (e.g., to target and back slightly)
-		const returnToOriginDuration = 0.4; // Duration to return to original position
+		const numShakeCycles = 5; // Number of back-and-forth shake cycles
+		const shakeCycleDuration = 0.08; // Duration of one full shake cycle (e.g., to target and back slightly)
+		const returnToOriginDuration = 0.6; // Duration to return to original position
 		const maxStartDelay = 0.1; // Max random start delay for each voxel, creates a wave effect
 
 		for (let i = 0; i < this.instancedMesh.count; i++) {
@@ -1849,7 +1849,7 @@ export class VoxelModelViewer {
 	 * Temporarily explodes the model outward and then brings it back together
 	 */
 	public applyExplodeEffect(): void {
-		if (!this.instancedMesh) return;
+		if (!this.instancedMesh || !this.camera) return;
 
 		// Kill any ongoing global matrix update tween from a previous effect
 		if (this.matrixUpdateTween) {
@@ -1866,16 +1866,62 @@ export class VoxelModelViewer {
 
 		let maxIndividualAnimationDuration = 0;
 
+		// Calculate model size and camera distance for scaling the effect
+		const modelBoundingBox = new THREE.Box3();
+		// Iterate only over active voxels for an accurate bounding box
+		for (let i = 0; i < this.instancedMesh.count; i++) {
+			if (this.liveVoxels[i]) {
+				modelBoundingBox.expandByPoint(this.liveVoxels[i].position);
+			}
+		}
+
+		const modelSize = new THREE.Vector3();
+		modelBoundingBox.getSize(modelSize);
+		// If model has no size (e.g. single voxel), use a default size of 1 to avoid division by zero
+		const maxModelDimension = Math.max(
+			1,
+			modelSize.x,
+			modelSize.y,
+			modelSize.z
+		);
+
+		const modelCenter = new THREE.Vector3();
+		modelBoundingBox.getCenter(modelCenter);
+
+		const cameraDistance = this.camera.position.distanceTo(modelCenter);
+
+		// New scaling factor:
+		// - Increases with model size (base size 9)
+		// - Increases when camera is closer (base distance 20)
+		const rawScaleFactor =
+			(maxModelDimension / 9.0) * (20.0 / cameraDistance);
+
+		// Clamp the factor to prevent extreme explosions but ensure it's still impactful
+		const explosionScaleFactor = Math.max(
+			0.5,
+			Math.min(rawScaleFactor, 8.0)
+		);
+
+		console.log(
+			`Explosion scale factor: ${explosionScaleFactor.toFixed(
+				2
+			)} (raw: ${rawScaleFactor.toFixed(
+				2
+			)}, camera dist: ${cameraDistance.toFixed(
+				2
+			)}, model size: ${maxModelDimension.toFixed(2)})`
+		);
+
 		for (let i = 0; i < this.instancedMesh.count; i++) {
 			const voxelInfo = this.liveVoxels[i];
 			if (!voxelInfo) continue;
 
 			const originalPosition = voxelInfo.position.clone();
 
-			// Calculate exploded position
-			let direction = originalPosition.clone();
+			// Calculate exploded position relative to the model's center
+			let direction = originalPosition.clone().sub(modelCenter);
 			if (direction.lengthSq() === 0) {
-				// If original position is at origin
+				// If position is at model center, give it a random direction
 				direction.set(
 					Math.random() - 0.5,
 					Math.random() - 0.5,
@@ -1884,14 +1930,25 @@ export class VoxelModelViewer {
 			}
 			direction.normalize();
 
-			const explosionDistance = 3 + Math.random() * 4; // Explode out by 3 to 7 units
+			// Scale explosion distance by the calculated factor
+			const baseExplosionDistance = 2.5 + Math.random() * 2; // Base value: 2.5 to 4.5 units
+			const scaledExplosionDistance =
+				baseExplosionDistance * explosionScaleFactor;
+
 			const explodedPosition = originalPosition
 				.clone()
-				.add(direction.multiplyScalar(explosionDistance));
+				.add(direction.multiplyScalar(scaledExplosionDistance));
 
-			const explodeDuration = 0.3 + Math.random() * 0.2;
-			const returnDelay = 0.1;
-			const returnDuration = 0.5 + Math.random() * 0.3;
+			// Scale durations with the explosion scale for a more natural feel
+			const durationScaleFactor = Math.min(
+				1.8,
+				1 + Math.log1p(explosionScaleFactor / 2)
+			);
+			const explodeDuration =
+				(0.35 + Math.random() * 0.15) * durationScaleFactor;
+			const returnDelay = 0.1 * durationScaleFactor;
+			const returnDuration =
+				(0.6 + Math.random() * 0.2) * durationScaleFactor;
 			const startDelay = Math.random() * 0.15;
 
 			const individualDuration =
@@ -1991,11 +2048,11 @@ export class VoxelModelViewer {
 		}
 
 		// Pulse parameters
-		const pulseDuration = 0.5; // Time to expand outward
-		const returnDuration = 0.7; // Time to return to original position
-		const pulseDelay = 0.0; // Delay between pulses
-		const numPulses = 2; // Number of pulse cycles
-		const maxPulseDistance = 0.4; // Maximum distance to move outward
+		const pulseDuration = 0.6; // Time to expand outward
+		const returnDuration = 0.9; // Time to return to original position
+		const pulseDelay = 0.05; // Delay between pulses
+		const numPulses = 3; // Number of pulse cycles
+		const maxPulseDistance = 0.5; // Maximum distance to move outward
 
 		const totalDuration =
 			(pulseDuration + returnDuration + pulseDelay) * numPulses;

@@ -696,7 +696,7 @@ export class App {
 						"bg-indigo-700/90",
 						"border-indigo-600/70"
 					);
-				}, 800); // Duration slightly longer than the effect
+				}, 1200); // Duration slightly longer than the effect
 			});
 		}
 
@@ -718,7 +718,7 @@ export class App {
 						"bg-indigo-700/90",
 						"border-indigo-600/70"
 					);
-				}, 900); // Duration slightly longer than the effect (explode is 0.3s + 0.1s + 0.5s animation)
+				}, 3000); // Increased duration to account for scaled explosion effect
 			});
 		}
 
@@ -740,7 +740,7 @@ export class App {
 						"bg-indigo-700/90",
 						"border-indigo-600/70"
 					);
-				}, 1200); // Duration slightly longer than the effect (pulse is 0.5s + 0.7s per cycle × 2 cycles)
+				}, 4700); // Duration slightly longer than the effect
 			});
 		}
 
