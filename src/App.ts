@@ -280,46 +280,101 @@ export class App {
 					for (const mat of materials) {
 						if (
 							"color" in mat &&
-							mat.color instanceof THREE.Color &&
-							!this.isWhiteColor(mat.color)
+							mat.color instanceof THREE.Color
 						) {
-							coloredMeshCount++;
-							break;
+							const c = mat.color;
+							// Only count as colored if it's not close to white
+							if (!(c.r > 0.9 && c.g > 0.9 && c.b > 0.9)) {
+								coloredMeshCount++;
+								break;
+							}
 						}
 					}
 				}
 			}
 		});
 
-		// If less than 30% of meshes have color, add vibrant colors
-		if (totalMeshCount > 0 && coloredMeshCount / totalMeshCount < 0.3) {
-			console.log("Adding vibrant colors to model");
-			let meshIndex = 0;
+		// If model has almost no color (very white or no colors at all)
+		// ONLY then add colors (less aggressive than before)
+		if (coloredMeshCount / Math.max(1, totalMeshCount) < 0.1) {
+			console.log("Model has almost no colors, adding vibrant colors");
 
+			// Use a more vibrant palette with carefully selected colors
+			const palette = [
+				new THREE.Color(0xf44336), // Red
+				new THREE.Color(0x2196f3), // Blue
+				new THREE.Color(0x4caf50), // Green
+				new THREE.Color(0xff9800), // Orange
+				new THREE.Color(0x9c27b0), // Purple
+				new THREE.Color(0x00bcd4), // Cyan
+				new THREE.Color(0xffeb3b), // Yellow
+				new THREE.Color(0x795548), // Brown
+				new THREE.Color(0xff4081), // Pink
+			];
+
+			let colorIndex = 0;
 			model.traverse((obj) => {
 				if (obj instanceof THREE.Mesh) {
-					// Generate a vibrant color based on mesh index
-					const hue = (meshIndex * 0.618033988749895) % 1; // Golden ratio distribution
-					const color = new THREE.Color().setHSL(
-						hue,
-						0.85,
-						0.5 + Math.random() * 0.2
-					);
+					// Only change colors of white or very light materials
+					const isWhiteMaterial = (mat: THREE.Material) => {
+						return (
+							"color" in mat &&
+							mat.color instanceof THREE.Color &&
+							mat.color.r > 0.9 &&
+							mat.color.g > 0.9 &&
+							mat.color.b > 0.9
+						);
+					};
 
-					// Apply to materials
-					if (obj.material) {
-						if (Array.isArray(obj.material)) {
-							for (let i = 0; i < obj.material.length; i++) {
-								if ("color" in obj.material[i]) {
-									obj.material[i].color = color.clone();
-								}
+					// Process materials
+					if (Array.isArray(obj.material)) {
+						obj.material.forEach((mat, idx) => {
+							if (isWhiteMaterial(mat)) {
+								mat.color.set(
+									palette[(colorIndex + idx) % palette.length]
+								);
 							}
-						} else if ("color" in obj.material) {
-							obj.material.color = color;
+						});
+						colorIndex++;
+					} else if (isWhiteMaterial(obj.material)) {
+						obj.material.color.set(
+							palette[colorIndex % palette.length]
+						);
+						colorIndex++;
+					}
+				}
+			});
+		} else {
+			// If model has some colors but they might be too subtle,
+			// enhance their saturation and brightness
+			model.traverse((obj) => {
+				if (obj instanceof THREE.Mesh) {
+					if (obj.material) {
+						const materials = Array.isArray(obj.material)
+							? obj.material
+							: [obj.material];
+
+						for (const mat of materials) {
+							if (
+								"color" in mat &&
+								mat.color instanceof THREE.Color
+							) {
+								// Convert to HSL to adjust saturation and lightness
+								const hsl = { h: 0, s: 0, l: 0 };
+								mat.color.getHSL(hsl);
+
+								// Boost saturation and ensure good lightness level
+								hsl.s = Math.min(1.0, hsl.s * 1.5); // Increase saturation by 50%
+
+								// Ensure lightness is in a good range (not too dark or light)
+								if (hsl.l < 0.3) hsl.l = 0.3;
+								if (hsl.l > 0.8) hsl.l = 0.8;
+
+								// Apply the enhanced color
+								mat.color.setHSL(hsl.h, hsl.s, hsl.l);
+							}
 						}
 					}
-
-					meshIndex++;
 				}
 			});
 		}
@@ -329,12 +384,7 @@ export class App {
 	 * Check if a color is white or very close to white
 	 */
 	private isWhiteColor(color: THREE.Color): boolean {
-		const tolerance = 0.1;
-		return (
-			color.r > 1 - tolerance &&
-			color.g > 1 - tolerance &&
-			color.b > 1 - tolerance
-		);
+		return color.r > 0.9 && color.g > 0.9 && color.b > 0.9;
 	}
 
 	/**
