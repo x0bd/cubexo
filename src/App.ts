@@ -17,7 +17,7 @@ export class App {
 	private themeManager: ThemeManager; // Declared themeManager property
 	private isInitialized = false;
 	private loaderElement: HTMLElement | null;
-	private activeModelIdx = 0; // Use first model (chicken)
+	private activeModelIdx = 0; // Use first model (flower)
 	private userModels: { name: string; url: string; model: THREE.Group }[] =
 		[];
 
@@ -92,17 +92,17 @@ export class App {
 			this.activeModelIdx = newIndex;
 		});
 
-		// Load the chicken model
+		// Load the flower model
 		this.loadModels();
 	}
 
 	private loadModels(): void {
 		// Show loading message
 		if (this.loaderElement) {
-			this.loaderElement.innerHTML = "Loading chicken model...";
+			this.loaderElement.innerHTML = "Loading flower model...";
 		}
 
-		// Get model URLs (should be just one now - the chicken)
+		// Get model URLs (should be just one now - the flower)
 		const modelURLs = this.modelLoader.getURLs();
 
 		// Log for debugging
@@ -111,17 +111,20 @@ export class App {
 		// No need to create preview element since we've removed the model panel
 		// this.modelSelector.createPreviewElement(0);
 
-		// Load the chicken model
+		// Load the flower model
 		const url = modelURLs[0];
-		console.log(`Loading chicken model: ${url}`);
+		console.log(`Loading flower model: ${url}`);
 
 		this.modelLoader.loadModel(
 			url,
 			(model) => {
-				console.log(`Chicken model loaded successfully`);
+				console.log(`Flower model loaded successfully`);
 
 				// Get model name from URL
 				const name = this.modelLoader.getModelNameFromUrl(url);
+
+				// Preprocess model to ensure colors are preserved, similar to uploaded models
+				this.preprocessModel(model);
 
 				// Store model data but don't create preview
 				const modelData = {
@@ -136,14 +139,14 @@ export class App {
 				// Voxelize the model
 				const modelVoxels = this.voxelizer.voxelizeModel(0, model);
 				console.log(
-					`Chicken model voxelized with ${modelVoxels.length} voxels`
+					`Flower model voxelized with ${modelVoxels.length} voxels`
 				);
 
 				// Add voxels to the viewer
 				this.viewer.addVoxelsForModel(0, modelVoxels);
 
 				// Start rendering
-				console.log("Chicken model loaded, starting render loop");
+				console.log("Flower model loaded, starting render loop");
 				if (this.loaderElement) {
 					this.loaderElement.innerHTML = "Calculating voxels...";
 				}
@@ -166,8 +169,171 @@ export class App {
 				this.viewer.setActiveModel(0);
 			},
 			(error) => {
-				console.error(`Error loading chicken model:`, error);
+				console.error(`Error loading flower model:`, error);
 			}
+		);
+	}
+
+	/**
+	 * Preprocess model to ensure colors are preserved, similar to how ModelUploader handles it
+	 */
+	private preprocessModel(model: THREE.Group): void {
+		// Ensure all objects in the model preserve colors
+		model.traverse((obj) => {
+			if (obj instanceof THREE.Mesh) {
+				obj.castShadow = true;
+				obj.receiveShadow = true;
+
+				// Handle different material types while preserving colors
+				if (obj.material) {
+					// Handle material arrays
+					if (Array.isArray(obj.material)) {
+						obj.material = obj.material.map((mat) =>
+							this.processMaterial(mat)
+						);
+					} else {
+						obj.material = this.processMaterial(obj.material);
+					}
+				}
+			}
+		});
+
+		// Add vibrant colors if model has very few or no colors
+		this.ensureVibrantColors(model);
+	}
+
+	/**
+	 * Process a material to ensure it's suitable for voxelization while preserving color
+	 */
+	private processMaterial(material: THREE.Material): THREE.Material {
+		// If it's already a standard material, just ensure properties are set
+		if (material instanceof THREE.MeshStandardMaterial) {
+			const newMat = material.clone();
+			newMat.roughness = 0.3;
+			newMat.metalness = 0.2;
+			return newMat;
+		}
+
+		// Extract color from various material types
+		let color = new THREE.Color(0xffffff);
+
+		// Try to get the color from the material - preserve original colors
+		if ("color" in material && material.color instanceof THREE.Color) {
+			color = material.color.clone();
+		} else if (
+			"emissive" in material &&
+			material.emissive instanceof THREE.Color
+		) {
+			// MeshPhongMaterial and MeshStandardMaterial have emissive
+			color = material.emissive.clone();
+		} else if ("map" in material && material.map) {
+			// If there's a texture, use a consistent color based on the texture
+			// Generate a deterministic color from the texture
+			let textureId = 0;
+			const map = material.map as THREE.Texture;
+
+			if (map && typeof map === "object" && "uuid" in map) {
+				// Create a simple hash from the UUID string
+				textureId = map.uuid
+					.split("")
+					.reduce((acc: number, char: string) => {
+						return (acc << 5) - acc + char.charCodeAt(0);
+					}, 0);
+			} else {
+				// Fallback to a random number if no UUID
+				textureId = Math.floor(Math.random() * 100);
+			}
+
+			// Generate a color based on the hash (consistent for same texture)
+			const hue = Math.abs(textureId % 100) / 100;
+			color = new THREE.Color().setHSL(hue, 0.85, 0.5);
+		}
+
+		// Create a new standard material with the extracted color
+		const stdMaterial = new THREE.MeshStandardMaterial({
+			color: color,
+			roughness: 0.3,
+			metalness: 0.2,
+		});
+
+		return stdMaterial;
+	}
+
+	/**
+	 * Ensure the model has vibrant colors for better voxelization results
+	 */
+	private ensureVibrantColors(model: THREE.Group): void {
+		// Count meshes with actual color information
+		let coloredMeshCount = 0;
+		let totalMeshCount = 0;
+
+		model.traverse((obj) => {
+			if (obj instanceof THREE.Mesh) {
+				totalMeshCount++;
+
+				// Check if this mesh has a non-white color
+				if (obj.material) {
+					const materials = Array.isArray(obj.material)
+						? obj.material
+						: [obj.material];
+
+					for (const mat of materials) {
+						if (
+							"color" in mat &&
+							mat.color instanceof THREE.Color &&
+							!this.isWhiteColor(mat.color)
+						) {
+							coloredMeshCount++;
+							break;
+						}
+					}
+				}
+			}
+		});
+
+		// If less than 30% of meshes have color, add vibrant colors
+		if (totalMeshCount > 0 && coloredMeshCount / totalMeshCount < 0.3) {
+			console.log("Adding vibrant colors to model");
+			let meshIndex = 0;
+
+			model.traverse((obj) => {
+				if (obj instanceof THREE.Mesh) {
+					// Generate a vibrant color based on mesh index
+					const hue = (meshIndex * 0.618033988749895) % 1; // Golden ratio distribution
+					const color = new THREE.Color().setHSL(
+						hue,
+						0.85,
+						0.5 + Math.random() * 0.2
+					);
+
+					// Apply to materials
+					if (obj.material) {
+						if (Array.isArray(obj.material)) {
+							for (let i = 0; i < obj.material.length; i++) {
+								if ("color" in obj.material[i]) {
+									obj.material[i].color = color.clone();
+								}
+							}
+						} else if ("color" in obj.material) {
+							obj.material.color = color;
+						}
+					}
+
+					meshIndex++;
+				}
+			});
+		}
+	}
+
+	/**
+	 * Check if a color is white or very close to white
+	 */
+	private isWhiteColor(color: THREE.Color): boolean {
+		const tolerance = 0.1;
+		return (
+			color.r > 1 - tolerance &&
+			color.g > 1 - tolerance &&
+			color.b > 1 - tolerance
 		);
 	}
 
