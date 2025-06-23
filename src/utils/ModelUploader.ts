@@ -73,9 +73,9 @@ export class ModelUploader {
 		box.getCenter(center);
 
 		// Log original model dimensions for debugging
-		console.log('ModelUploader - Original model dimensions:', {
+		console.log("ModelUploader - Original model dimensions:", {
 			size: size,
-			center: center
+			center: center,
 		});
 
 		// Calculate scale to normalize the model so its largest dimension is 1 (unit size)
@@ -85,16 +85,19 @@ export class ModelUploader {
 			scale = 1.0 / maxDim; // Normalize to unit size
 		}
 
-		console.log('ModelUploader - Normalizing to unit size with scale factor:', scale);
+		console.log(
+			"ModelUploader - Normalizing to unit size with scale factor:",
+			scale
+		);
 
 		// Apply transformations to center and scale the model
 		model.position.copy(center).multiplyScalar(-scale); // Center based on the new scale
 		model.scale.set(scale, scale, scale); // Set scale to normalize
 
 		// Log final model state
-		console.log('ModelUploader - Final model position and scale:', {
+		console.log("ModelUploader - Final model position and scale:", {
 			position: model.position,
-			scale: model.scale
+			scale: model.scale,
 		});
 
 		// Ensure all objects in the model cast shadows and preserve colors
@@ -141,33 +144,119 @@ export class ModelUploader {
 		// Try to get the color from the material - preserve original colors
 		if ("color" in material && material.color instanceof THREE.Color) {
 			color = material.color.clone();
+
+			// Log the RGB values for debugging
+			console.log(
+				"Material color found:",
+				color.r.toFixed(2),
+				color.g.toFixed(2),
+				color.b.toFixed(2)
+			);
+
+			// Special handling for red colors - ensure they're preserved
+			if (color.r > 0.7 && color.g < 0.3 && color.b < 0.3) {
+				console.log("Red color detected and preserved");
+				// Enhance red to make it more vibrant
+				color.r = Math.max(color.r, 0.9);
+				color.g = Math.min(color.g, 0.2);
+				color.b = Math.min(color.b, 0.2);
+			}
+
+			// Special handling for white colors
+			if (color.r > 0.9 && color.g > 0.9 && color.b > 0.9) {
+				console.log("White color detected and preserved");
+				color.setRGB(1, 1, 1); // Pure white
+			}
 		} else if (
 			"emissive" in material &&
-			material.emissive instanceof THREE.Color
+			material.emissive instanceof THREE.Color &&
+			!material.emissive.equals(new THREE.Color(0x000000)) // Only use emissive if it's not black
 		) {
 			// MeshPhongMaterial and MeshStandardMaterial have emissive
 			color = material.emissive.clone();
+			console.log(
+				"Using emissive color:",
+				color.r.toFixed(2),
+				color.g.toFixed(2),
+				color.b.toFixed(2)
+			);
 		} else if ("map" in material && material.map) {
+			// Check material name for color hints
+			if (material.name) {
+				const matName = material.name.toLowerCase();
+				if (matName.includes("red")) {
+					console.log("Red material name detected:", material.name);
+					color.setRGB(0.95, 0.1, 0.1); // Vibrant red
+					return new THREE.MeshStandardMaterial({
+						color: color,
+						roughness: 0.3,
+						metalness: 0.2,
+					});
+				}
+				if (matName.includes("white")) {
+					console.log("White material name detected:", material.name);
+					color.setRGB(1, 1, 1); // Pure white
+					return new THREE.MeshStandardMaterial({
+						color: color,
+						roughness: 0.3,
+						metalness: 0.2,
+					});
+				}
+			}
+
 			// If there's a texture, use a consistent color based on the texture
 			// Generate a deterministic color from the texture
 			let textureId = 0;
 			const map = material.map as THREE.Texture;
 
 			if (map && typeof map === "object" && "uuid" in map) {
+				// Check texture name for color hints
+				if (map.name) {
+					const texName = map.name.toLowerCase();
+					if (texName.includes("red")) {
+						console.log("Red texture name detected:", map.name);
+						color.setRGB(0.95, 0.1, 0.1); // Vibrant red
+						return new THREE.MeshStandardMaterial({
+							color: color,
+							roughness: 0.3,
+							metalness: 0.2,
+						});
+					}
+					if (texName.includes("white")) {
+						console.log("White texture name detected:", map.name);
+						color.setRGB(1, 1, 1); // Pure white
+						return new THREE.MeshStandardMaterial({
+							color: color,
+							roughness: 0.3,
+							metalness: 0.2,
+						});
+					}
+				}
+
 				// Create a simple hash from the UUID string
 				textureId = map.uuid
 					.split("")
 					.reduce((acc: number, char: string) => {
 						return (acc << 5) - acc + char.charCodeAt(0);
 					}, 0);
+
+				// Bias towards red for certain hash values (40% chance)
+				const hashMod = Math.abs(textureId % 100);
+				if (hashMod < 40) {
+					console.log("Selected red from hash bias");
+					color.setRGB(0.95, 0.1, 0.1); // Vibrant red
+				} else {
+					// Generate a color based on the hash (consistent for same texture)
+					const hue = Math.abs(textureId % 100) / 100;
+					color = new THREE.Color().setHSL(hue, 0.85, 0.5);
+				}
 			} else {
 				// Fallback to a random number if no UUID
 				textureId = Math.floor(Math.random() * 100);
+				// Generate a color based on the hash (consistent for same texture)
+				const hue = Math.abs(textureId % 100) / 100;
+				color = new THREE.Color().setHSL(hue, 0.85, 0.5);
 			}
-
-			// Generate a color based on the hash (consistent for same texture)
-			const hue = Math.abs(textureId % 100) / 100;
-			color = new THREE.Color().setHSL(hue, 0.85, 0.5);
 		}
 
 		// Create a new standard material with the extracted color
@@ -188,6 +277,8 @@ export class ModelUploader {
 		// Count meshes with actual color information
 		let coloredMeshCount = 0;
 		let totalMeshCount = 0;
+		let hasRedMesh = false;
+		let hasWhiteMesh = false;
 
 		model.traverse((obj) => {
 			if (obj instanceof THREE.Mesh) {
@@ -205,8 +296,21 @@ export class ModelUploader {
 							mat.color instanceof THREE.Color
 						) {
 							const c = mat.color;
+							// Check for red color
+							if (c.r > 0.7 && c.g < 0.3 && c.b < 0.3) {
+								hasRedMesh = true;
+								coloredMeshCount++;
+								console.log("Found red mesh in model");
+								break;
+							}
+							// Check for white color
+							else if (c.r > 0.9 && c.g > 0.9 && c.b > 0.9) {
+								hasWhiteMesh = true;
+								// Don't increment coloredMeshCount for white
+								console.log("Found white mesh in model");
+							}
 							// Only count as colored if it's not close to white
-							if (!(c.r > 0.9 && c.g > 0.9 && c.b > 0.9)) {
+							else if (!(c.r > 0.9 && c.g > 0.9 && c.b > 0.9)) {
 								coloredMeshCount++;
 								break;
 							}
@@ -216,9 +320,24 @@ export class ModelUploader {
 			}
 		});
 
+		// Log statistics about the model's colors
+		console.log(
+			`Model color stats: ${coloredMeshCount}/${totalMeshCount} colored meshes (${(
+				(coloredMeshCount / Math.max(1, totalMeshCount)) *
+				100
+			).toFixed(1)}%)`
+		);
+		console.log(
+			`Has red meshes: ${hasRedMesh}, Has white meshes: ${hasWhiteMesh}`
+		);
+
 		// If model has almost no color (very white or no colors at all)
+		// AND doesn't have red meshes (we don't want to override red)
 		// ONLY then add colors (less aggressive than before)
-		if (coloredMeshCount / Math.max(1, totalMeshCount) < 0.1) {
+		if (
+			coloredMeshCount / Math.max(1, totalMeshCount) < 0.1 &&
+			!hasRedMesh
+		) {
 			console.log("Model has almost no colors, adding basic colors");
 
 			// Use a more limited palette with fewer colors for consistency
@@ -263,6 +382,56 @@ export class ModelUploader {
 					}
 				}
 			});
+		}
+		// If model has some colors but they're too subtle, enhance them
+		// But ONLY if there are no red meshes (we don't want to override red)
+		else if (
+			coloredMeshCount / Math.max(1, totalMeshCount) < 0.3 &&
+			!hasRedMesh
+		) {
+			console.log(
+				"Model has some colors but they're subtle, enhancing saturation"
+			);
+
+			model.traverse((obj) => {
+				if (obj instanceof THREE.Mesh) {
+					const materials = Array.isArray(obj.material)
+						? obj.material
+						: [obj.material];
+
+					materials.forEach((mat) => {
+						if (
+							"color" in mat &&
+							mat.color instanceof THREE.Color
+						) {
+							const c = mat.color;
+
+							// Skip white and red colors
+							if (
+								(c.r > 0.9 && c.g > 0.9 && c.b > 0.9) ||
+								(c.r > 0.7 && c.g < 0.3 && c.b < 0.3)
+							) {
+								return;
+							}
+
+							// Convert to HSL to enhance saturation
+							const hsl = { h: 0, s: 0, l: 0 };
+							c.getHSL(hsl);
+
+							// Boost saturation by 30% but cap at 0.9
+							hsl.s = Math.min(0.9, hsl.s * 1.3);
+
+							// Ensure lightness is not too dark or too light
+							hsl.l = Math.max(0.3, Math.min(0.7, hsl.l));
+
+							// Apply enhanced color
+							c.setHSL(hsl.h, hsl.s, hsl.l);
+						}
+					});
+				}
+			});
+		} else {
+			console.log("Model has sufficient colors, not modifying colors");
 		}
 	}
 

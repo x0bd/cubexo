@@ -178,6 +178,10 @@ export class App {
 	 * Preprocess model to ensure colors are preserved, similar to how ModelUploader handles it
 	 */
 	private preprocessModel(model: THREE.Group): void {
+		// Check if this is likely the default model or an uploaded model
+		const isDefaultModel = this.userModels.length === 0;
+		console.log("Processing model, isDefaultModel:", isDefaultModel);
+
 		// Ensure all objects in the model preserve colors
 		model.traverse((obj) => {
 			if (obj instanceof THREE.Mesh) {
@@ -198,8 +202,13 @@ export class App {
 			}
 		});
 
-		// Add vibrant colors if model has very few or no colors
-		this.ensureVibrantColors(model);
+		// Only add vibrant colors for the default model
+		// For uploaded models, we want to preserve the original colors
+		if (isDefaultModel) {
+			this.ensureVibrantColors(model);
+		} else {
+			console.log("Skipping color enhancement for uploaded model");
+		}
 	}
 
 	/**
@@ -220,9 +229,32 @@ export class App {
 		// Try to get the color from the material - preserve original colors
 		if ("color" in material && material.color instanceof THREE.Color) {
 			color = material.color.clone();
+
+			// Log color for debugging
+			console.log(
+				`Material color found: r=${color.r.toFixed(
+					2
+				)}, g=${color.g.toFixed(2)}, b=${color.b.toFixed(2)}`
+			);
+
+			// Check if it's a red material - ensure we preserve red colors
+			if (color.r > 0.7 && color.g < 0.3 && color.b < 0.3) {
+				console.log("Preserving red color");
+				// Make sure it's a vibrant red
+				color.r = Math.max(color.r, 0.9);
+				color.g = Math.min(color.g, 0.2);
+				color.b = Math.min(color.b, 0.2);
+			}
+
+			// Check if it's a white material - ensure we preserve white colors
+			if (color.r > 0.9 && color.g > 0.9 && color.b > 0.9) {
+				console.log("Preserving white color");
+				color.setRGB(1, 1, 1);
+			}
 		} else if (
 			"emissive" in material &&
-			material.emissive instanceof THREE.Color
+			material.emissive instanceof THREE.Color &&
+			!material.emissive.equals(new THREE.Color(0x000000)) // Only use emissive if it's not black
 		) {
 			// MeshPhongMaterial and MeshStandardMaterial have emissive
 			color = material.emissive.clone();
@@ -231,6 +263,33 @@ export class App {
 			// Generate a deterministic color from the texture
 			let textureId = 0;
 			const map = material.map as THREE.Texture;
+
+			// Check if material name contains color hints
+			if (material.name) {
+				const name = material.name.toLowerCase();
+				if (name.includes("red")) {
+					console.log("Material name suggests red color");
+					return new THREE.MeshStandardMaterial({
+						color: new THREE.Color(0xf44336),
+						roughness: 0.3,
+						metalness: 0.2,
+					});
+				} else if (name.includes("white")) {
+					console.log("Material name suggests white color");
+					return new THREE.MeshStandardMaterial({
+						color: new THREE.Color(0xffffff),
+						roughness: 0.3,
+						metalness: 0.2,
+					});
+				} else if (name.includes("blue")) {
+					console.log("Material name suggests blue color");
+					return new THREE.MeshStandardMaterial({
+						color: new THREE.Color(0x2196f3),
+						roughness: 0.3,
+						metalness: 0.2,
+					});
+				}
+			}
 
 			if (map && typeof map === "object" && "uuid" in map) {
 				// Create a simple hash from the UUID string
@@ -245,8 +304,9 @@ export class App {
 			}
 
 			// Generate a color based on the hash (consistent for same texture)
+			// Use a more conservative saturation and lightness
 			const hue = Math.abs(textureId % 100) / 100;
-			color = new THREE.Color().setHSL(hue, 0.85, 0.5);
+			color = new THREE.Color().setHSL(hue, 0.7, 0.5);
 		}
 
 		// Create a new standard material with the extracted color
@@ -266,6 +326,8 @@ export class App {
 		// Count meshes with actual color information
 		let coloredMeshCount = 0;
 		let totalMeshCount = 0;
+		let hasRedMesh = false;
+		let hasWhiteMesh = false;
 
 		model.traverse((obj) => {
 			if (obj instanceof THREE.Mesh) {
@@ -283,8 +345,17 @@ export class App {
 							mat.color instanceof THREE.Color
 						) {
 							const c = mat.color;
-							// Only count as colored if it's not close to white
-							if (!(c.r > 0.9 && c.g > 0.9 && c.b > 0.9)) {
+
+							// Check for red-ish colors
+							if (c.r > 0.7 && c.g < 0.3 && c.b < 0.3) {
+								hasRedMesh = true;
+							}
+
+							// Check for white colors
+							if (c.r > 0.9 && c.g > 0.9 && c.b > 0.9) {
+								hasWhiteMesh = true;
+							} else {
+								// Only count as colored if it's not close to white
 								coloredMeshCount++;
 								break;
 							}
@@ -294,9 +365,17 @@ export class App {
 			}
 		});
 
+		console.log(
+			`Model color stats: ${coloredMeshCount}/${totalMeshCount} colored meshes, hasRed: ${hasRedMesh}, hasWhite: ${hasWhiteMesh}`
+		);
+
 		// If model has almost no color (very white or no colors at all)
-		// ONLY then add colors (less aggressive than before)
-		if (coloredMeshCount / Math.max(1, totalMeshCount) < 0.1) {
+		// AND doesn't have specific colors we want to preserve (like red)
+		// ONLY then add colors
+		if (
+			coloredMeshCount / Math.max(1, totalMeshCount) < 0.1 &&
+			!hasRedMesh
+		) {
 			console.log("Model has almost no colors, adding vibrant colors");
 
 			// Use a more vibrant palette with carefully selected colors
@@ -344,9 +423,14 @@ export class App {
 					}
 				}
 			});
-		} else {
+		} else if (
+			coloredMeshCount / Math.max(1, totalMeshCount) < 0.3 &&
+			!hasRedMesh
+		) {
 			// If model has some colors but they might be too subtle,
-			// enhance their saturation and brightness
+			// enhance their saturation and brightness ONLY if there are no red meshes
+			console.log("Model has some colors, enhancing existing colors");
+
 			model.traverse((obj) => {
 				if (obj instanceof THREE.Mesh) {
 					if (obj.material) {
@@ -359,24 +443,37 @@ export class App {
 								"color" in mat &&
 								mat.color instanceof THREE.Color
 							) {
-								// Convert to HSL to adjust saturation and lightness
-								const hsl = { h: 0, s: 0, l: 0 };
-								mat.color.getHSL(hsl);
+								// Only enhance non-white, non-red colors
+								const c = mat.color;
+								const isWhite =
+									c.r > 0.9 && c.g > 0.9 && c.b > 0.9;
+								const isRed =
+									c.r > 0.7 && c.g < 0.3 && c.b < 0.3;
 
-								// Boost saturation and ensure good lightness level
-								hsl.s = Math.min(1.0, hsl.s * 1.5); // Increase saturation by 50%
+								if (!isWhite && !isRed) {
+									// Convert to HSL to adjust saturation and lightness
+									const hsl = { h: 0, s: 0, l: 0 };
+									mat.color.getHSL(hsl);
 
-								// Ensure lightness is in a good range (not too dark or light)
-								if (hsl.l < 0.3) hsl.l = 0.3;
-								if (hsl.l > 0.8) hsl.l = 0.8;
+									// Boost saturation slightly
+									hsl.s = Math.min(1.0, hsl.s * 1.2); // Increase saturation by 20%
 
-								// Apply the enhanced color
-								mat.color.setHSL(hsl.h, hsl.s, hsl.l);
+									// Ensure lightness is in a good range (not too dark or light)
+									if (hsl.l < 0.3) hsl.l = 0.3;
+									if (hsl.l > 0.8) hsl.l = 0.8;
+
+									// Apply the enhanced color
+									mat.color.setHSL(hsl.h, hsl.s, hsl.l);
+								}
 							}
 						}
 					}
 				}
 			});
+		} else {
+			console.log(
+				"Model already has good colors, preserving original colors"
+			);
 		}
 	}
 
