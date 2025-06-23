@@ -8,6 +8,7 @@ import { GIFEncoder, quantize, applyPalette } from "gifenc"; // Add the gifenc i
 
 export class VoxelModelViewer {
 	private matrixUpdateTween: gsap.core.Tween | null = null;
+	private activeEffectTimeline: gsap.core.Timeline | null = null;
 	private renderer: THREE.WebGLRenderer | null = null;
 	private scene: THREE.Scene | null = null;
 	private camera: THREE.PerspectiveCamera | null = null;
@@ -2021,18 +2022,30 @@ export class VoxelModelViewer {
 	public applyPulseEffect(): void {
 		if (!this.instancedMesh) return;
 
-		// Kill any ongoing global matrix update tween from a previous effect
-		if (this.matrixUpdateTween) {
-			this.matrixUpdateTween.kill();
-			this.matrixUpdateTween = null;
+		// Kill any existing effect timeline to prevent overlaps.
+		if (this.activeEffectTimeline) {
+			this.activeEffectTimeline.kill();
 		}
 
-		// Kill existing tweens for all voxel positions to prevent conflicts
-		for (let i = 0; i < this.instancedMesh.count; i++) {
-			if (this.liveVoxels[i]) {
-				gsap.killTweensOf(this.liveVoxels[i].position);
-			}
-		}
+		// This single timeline will manage the entire effect for cleanliness and control.
+		this.activeEffectTimeline = gsap.timeline({
+			onUpdate: () => {
+				// On every frame of the animation, we must update the matrix for each live voxel.
+				// This was the missing piece that made the animation seem broken.
+				if (this.instancedMesh) {
+					for (let i = 0; i < this.instancedMesh.count; i++) {
+						if (this.liveVoxels[i]) {
+							this.updateMatrix(i); // This copies the GSAP-updated position into the mesh
+						}
+					}
+				}
+			},
+			onComplete: () => {
+				// Final cleanup and state reset.
+				this.forceResetAllVoxelPositions(); // Ensure voxels are perfectly reset.
+				this.activeEffectTimeline = null; // Clear reference.
+			},
+		});
 
 		// Calculate the center of the model
 		const center = new THREE.Vector3();
@@ -2048,14 +2061,11 @@ export class VoxelModelViewer {
 		}
 
 		// Pulse parameters
-		const pulseDuration = 0.6; // Time to expand outward
-		const returnDuration = 0.9; // Time to return to original position
-		const pulseDelay = 0.05; // Delay between pulses
-		const numPulses = 3; // Number of pulse cycles
-		const maxPulseDistance = 0.5; // Maximum distance to move outward
-
-		const totalDuration =
-			(pulseDuration + returnDuration + pulseDelay) * numPulses;
+		const pulseDuration = 1.2; // Time to expand outward
+		const returnDuration = 1.5; // Time to return to original position
+		const pulseDelay = 0.0; // No delay needed for a single pulse
+		const numPulses = 1; // Number of pulse cycles
+		const maxPulseDistance = 0.8; // Maximum distance to move outward
 
 		for (let i = 0; i < this.instancedMesh.count; i++) {
 			const voxelInfo = this.liveVoxels[i];
@@ -2068,72 +2078,42 @@ export class VoxelModelViewer {
 				.subVectors(originalPosition, center)
 				.normalize();
 
-			// Create timeline for this voxel
-			const tl = gsap.timeline({
-				onUpdate: () => {
-					this.updateMatrix(i);
-				},
-			});
-
-			// Add pulse cycles
+			// Add this voxel's animations to the master timeline
 			for (let j = 0; j < numPulses; j++) {
-				// Calculate pulse position (outward from center)
 				const pulsePosition = new THREE.Vector3()
 					.copy(originalPosition)
 					.add(direction.clone().multiplyScalar(maxPulseDistance));
 
-				// Pulse outward
-				tl.to(voxelInfo.position, {
-					x: pulsePosition.x,
-					y: pulsePosition.y,
-					z: pulsePosition.z,
-					duration: pulseDuration,
-					ease: "power2.out",
-				});
+				// The start time for this specific pulse cycle
+				const startTime =
+					j * (pulseDuration + returnDuration + pulseDelay);
 
-				// Return to original position
-				tl.to(voxelInfo.position, {
-					x: originalPosition.x,
-					y: originalPosition.y,
-					z: originalPosition.z,
-					duration: returnDuration,
-					ease: "elastic.out(1.2, 0.4)",
-				});
+				// Pulse outward, added at the calculated start time
+				this.activeEffectTimeline.to(
+					voxelInfo.position,
+					{
+						x: pulsePosition.x,
+						y: pulsePosition.y,
+						z: pulsePosition.z,
+						duration: pulseDuration,
+						ease: "power2.out",
+					},
+					startTime
+				);
 
-				// Add delay between pulses if not the last pulse
-				if (j < numPulses - 1) {
-					tl.to({}, { duration: pulseDelay });
-				}
+				// Return to original position, starting after the outward pulse
+				this.activeEffectTimeline.to(
+					voxelInfo.position,
+					{
+						x: originalPosition.x,
+						y: originalPosition.y,
+						z: originalPosition.z,
+						duration: returnDuration,
+						ease: "elastic.out(1.2, 0.4)",
+					},
+					startTime + pulseDuration
+				);
 			}
-		}
-
-		// Ensure instanceMatrix.needsUpdate is set throughout the animations
-		if (this.instancedMesh) {
-			this.matrixUpdateTween = gsap.to(
-				{},
-				{
-					duration: totalDuration,
-					onUpdate: () => {
-						if (this.instancedMesh) {
-							this.instancedMesh.instanceMatrix.needsUpdate =
-								true;
-						}
-					},
-					onComplete: () => {
-						// Final update to ensure all matrices are correct
-						if (this.instancedMesh) {
-							for (let k = 0; k < this.instancedMesh.count; k++) {
-								if (this.liveVoxels[k]) {
-									this.updateMatrix(k);
-								}
-							}
-							this.instancedMesh.instanceMatrix.needsUpdate =
-								true;
-						}
-						this.matrixUpdateTween = null; // Clear the reference
-					},
-				}
-			);
 		}
 
 		// Show a notification that the effect was applied

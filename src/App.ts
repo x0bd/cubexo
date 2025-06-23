@@ -740,7 +740,7 @@ export class App {
 						"bg-indigo-700/90",
 						"border-indigo-600/70"
 					);
-				}, 4700); // Duration slightly longer than the effect
+				}, 2800); // Adjusted for a single, longer pulse effect
 			});
 		}
 
