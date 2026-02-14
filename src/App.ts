@@ -4,7 +4,7 @@ import { ModelSelector } from "./components/ModelSelector";
 import { Voxelizer } from "./models/Voxelizer";
 import * as THREE from "three";
 import gsap from "gsap";
-import { ExportFormat } from "./utils/ModelExporter";
+
 import { ModelUploader } from "./utils/ModelUploader";
 import { ThemeManager } from "./utils/theme"; // Added import for ThemeManager
 
@@ -64,7 +64,7 @@ export class App {
 		this.setupNotificationListener();
 
 		// Minimal setup for modelSelector - we only need it for the active model tracking
-		this.modelSelector.init((oldIdx, newIdx) => {
+		this.modelSelector.init((_, newIdx) => {
 			if (this.viewer) {
 				this.viewer.setActiveModel(newIdx);
 			}
@@ -480,9 +480,7 @@ export class App {
 	/**
 	 * Check if a color is white or very close to white
 	 */
-	private isWhiteColor(color: THREE.Color): boolean {
-		return color.r > 0.9 && color.g > 0.9 && color.b > 0.9;
-	}
+
 
 	/**
 	 * Setup the export panel buttons functionality

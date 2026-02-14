@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import type { ModelData } from "../types/types";
+
 
 export class ModelLoader {
 	private gltfLoader: GLTFLoader;

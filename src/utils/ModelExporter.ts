@@ -5,12 +5,14 @@ import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
-export enum ExportFormat {
-	OBJ = "obj",
-	STL = "stl",
-	GLTF = "gltf",
-	GLB = "glb",
-}
+export const ExportFormat = {
+	OBJ: "obj",
+	STL: "stl",
+	GLTF: "gltf",
+	GLB: "glb",
+} as const;
+
+export type ExportFormat = (typeof ExportFormat)[keyof typeof ExportFormat];
 
 export class ModelExporter {
 	/**

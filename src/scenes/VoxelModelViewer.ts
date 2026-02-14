@@ -945,7 +945,7 @@ export class VoxelModelViewer {
 		});
 
 		// Mouse up event to detect clicks vs. drags
-		this.canvasElement.addEventListener("mouseup", (event) => {
+		this.canvasElement.addEventListener("mouseup", (_) => {
 			if (!this.isInteractionEnabled) return;
 
 			// Only trigger click if not dragging and a voxel is hovered
@@ -1013,7 +1013,7 @@ export class VoxelModelViewer {
 			}
 		});
 
-		this.canvasElement.addEventListener("touchend", (event) => {
+		this.canvasElement.addEventListener("touchend", (_) => {
 			if (!this.isInteractionEnabled) return;
 
 			// Only trigger click if not dragging and a voxel is hovered

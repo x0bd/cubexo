@@ -1,77 +1,11 @@
-import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { ModelData, Voxel } from "../types/types";
+
+import type { ModelData } from "../types/types";
 
 // Helper function (can be outside the class or a static method if preferred)
 // This is similar to the one in VoxelModelViewer but operates on THREE.Group
 // THIS FUNCTION IS NO LONGER USED FOR PREVIEWS if static images are used.
 // It might still be useful if you have other places where you need to center/scale models in a scene.
-function centerAndScaleModelInPreviewScene(
-	model: THREE.Group,
-	scene: THREE.Scene,
-	fitScale: number,
-	modelName?: string
-): void {
-	// Remove previous model/wrapper to avoid duplicates
-	const existingWrapper = scene.getObjectByName("previewModelWrapper");
-	if (existingWrapper) {
-		scene.remove(existingWrapper);
-		// Ideally, traverse and dispose geometries/materials if they are not shared,
-		// but this can be complex if models share resources. For now, just remove.
-		// existingWrapper.traverse((object) => {
-		// 	if (object instanceof THREE.Mesh) {
-		// 		object.geometry.dispose();
-		// 		if (object.material instanceof Array) {
-		// 			object.material.forEach(material => material.dispose());
-		// 		} else if (object.material) {
-		// 			object.material.dispose();
-		// 		}
-		// 	}
-		// });
-	}
 
-	const wrapper = new THREE.Group();
-	wrapper.name = "previewModelWrapper";
-
-	// Clone the model to avoid modifying the original modelData.model
-	// and to ensure transformations are applied to a fresh instance for this preview.
-	const modelClone = model.clone();
-
-	const box = new THREE.Box3().setFromObject(modelClone);
-	const center = new THREE.Vector3();
-	box.getCenter(center);
-
-	modelClone.position.sub(center); // Center the clone *within* the wrapper
-
-	wrapper.add(modelClone);
-
-	const size = new THREE.Vector3();
-	box.getSize(size); // Get size from the clone's bounding box
-	const maxDim = Math.max(size.x, size.y, size.z);
-
-	if (maxDim > 0) {
-		const scaleFactor = fitScale / maxDim;
-		wrapper.scale.setScalar(scaleFactor);
-	} else {
-		// If model has no dimensions (e.g., empty group), set a default small scale
-		// to prevent issues with zero or infinite scales.
-		wrapper.scale.setScalar(0.1);
-		console.warn(
-			`Model has zero max dimension, applying default small scale to wrapper. Model name: ${
-				modelName || "Unknown"
-			}`,
-			model
-		);
-	}
-
-	scene.add(wrapper);
-
-	// Ensure orbit controls for this preview target the model's new center (wrapper's origin)
-	if (scene.userData.orbit) {
-		scene.userData.orbit.target.set(0, 0, 0);
-		scene.userData.orbit.update();
-	}
-}
 
 export class ModelSelector {
 	private selectorElement: HTMLElement | null;
@@ -84,9 +18,7 @@ export class ModelSelector {
 	private modelSelectedCallback:
 		| ((oldIndex: number, newIndex: number) => void)
 		| null = null;
-	private currentModelIndex = 0;
-	private isModelSwitchInProgress = false;
-	private modelSwitchDebounceTimeout: number | null = null;
+
 	private models: ModelData[] = [];
 
 	constructor() {

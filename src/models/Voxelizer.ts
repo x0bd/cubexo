@@ -57,7 +57,7 @@ export class Voxelizer {
 		const bboxMax = new THREE.Vector3();
 		
 		const voxelBox = new THREE.Box3();
-		const halfGrid = new THREE.Vector3(gridSize/2, gridSize/2, gridSize/2);
+
 
 		// Traverse all meshes in the scene
 		importedScene.traverse((child) => {
