@@ -9,8 +9,6 @@ export class Voxelizer {
 		boxSize: 0.24,
 		boxRoundness: 0.03,
 	};
-	private rayCaster = new THREE.Raycaster();
-	private rayCasterIntersects: THREE.Intersection[] = [];
 
 	constructor(params?: Partial<AppParameters>) {
 		if (params) {
@@ -22,53 +20,10 @@ export class Voxelizer {
 		modelIdx: number,
 		importedScene: THREE.Group
 	): Voxel[] {
-		// Check if this is likely a user-uploaded model by checking the model index or name
-		const isUserModel =
-			modelIdx >= 3 ||
-			(importedScene.name && importedScene.name.includes("user"));
-		console.log(
-			`Voxelizing model ${modelIdx}, isUserModel: ${isUserModel}`
-		);
+		console.log(`Voxelizing model ${modelIdx} with Triangle-Box Intersection`);
 
-		const importedMeshes: THREE.Mesh[] = [];
-		importedScene.traverse((child) => {
-			if (child instanceof THREE.Mesh) {
-				child.material.side = THREE.DoubleSide;
-
-				// For user models, check for red and white materials and enhance them
-				if (isUserModel && child.material) {
-					const materials = Array.isArray(child.material)
-						? child.material
-						: [child.material];
-					materials.forEach((mat) => {
-						if (
-							"color" in mat &&
-							mat.color instanceof THREE.Color
-						) {
-							const c = mat.color;
-							console.log(
-								`Material color: ${c.r.toFixed(
-									2
-								)}, ${c.g.toFixed(2)}, ${c.b.toFixed(2)}`
-							);
-
-							// Enhance red colors for user models
-							if (c.r > 0.7 && c.g < 0.3 && c.b < 0.3) {
-								console.log(
-									"Enhancing red color in user model"
-								);
-								c.r = 0.95;
-								c.g = 0.05;
-								c.b = 0.05;
-							}
-						}
-					});
-				}
-
-				importedMeshes.push(child);
-			}
-		});
-
+		// Prepare the scene: verify transforms and update matrices
+		// This logic matches the previous scale/center logic
 		let boundingBox = new THREE.Box3().setFromObject(importedScene);
 		const size = boundingBox.getSize(new THREE.Vector3());
 		const scaleFactor = this.params.modelSize / size.length();
@@ -78,105 +33,123 @@ export class Voxelizer {
 
 		importedScene.scale.multiplyScalar(scaleFactor);
 		importedScene.position.copy(center);
+		importedScene.updateMatrixWorld(true);
 
+		// Re-calculate bounding box after transform to determine grid bounds
 		boundingBox = new THREE.Box3().setFromObject(importedScene);
-		boundingBox.min.y += 0.5 * this.params.gridSize; // for egg grid to look better
+		// Expand slightly to ensure boundary triangles are caught
+		const gridPad = this.params.gridSize * 0.5;
+		boundingBox.expandByScalar(gridPad);
 
-		const modelVoxels: Voxel[] = [];
+		// Grid parameters
+		const gridSize = this.params.gridSize;
+		const invGridSize = 1 / gridSize;
+		
+		// Map to store unique voxels: key "x,y,z" -> Voxel
+		const voxelMap = new Map<string, Voxel>();
+		
+		// Temporary variables for memory efficiency
+		const triangle = new THREE.Triangle();
+		const a = new THREE.Vector3();
+		const b = new THREE.Vector3();
+		const c = new THREE.Vector3();
+		const bboxMin = new THREE.Vector3();
+		const bboxMax = new THREE.Vector3();
+		
+		const voxelBox = new THREE.Box3();
+		const halfGrid = new THREE.Vector3(gridSize/2, gridSize/2, gridSize/2);
 
-		for (
-			let i = boundingBox.min.x;
-			i < boundingBox.max.x;
-			i += this.params.gridSize
-		) {
-			for (
-				let j = boundingBox.min.y;
-				j < boundingBox.max.y;
-				j += this.params.gridSize
-			) {
-				for (
-					let k = boundingBox.min.z;
-					k < boundingBox.max.z;
-					k += this.params.gridSize
-				) {
-					for (
-						let meshCnt = 0;
-						meshCnt < importedMeshes.length;
-						meshCnt++
-					) {
-						const mesh = importedMeshes[meshCnt];
+		// Traverse all meshes in the scene
+		importedScene.traverse((child) => {
+			if (child instanceof THREE.Mesh) {
+				const mesh = child;
+				const geometry = mesh.geometry;
+				const material = mesh.material;
+				
+				// Ensure we have world matrix
+				// Since we called importedScene.updateMatrixWorld(true), child matrices are up to date
+				const matrixWorld = mesh.matrixWorld;
 
-						// For user models, we want to be more careful with color extraction
-						let color: THREE.Color = new THREE.Color(0xffffff); // Initialize with default color
-						if (isUserModel) {
-							// For user models, check if the mesh material has red color
-							const materials = Array.isArray(mesh.material)
-								? mesh.material
-								: [mesh.material];
-							let hasRedColor = false;
+				// Handle geometry (BufferGeometry)
+				if (geometry.isBufferGeometry) {
+					const posAttr = geometry.attributes.position;
+					const indexAttr = geometry.index;
+					
+					// Determine color for this mesh
+					const meshColor = this.extractColorFromMaterial(material);
 
-							for (const mat of materials) {
-								if (
-									"color" in mat &&
-									mat.color instanceof THREE.Color
-								) {
-									const c = mat.color;
-									if (c.r > 0.7 && c.g < 0.3 && c.b < 0.3) {
-										// If we find a red color, use it directly
-										color = new THREE.Color(0xf44336); // Vibrant red
-										hasRedColor = true;
-										break;
+					// Helper to process a triangle
+					const processTriangle = (ia: number, ib: number, ic: number) => {
+						// Get vertices in world space
+						a.fromBufferAttribute(posAttr, ia).applyMatrix4(matrixWorld);
+						b.fromBufferAttribute(posAttr, ib).applyMatrix4(matrixWorld);
+						c.fromBufferAttribute(posAttr, ic).applyMatrix4(matrixWorld);
+
+						triangle.set(a, b, c);
+
+						// Calc triangle bounding box
+						bboxMin.copy(a).min(b).min(c);
+						bboxMax.copy(a).max(b).max(c);
+
+						// Determine grid range for this triangle
+						const iMin = Math.floor(bboxMin.x * invGridSize);
+						const iMax = Math.floor(bboxMax.x * invGridSize);
+						const jMin = Math.floor(bboxMin.y * invGridSize);
+						const jMax = Math.floor(bboxMax.y * invGridSize);
+						const kMin = Math.floor(bboxMin.z * invGridSize);
+						const kMax = Math.floor(bboxMax.z * invGridSize);
+
+						// Iterate over potential grid cells
+						for (let i = iMin; i <= iMax; i++) {
+							for (let j = jMin; j <= jMax; j++) {
+								for (let k = kMin; k <= kMax; k++) {
+									// Define the voxel box
+									const vx = i * gridSize;
+									const vy = j * gridSize;
+									const vz = k * gridSize;
+									
+									voxelBox.min.set(vx, vy, vz);
+									voxelBox.max.set(vx + gridSize, vy + gridSize, vz + gridSize);
+
+									if (triangle.intersectsBox(voxelBox)) {
+										const key = `${i},${j},${k}`;
+										
+										// If not already present, add it
+										// (We could mix colors here if we wanted to be fancy, but first win is fine)
+										if (!voxelMap.has(key)) {
+											// Center of the voxel
+											const centerV = new THREE.Vector3(vx + gridSize/2, vy + gridSize/2, vz + gridSize/2);
+											
+											voxelMap.set(key, {
+												position: centerV,
+												color: meshColor.clone()
+											});
+										}
 									}
 								}
 							}
-
-							// If no red color was found, extract normally
-							if (!hasRedColor) {
-								color = this.extractColorFromMaterial(
-									mesh.material
-								);
-							}
-						} else {
-							// For default models, use the normal extraction
-							color = this.extractColorFromMaterial(
-								mesh.material
-							);
 						}
+					};
 
-						const pos = new THREE.Vector3(i, j, k);
-
-						if (
-							this.isInsideMesh(
-								pos,
-								new THREE.Vector3(0, 0, 1),
-								mesh
-							)
-						) {
-							modelVoxels.push({
-								color: color,
-								position: pos,
-							});
-							break;
+					// Iterate over triangles
+					if (indexAttr) {
+						for (let i = 0; i < indexAttr.count; i += 3) {
+							processTriangle(indexAttr.getX(i), indexAttr.getX(i+1), indexAttr.getX(i+2));
+						}
+					} else {
+						for (let i = 0; i < posAttr.count; i += 3) {
+							processTriangle(i, i+1, i+2);
 						}
 					}
 				}
 			}
-		}
+		});
 
+		const modelVoxels = Array.from(voxelMap.values());
 		console.log(
-			`Model ${modelIdx} voxelized with ${modelVoxels.length} voxels`
+			`Model ${modelIdx} voxelized with ${modelVoxels.length} voxels (Triangle-Box Intersection)`
 		);
 		return modelVoxels;
-	}
-
-	private isInsideMesh(
-		pos: THREE.Vector3,
-		ray: THREE.Vector3,
-		mesh: THREE.Mesh
-	): boolean {
-		this.rayCaster.set(pos, ray);
-		this.rayCasterIntersects = this.rayCaster.intersectObject(mesh, false);
-		return this.rayCasterIntersects.length % 2 === 1;
 	}
 
 	/**
@@ -192,112 +165,43 @@ export class Voxelizer {
 			return this.extractColorFromMaterial(material[0]);
 		}
 
-		// Default color if we can't extract one
+		// Default color
 		const defaultColor = new THREE.Color(0xffffff);
 
 		// Try to extract color from various material types
 		if ("color" in material && material.color instanceof THREE.Color) {
-			// Most materials have a color property
 			const color = material.color.clone();
-
-			// Check if it's a red color - preserve red colors
-			if (color.r > 0.7 && color.g < 0.5 && color.b < 0.5) {
-				// Enhance red to make it more vibrant
-				color.r = Math.max(color.r, 0.9);
-				color.g = Math.min(color.g, 0.2);
-				color.b = Math.min(color.b, 0.2);
-				console.log("Detected and preserved red color");
-				return color;
-			}
-
-			// Check if it's a white color - preserve white
-			if (color.r > 0.9 && color.g > 0.9 && color.b > 0.9) {
-				console.log("Detected and preserved white color");
-				return new THREE.Color(0xffffff);
-			}
-
+            // Removed artificial color enhancement to preserve natural tones (browns, creams)
+            console.log(`Extracted color: ${color.getHexString()}`);
 			return color;
 		} else if (
 			"emissive" in material &&
 			material.emissive instanceof THREE.Color &&
-			!material.emissive.equals(new THREE.Color(0x000000)) // Only use emissive if it's not black
+			!material.emissive.equals(new THREE.Color(0x000000))
 		) {
-			// MeshPhongMaterial and MeshStandardMaterial have emissive
 			return material.emissive.clone();
 		} else if ("map" in material && material.map) {
-			// If there's a texture map but no direct color, try to extract a consistent color
-			// based on the texture's UUID rather than using random colors
+             // Heuristic based on texture name
+             const map = material.map as THREE.Texture;
+             if (map && map.name) {
+                 const n = map.name.toLowerCase();
+                 if (n.includes('leaf') || n.includes('green')) return new THREE.Color(0x4caf50);
+                 if (n.includes('bark') || n.includes('wood') || n.includes('brown')) return new THREE.Color(0x795548);
+             }
 
-			// First, check if the texture name contains color information
-			const map = material.map as THREE.Texture;
-			if (map && map.name) {
-				const textureName = map.name.toLowerCase();
-				if (textureName.includes("red")) {
-					console.log("Detected red from texture name:", map.name);
-					return new THREE.Color(0xf44336); // Red
-				}
-				if (textureName.includes("white")) {
-					console.log("Detected white from texture name:", map.name);
-					return new THREE.Color(0xffffff); // White
-				}
-			}
-
-			// For materials with specific names
-			if (material.name) {
-				const matName = material.name.toLowerCase();
-				if (matName.includes("red")) {
-					console.log(
-						"Detected red from material name:",
-						material.name
-					);
-					return new THREE.Color(0xf44336); // Red
-				}
-				if (matName.includes("white")) {
-					console.log(
-						"Detected white from material name:",
-						material.name
-					);
-					return new THREE.Color(0xffffff); // White
-				}
-			}
-
-			// Try to analyze the texture to determine its dominant color
-			// This is a simplified approach - in a real app, you might use canvas to analyze the texture
+             // Deterministic fallback based on UUID
 			let textureId = 0;
 			if (map && typeof map === "object" && "uuid" in map) {
-				// Create a simple hash from the UUID string
 				textureId = map.uuid
 					.split("")
 					.reduce((acc: number, char: string) => {
 						return (acc << 5) - acc + char.charCodeAt(0);
 					}, 0);
 			}
-
-			// For white/red rocket example, we need to ensure we don't always generate blue
-			// Let's use the hash to select from a predefined set of colors
-			const colorPalette = [
-				new THREE.Color(0xf44336), // Red
-				new THREE.Color(0xff9800), // Orange
-				new THREE.Color(0xffeb3b), // Yellow
-				new THREE.Color(0x4caf50), // Green
-				new THREE.Color(0x2196f3), // Blue
-				new THREE.Color(0x9c27b0), // Purple
-			];
-
-			// Use the hash to select a color, but bias toward red for certain hash values
-			// This increases the chance of red being selected
-			const hashMod = Math.abs(textureId % 100);
-			if (hashMod < 40) {
-				// 40% chance of red
-				console.log("Selected red from palette based on hash");
-				return colorPalette[0]; // Red
-			} else {
-				const colorIndex = Math.abs(textureId % colorPalette.length);
-				return colorPalette[colorIndex];
-			}
+			const hue = Math.abs(textureId % 100) / 100;
+			return new THREE.Color().setHSL(hue, 0.6, 0.5);
 		}
 
-		// Fallback to default color
 		return defaultColor;
 	}
 }
