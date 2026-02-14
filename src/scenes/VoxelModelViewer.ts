@@ -1584,7 +1584,7 @@ export class VoxelModelViewer {
 
 	/**
 	 * Export a high-resolution PNG image of the current view (2000x2000 pixels)
-	 * Uses the current camera angle set by the user but zooms in for better detail
+	 * Uses the current camera angle set by the user but re-centers on the model
 	 */
 	public exportAsPng(): void {
 		if (
@@ -1617,12 +1617,15 @@ export class VoxelModelViewer {
 			pixelRatio: this.renderer.getPixelRatio(),
 		};
 
-		// Store camera state
+		// Store camera state — save the real controls target
 		const originalCamera = {
 			position: this.camera.position.clone(),
-			target: new THREE.Vector3(0, 0, 0),
+			target: this.controls
+				? this.controls.target.clone()
+				: new THREE.Vector3(0, 0, 0),
 			zoom: this.camera.zoom,
 			fov: this.camera.fov,
+			aspect: this.camera.aspect,
 		};
 
 		// Store renderer settings
@@ -1640,7 +1643,7 @@ export class VoxelModelViewer {
 
 		// Enhance renderer for high-quality export
 		this.renderer.setSize(2000, 2000);
-		this.renderer.setPixelRatio(2); // Adjusted from 3 to 2 for balanced quality and performance
+		this.renderer.setPixelRatio(2);
 
 		// Enhance shadows and tone mapping for export
 		this.renderer.shadowMap.enabled = true;
@@ -1648,31 +1651,37 @@ export class VoxelModelViewer {
 		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
 		this.renderer.toneMappingExposure = 1.2;
 
-		// Get the current camera direction
-		const cameraDirection = new THREE.Vector3();
-		this.camera.getWorldDirection(cameraDirection);
-
-		// Calculate the center of the model
+		// Calculate the bounding box and true center of the model
 		const box = new THREE.Box3().setFromObject(this.instancedMesh);
 		const center = new THREE.Vector3();
 		box.getCenter(center);
+		const size = new THREE.Vector3();
+		box.getSize(size);
+		const maxDim = Math.max(size.x, size.y, size.z);
 
-		// Create a new scene for high-res rendering
-		const zoomFactor = 0.4; // Adjusted from 0.6 to 0.4 for a closer zoom (larger model in frame)
-		const originalDistance = this.camera.position.distanceTo(center);
-		const newDistance = originalDistance * zoomFactor;
+		// Get the camera direction from current position to current target
+		const cameraDirection = new THREE.Vector3()
+			.subVectors(this.camera.position, center)
+			.normalize();
 
-		// Move camera closer to the model along its current direction
+		// Calculate ideal distance to fit the model nicely in frame
+		// Use the FOV to compute how far the camera needs to be
+		const fovRad = THREE.MathUtils.degToRad(this.camera.fov);
+		const fitDistance = (maxDim / 2) / Math.tan(fovRad / 2);
+		const exportDistance = fitDistance * 0.9; // Slightly closer for a tighter framing
+
+		// Position camera along the same direction but at the ideal distance from model center
 		const newPosition = center
 			.clone()
-			.add(cameraDirection.multiplyScalar(-newDistance));
+			.add(cameraDirection.clone().multiplyScalar(exportDistance));
 
-		// Apply new camera position
+		// Apply new camera position and look at model center
 		this.camera.position.copy(newPosition);
+		this.camera.lookAt(center);
 
-		// Update controls if needed
+		// Update controls target to the model center (use .copy, not assignment)
 		if (this.controls) {
-			this.controls.target = center;
+			this.controls.target.copy(center);
 			this.controls.update();
 		}
 
@@ -1710,11 +1719,11 @@ export class VoxelModelViewer {
 		// Restore camera position and properties
 		this.camera.position.copy(originalCamera.position);
 		this.camera.zoom = originalCamera.zoom;
-		this.camera.aspect = originalSize.width / originalSize.height;
+		this.camera.aspect = originalCamera.aspect;
 		this.camera.fov = originalCamera.fov;
 		this.camera.updateProjectionMatrix();
 
-		// Restore controls
+		// Restore controls target and re-enable
 		if (this.controls) {
 			this.controls.target.copy(originalCamera.target);
 			this.controls.update();
@@ -2146,7 +2155,6 @@ export class VoxelModelViewer {
 		numFrames: number = 60,
 		delayPerFrame: number = 100 // ms, delay for each GIF frame
 	): Promise<void> {
-		// Changed to Promise<void> as it will trigger download directly
 		if (
 			!this.renderer ||
 			!this.scene ||
@@ -2171,10 +2179,42 @@ export class VoxelModelViewer {
 		const originalHeight =
 			this.canvasElement?.clientHeight || window.innerHeight;
 		const originalAspect = this.camera.aspect;
+		const originalCameraPos = this.camera.position.clone();
+		const originalControlsTarget = this.controls
+			? this.controls.target.clone()
+			: new THREE.Vector3(0, 0, 0);
 		const exportWidth = 1600;
 		const exportHeight = 1600;
 
 		const originalSceneRotationY = this.scene.rotation.y;
+
+		// --- Center the camera on the model for export ---
+		const box = new THREE.Box3().setFromObject(this.instancedMesh);
+		const center = new THREE.Vector3();
+		box.getCenter(center);
+		const size = new THREE.Vector3();
+		box.getSize(size);
+		const maxDim = Math.max(size.x, size.y, size.z);
+
+		// Calculate ideal distance to fit the model nicely
+		const fovRad = THREE.MathUtils.degToRad(this.camera.fov);
+		const fitDistance = (maxDim / 2) / Math.tan(fovRad / 2);
+		const exportDistance = fitDistance * 1.0; // Comfortable framing
+
+		// Position camera at a slight elevation looking at model center
+		const elevationAngle = Math.PI / 6; // 30 degrees above horizon
+		this.camera.position.set(
+			center.x,
+			center.y + Math.sin(elevationAngle) * exportDistance,
+			center.z + Math.cos(elevationAngle) * exportDistance
+		);
+		this.camera.lookAt(center);
+
+		if (this.controls) {
+			this.controls.target.copy(center);
+			this.controls.enabled = false;
+			this.controls.update();
+		}
 
 		this.renderer.setSize(exportWidth, exportHeight, false);
 		this.camera.aspect = exportWidth / exportHeight;
@@ -2189,16 +2229,11 @@ export class VoxelModelViewer {
 		// Calculate rotation step for the full 360° rotation
 		const rotationStep = (Math.PI * 2) / numFrames;
 
-		if (this.controls) {
-			this.controls.update();
-		}
-
 		for (let i = 0; i < numFrames; i++) {
 			this.scene.rotation.y = originalSceneRotationY + i * rotationStep;
 			this.renderer.render(this.scene, this.camera);
 
-			// We can't directly get a 2D context from a WebGL canvas,
-			// so we need to create a temporary 2D canvas to get the pixel data
+			// Create a temporary 2D canvas to get pixel data from the WebGL canvas
 			const tempCanvas = document.createElement("canvas");
 			tempCanvas.width = exportWidth;
 			tempCanvas.height = exportHeight;
@@ -2271,9 +2306,12 @@ export class VoxelModelViewer {
 		// Restore original settings after capturing frames
 		this.scene.rotation.y = originalSceneRotationY;
 		this.renderer.setSize(originalWidth, originalHeight, true);
+		this.camera.position.copy(originalCameraPos);
 		this.camera.aspect = originalAspect;
 		this.camera.updateProjectionMatrix();
 		if (this.controls) {
+			this.controls.target.copy(originalControlsTarget);
+			this.controls.enabled = true;
 			this.controls.update();
 		}
 
