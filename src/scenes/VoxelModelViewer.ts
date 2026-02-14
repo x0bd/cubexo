@@ -1583,16 +1583,11 @@ export class VoxelModelViewer {
 	}
 
 	/**
-	 * Export a high-resolution PNG image of the current view (2000x2000 pixels)
-	 * Uses the current camera angle set by the user but re-centers on the model
+	 * Export a high-resolution PNG image (2000x2000 pixels)
+	 * Uses a completely independent camera, pixelRatio=1 for correct pixel mapping
 	 */
 	public exportAsPng(): void {
-		if (
-			!this.renderer ||
-			!this.scene ||
-			!this.camera ||
-			!this.instancedMesh
-		) {
+		if (!this.renderer || !this.scene || !this.instancedMesh) {
 			console.error("Cannot export: renderer not initialized");
 			return;
 		}
@@ -1604,131 +1599,101 @@ export class VoxelModelViewer {
 		const modelName =
 			modelLoader?.getAttribute("data-model-name") ||
 			`model-${this.activeModelIndex}`;
-
-		// Create a sanitized filename
 		const filename = `cubexo-${modelName
 			.toLowerCase()
 			.replace(/[^a-z0-9]/g, "-")}.png`;
 
-		// Store original renderer size, pixel ratio and settings
-		const originalSize = {
-			width: this.renderer.domElement.width,
-			height: this.renderer.domElement.height,
-			pixelRatio: this.renderer.getPixelRatio(),
-		};
+		const exportSize = 2000;
 
-		// Store camera state — save the real controls target
-		const originalCamera = {
-			position: this.camera.position.clone(),
-			target: this.controls
-				? this.controls.target.clone()
-				: new THREE.Vector3(0, 0, 0),
-			zoom: this.camera.zoom,
-			fov: this.camera.fov,
-			aspect: this.camera.aspect,
-		};
+		// Save renderer state
+		const origWidth = this.renderer.domElement.width;
+		const origHeight = this.renderer.domElement.height;
+		const origPixelRatio = this.renderer.getPixelRatio();
+		const origToneMapping = this.renderer.toneMapping;
+		const origExposure = this.renderer.toneMappingExposure;
 
-		// Store renderer settings
-		const originalRendererSettings = {
-			shadowMapEnabled: this.renderer.shadowMap.enabled,
-			shadowMapType: this.renderer.shadowMap.type,
-			toneMapping: this.renderer.toneMapping,
-			toneMappingExposure: this.renderer.toneMappingExposure,
-		};
+		// Create independent export camera
+		const exportCamera = this._createExportCamera(exportSize, exportSize);
 
-		// Temporarily disable controls
-		if (this.controls) {
-			this.controls.enabled = false;
-		}
-
-		// Enhance renderer for high-quality export
-		this.renderer.setSize(2000, 2000);
-		this.renderer.setPixelRatio(2);
-
-		// Enhance shadows and tone mapping for export
-		this.renderer.shadowMap.enabled = true;
-		this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+		// CRITICAL: Set pixelRatio to 1 so canvas buffer size == logical size
+		// Without this, the canvas buffer is e.g. 4000x4000 at dpr=2 but
+		// toDataURL/drawImage capture at buffer resolution, causing offset
+		this.renderer.setPixelRatio(1);
+		this.renderer.setSize(exportSize, exportSize);
 		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
 		this.renderer.toneMappingExposure = 1.2;
 
-		// Calculate the bounding box and true center of the model
-		const box = new THREE.Box3().setFromObject(this.instancedMesh);
-		const center = new THREE.Vector3();
-		box.getCenter(center);
-		const size = new THREE.Vector3();
-		box.getSize(size);
-		const maxDim = Math.max(size.x, size.y, size.z);
+		// Render with the independent export camera
+		this.renderer.render(this.scene, exportCamera);
 
-		// Get the camera direction from current position to current target
-		const cameraDirection = new THREE.Vector3()
-			.subVectors(this.camera.position, center)
-			.normalize();
-
-		// Calculate ideal distance to fit the model nicely in frame
-		// Use the FOV to compute how far the camera needs to be
-		const fovRad = THREE.MathUtils.degToRad(this.camera.fov);
-		const fitDistance = (maxDim / 2) / Math.tan(fovRad / 2);
-		const exportDistance = fitDistance * 0.9; // Slightly closer for a tighter framing
-
-		// Position camera along the same direction but at the ideal distance from model center
-		const newPosition = center
-			.clone()
-			.add(cameraDirection.clone().multiplyScalar(exportDistance));
-
-		// Apply new camera position and look at model center
-		this.camera.position.copy(newPosition);
-		this.camera.lookAt(center);
-
-		// Update controls target to the model center (use .copy, not assignment)
-		if (this.controls) {
-			this.controls.target.copy(center);
-			this.controls.update();
-		}
-
-		// Use square aspect ratio for the export
-		this.camera.aspect = 1;
-		this.camera.updateProjectionMatrix();
-
-		// Render the scene
-		this.renderer.render(this.scene, this.camera);
-
-		// Create download link for the PNG
+		// Download
 		try {
 			const dataURL = this.renderer.domElement.toDataURL("image/png");
 			const link = document.createElement("a");
 			link.href = dataURL;
 			link.download = filename;
 			link.click();
-
-			// Show export notification
 			this.showExportNotification("High-quality PNG exported");
 		} catch (error) {
 			console.error("Error exporting PNG:", error);
 		}
 
-		// Restore original renderer settings
-		this.renderer.setSize(originalSize.width, originalSize.height);
-		this.renderer.setPixelRatio(originalSize.pixelRatio);
-		this.renderer.shadowMap.enabled =
-			originalRendererSettings.shadowMapEnabled;
-		this.renderer.shadowMap.type = originalRendererSettings.shadowMapType;
-		this.renderer.toneMapping = originalRendererSettings.toneMapping;
-		this.renderer.toneMappingExposure =
-			originalRendererSettings.toneMappingExposure;
+		// Restore renderer
+		this.renderer.setPixelRatio(origPixelRatio);
+		this.renderer.setSize(origWidth, origHeight);
+		this.renderer.toneMapping = origToneMapping;
+		this.renderer.toneMappingExposure = origExposure;
+	}
 
-		// Restore camera position and properties
-		this.camera.position.copy(originalCamera.position);
-		this.camera.zoom = originalCamera.zoom;
-		this.camera.aspect = originalCamera.aspect;
-		this.camera.fov = originalCamera.fov;
-		this.camera.updateProjectionMatrix();
+	/**
+	 * Create an independent camera for export, perfectly centered on the model.
+	 * Uses liveVoxels (the actual rendered positions) for accurate bounds.
+	 */
+	private _createExportCamera(
+		width: number,
+		height: number
+	): THREE.PerspectiveCamera {
+		// Compute bounding box from liveVoxels — the ACTUAL rendered positions
+		// (voxelsPerModel is the initial data, liveVoxels is what's on screen)
+		const box = new THREE.Box3();
+		const voxelCount =
+			this.voxelsPerModel[this.activeModelIndex]?.length || 0;
 
-		// Restore controls target and re-enable
-		if (this.controls) {
-			this.controls.target.copy(originalCamera.target);
-			this.controls.update();
-			this.controls.enabled = true;
+		if (this.liveVoxels.length > 0 && voxelCount > 0) {
+			// Only include voxels that belong to the active model
+			for (let i = 0; i < Math.min(voxelCount, this.liveVoxels.length); i++) {
+				box.expandByPoint(this.liveVoxels[i].position);
+			}
+		} else {
+			box.set(new THREE.Vector3(-5, -5, -5), new THREE.Vector3(5, 5, 5));
 		}
+
+		const center = new THREE.Vector3();
+		box.getCenter(center);
+		const size = new THREE.Vector3();
+		box.getSize(size);
+		const maxDim = Math.max(size.x, size.y, size.z);
+
+		// Create a fresh camera
+		const fov = 35;
+		const cam = new THREE.PerspectiveCamera(fov, width / height, 0.1, 1000);
+
+		// Distance: model should fill about 55% of the frame
+		const fovRad = THREE.MathUtils.degToRad(fov);
+		const fitDist = (maxDim / 2) / Math.tan(fovRad / 2);
+		const dist = fitDist * 1.8;
+
+		// Position at 30° elevation, looking at model center
+		const elevation = Math.PI / 6;
+		cam.position.set(
+			center.x,
+			center.y + Math.sin(elevation) * dist,
+			center.z + Math.cos(elevation) * dist
+		);
+		cam.lookAt(center);
+		cam.updateProjectionMatrix();
+
+		return cam;
 	}
 
 	/**
@@ -2153,17 +2118,16 @@ export class VoxelModelViewer {
 
 	public async exportTurntableGifFrames(
 		numFrames: number = 60,
-		delayPerFrame: number = 100 // ms, delay for each GIF frame
+		delayPerFrame: number = 100
 	): Promise<void> {
 		if (
 			!this.renderer ||
 			!this.scene ||
-			!this.camera ||
 			!this.instancedMesh ||
 			this.instancedMesh.count === 0
 		) {
 			console.error(
-				"Cannot export GIF: Renderer, scene, camera, or active model not available."
+				"Cannot export GIF: Renderer, scene, or active model not available."
 			);
 			this.showExportNotification(
 				"Error: No model to export for GIF",
@@ -2174,66 +2138,38 @@ export class VoxelModelViewer {
 
 		this.showExportNotification("Preparing GIF frames...", "success");
 
-		const originalWidth =
-			this.canvasElement?.clientWidth || window.innerWidth;
-		const originalHeight =
-			this.canvasElement?.clientHeight || window.innerHeight;
-		const originalAspect = this.camera.aspect;
-		const originalCameraPos = this.camera.position.clone();
-		const originalControlsTarget = this.controls
-			? this.controls.target.clone()
-			: new THREE.Vector3(0, 0, 0);
 		const exportWidth = 1600;
 		const exportHeight = 1600;
 
+		// Save only what we actually change
+		const origWidth =
+			this.canvasElement?.clientWidth || window.innerWidth;
+		const origHeight =
+			this.canvasElement?.clientHeight || window.innerHeight;
+		const origPixelRatio = this.renderer.getPixelRatio();
 		const originalSceneRotationY = this.scene.rotation.y;
 
-		// --- Center the camera on the model for export ---
-		const box = new THREE.Box3().setFromObject(this.instancedMesh);
-		const center = new THREE.Vector3();
-		box.getCenter(center);
-		const size = new THREE.Vector3();
-		box.getSize(size);
-		const maxDim = Math.max(size.x, size.y, size.z);
+		// --- Create a completely independent camera for the GIF ---
+		const exportCamera = this._createExportCamera(exportWidth, exportHeight);
 
-		// Calculate ideal distance to fit the model nicely
-		const fovRad = THREE.MathUtils.degToRad(this.camera.fov);
-		const fitDistance = (maxDim / 2) / Math.tan(fovRad / 2);
-		const exportDistance = fitDistance * 1.0; // Comfortable framing
-
-		// Position camera at a slight elevation looking at model center
-		const elevationAngle = Math.PI / 6; // 30 degrees above horizon
-		this.camera.position.set(
-			center.x,
-			center.y + Math.sin(elevationAngle) * exportDistance,
-			center.z + Math.cos(elevationAngle) * exportDistance
-		);
-		this.camera.lookAt(center);
-
-		if (this.controls) {
-			this.controls.target.copy(center);
-			this.controls.enabled = false;
-			this.controls.update();
-		}
-
+		// CRITICAL: Set pixelRatio to 1 so canvas buffer size == logical size
+		// Without this, drawImage captures the wrong portion of a DPR-scaled canvas
+		this.renderer.setPixelRatio(1);
 		this.renderer.setSize(exportWidth, exportHeight, false);
-		this.camera.aspect = exportWidth / exportHeight;
-		this.camera.updateProjectionMatrix();
 
 		// Create the GIF encoder
 		const gifEncoder = GIFEncoder();
-
-		// We'll use the same palette for all frames to avoid flicker
 		let globalPalette: number[][] | null = null;
-
-		// Calculate rotation step for the full 360° rotation
 		const rotationStep = (Math.PI * 2) / numFrames;
 
 		for (let i = 0; i < numFrames; i++) {
+			// Rotate the scene for turntable effect
 			this.scene.rotation.y = originalSceneRotationY + i * rotationStep;
-			this.renderer.render(this.scene, this.camera);
 
-			// Create a temporary 2D canvas to get pixel data from the WebGL canvas
+			// Render with the independent export camera
+			this.renderer.render(this.scene, exportCamera);
+
+			// Extract pixel data via a temp 2D canvas
 			const tempCanvas = document.createElement("canvas");
 			tempCanvas.width = exportWidth;
 			tempCanvas.height = exportHeight;
@@ -2244,10 +2180,7 @@ export class VoxelModelViewer {
 				continue;
 			}
 
-			// Draw the WebGL canvas onto the 2D canvas
 			tempContext.drawImage(this.renderer.domElement, 0, 0);
-
-			// Now we can get the pixel data
 			const imageData = tempContext.getImageData(
 				0,
 				0,
@@ -2265,7 +2198,6 @@ export class VoxelModelViewer {
 				globalPalette = quantize(rgba, 256);
 			}
 
-			// Apply the palette to get indexed bitmap
 			if (!globalPalette) {
 				console.error("Failed to generate palette");
 				continue;
@@ -2273,16 +2205,14 @@ export class VoxelModelViewer {
 
 			const indexedPixels = applyPalette(rgba, globalPalette);
 
-			// Write frame to the GIF
 			const frameOptions: any = {
 				palette: globalPalette,
-				delay: delayPerFrame / 10, // gifenc uses 1/100th of a second
+				delay: delayPerFrame / 10,
 			};
 
-			// Mark first frame appropriately
 			if (i === 0) {
 				frameOptions.first = true;
-				frameOptions.repeat = 0; // 0 = loop forever
+				frameOptions.repeat = 0;
 			}
 
 			gifEncoder.writeFrame(
@@ -2303,34 +2233,24 @@ export class VoxelModelViewer {
 		// Complete the GIF
 		gifEncoder.finish();
 
-		// Restore original settings after capturing frames
+		// Restore scene rotation, pixelRatio, and renderer size
 		this.scene.rotation.y = originalSceneRotationY;
-		this.renderer.setSize(originalWidth, originalHeight, true);
-		this.camera.position.copy(originalCameraPos);
-		this.camera.aspect = originalAspect;
-		this.camera.updateProjectionMatrix();
-		if (this.controls) {
-			this.controls.target.copy(originalControlsTarget);
-			this.controls.enabled = true;
-			this.controls.update();
-		}
+		this.renderer.setPixelRatio(origPixelRatio);
+		this.renderer.setSize(origWidth, origHeight, true);
 
 		console.log("GIF encoding completed");
 		this.showExportNotification("GIF encoding finished", "success");
 
-		// Get GIF data and create a download
+		// Download
 		const gifData = gifEncoder.bytes();
-		const blob = new Blob([gifData], { type: "image/gif" });
+		const blob = new Blob([gifData as BlobPart], { type: "image/gif" });
 		const url = URL.createObjectURL(blob);
 
-		// Create and trigger download
 		const a = document.createElement("a");
 		a.href = url;
 
-		// Generate a filename with the active model name if possible
 		let filename = "turntable_export.gif";
 		const activeModelData = this.voxelsPerModel[this.activeModelIndex];
-
 		if (activeModelData && (activeModelData as any).name) {
 			filename = `${(activeModelData as any).name
 				.replace(/[^a-z0-9]/gi, "_")
