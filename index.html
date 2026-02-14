@@ -21,6 +21,7 @@
 		<style>
 			:root {
 				--font-geist-mono: "Geist Mono", monospace;
+				--font-inter: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 				touch-action: pan-x pan-y;
 				-webkit-tap-highlight-color: transparent;
 			}
@@ -29,7 +30,11 @@
 				font-family: var(--font-geist-mono);
 			}
 
-			/* Apply Geist Mono to all text elements */
+			.inter {
+				font-family: var(--font-inter);
+			}
+
+			/* Apply Inter to all text elements by default */
 			body,
 			button,
 			input,
@@ -37,389 +42,259 @@
 			textarea,
 			span,
 			div {
-				font-family: var(--font-geist-mono);
+				font-family: var(--font-inter);
 			}
+			
 			.jp {
-				font-family: var(--font-geist-mono);
-				letter-spacing: 0.03em;
-			}
-			/* Dock reflection effect */
-			.dock-icon::after {
-				content: "";
-				position: absolute;
-				bottom: -8px;
-				left: 0;
-				right: 0;
-				height: 8px;
-				background: linear-gradient(
-					to bottom,
-					currentColor,
-					transparent
-				);
-				opacity: 0.15;
-				filter: blur(2px);
-				transform: scaleY(0.3);
-				transform-origin: top;
-				transition: all 0.2s;
+				font-family: var(--font-inter);
+				letter-spacing: 0.01em;
 			}
 
-			/* Dock hover labels */
+			/* Dock hover labels - macOS style */
 			.dock-icon .dock-label {
 				position: absolute;
-				top: -30px;
+				top: -40px;
 				left: 50%;
 				transform: translateX(-50%);
-				background-color: rgba(24, 24, 27, 0.9);
-				color: #f4f4f5;
+				background-color: rgba(255, 255, 255, 0.9);
+				color: #1c1c1e;
 				padding: 4px 8px;
-				border-radius: 4px;
-				font-size: 10px;
+				border-radius: 6px;
+				font-size: 11px;
 				white-space: nowrap;
 				opacity: 0;
-				transition: opacity 0.2s ease-in-out;
+				transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
 				pointer-events: none;
-				font-family: "Geist Mono", monospace;
+				font-family: var(--font-inter);
 				font-weight: 500;
-				letter-spacing: 0.03em;
-				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-				border: 1px solid rgba(82, 82, 91, 0.3);
+				letter-spacing: -0.01em;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+				border: 1px solid rgba(0, 0, 0, 0.05);
+				z-index: 100;
+				backdrop-filter: blur(12px);
+			}
+
+			.dark-mode .dock-icon .dock-label {
+				background-color: rgba(50, 50, 50, 0.9);
+				color: #f5f5f7;
+				border: 1px solid rgba(255, 255, 255, 0.1);
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 			}
 
 			.dock-icon:hover .dock-label {
 				opacity: 1;
+				top: -45px;
 			}
 
-			.dock-icon:hover::after {
-				opacity: 0.25;
-				transform: scaleY(0.4);
-			}
-			.light-mode .dock-icon::after {
-				opacity: 0.1;
-			}
-			.light-mode .dock-icon:hover::after {
-				opacity: 0.15;
-			}
-			/* Active mode indicator */
+			/* Active mode indicator - macOS dot */
 			.dock-icon.active::before {
 				content: "";
 				position: absolute;
-				bottom: -16px;
+				bottom: -10px;
 				left: 50%;
 				width: 4px;
 				height: 4px;
 				background-color: currentColor;
 				border-radius: 50%;
 				transform: translateX(-50%);
+				opacity: 0.8;
 			}
-			.light-mode .dock-icon.active::before {
-				background-color: rgba(15, 23, 42, 0.9);
-				width: 5px;
-				height: 5px;
-			}
-			/* Scrollbar styling */
+
+			/* Scrollbar styling - Apple style */
 			.custom-scrollbar::-webkit-scrollbar {
-				width: 4px;
+				width: 6px;
+				height: 6px;
 			}
 			.custom-scrollbar::-webkit-scrollbar-track {
 				background: transparent;
 			}
 			.custom-scrollbar::-webkit-scrollbar-thumb {
-				background: rgba(161, 161, 170, 0.3);
-				border-radius: 4px;
+				background: rgba(128, 128, 128, 0.3);
+				border-radius: 10px;
+				border: 2px solid transparent;
+				background-clip: content-box;
 			}
 			.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-				background: rgba(161, 161, 170, 0.5);
+				background-color: rgba(128, 128, 128, 0.5);
 			}
-			/* Vercel-inspired glass effect */
+
+			/* Apple-style Glassmorphism */
 			.glass-panel {
-				backdrop-filter: blur(16px);
-				border: 1px solid rgba(63, 63, 70, 0.3);
-				box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.3);
-				transition: all 0.2s ease;
-				background-color: rgba(24, 24, 27, 0.7);
+				backdrop-filter: blur(20px);
+				-webkit-backdrop-filter: blur(20px);
+				border: 1px solid rgba(255, 255, 255, 0.1);
+				box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+				transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+				background-color: rgba(30, 30, 30, 0.65);
 			}
+			
+			.light-mode .glass-panel {
+				background-color: rgba(255, 255, 255, 0.65);
+				border: 1px solid rgba(0, 0, 0, 0.05);
+				box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+			}
+
 			.glass-panel:hover {
-				border-color: rgba(113, 113, 122, 0.4);
+				border-color: rgba(255, 255, 255, 0.2);
+				box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 			}
-			/* Improved glassmorphism for panels */
+
+			/* Improved glassmorphism for main panels */
 			.panel {
-				background-color: rgba(24, 24, 27, 0.65) !important;
-				backdrop-filter: blur(16px);
-				box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.3),
-					inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+				background-color: rgba(30, 30, 30, 0.75) !important;
+				backdrop-filter: blur(25px) !important;
+				-webkit-backdrop-filter: blur(25px) !important;
+				border: 1px solid rgba(255, 255, 255, 0.08) !important; /* Fixed inner border */
+				box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2), inset 0 0 0 0.5px rgba(255,255,255,0.05);
+				border-radius: 18px !important;
 			}
-			/* Subtle accent glow for buttons */
-			.accent-glow {
-				box-shadow: 0 0 15px 2px rgba(99, 102, 241, 0.15);
-			}
-			/* Refined button styles */
+
+			/* Apple-style buttons */
 			.traf-button {
-				transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+				transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 			}
 			.traf-button:hover {
-				transform: translateY(-2px);
-				box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+				transform: translateY(-2px) scale(1.05);
+				box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
 			}
 			.traf-button:active {
-				transform: translateY(0);
+				transform: scale(0.95);
 			}
-			/* Accessibility focus styles */
+
+			/* Accessibility focus styles - Blue ring */
 			button:focus-visible,
 			a:focus-visible,
 			input:focus-visible,
 			select:focus-visible {
-				outline: 2px solid rgba(99, 102, 241, 0.6);
+				outline: 2px solid #007AFF;
 				outline-offset: 2px;
 			}
-			/* Theme-specific styles - shadcn UI inspired */
-			/* Light mode panel styles - using exact Tailwind Zinc colors */
+
+			/* Theme-specific styles */
+			/* Light mode panel styles */
 			.light-mode .panel {
-				background-color: #fafafa !important; /* zinc-50 */
-				border: 1px solid #e4e4e7 !important; /* zinc-200 */
-				box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+				background-color: rgba(255, 255, 255, 0.75) !important; 
+				border: 1px solid rgba(0, 0, 0, 0.05) !important; 
+				box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08) !important;
 			}
 			.light-mode .panel-header,
 			.light-mode .panel-footer {
-				border-color: #e4e4e7 !important; /* zinc-200 */
-				background-color: #fafafa !important; /* zinc-50 */
+				border-color: rgba(0, 0, 0, 0.05) !important; 
+				background-color: rgba(255, 255, 255, 0.5) !important; 
 			}
-			/* Remove custom CSS since we're using Tailwind classes directly */
-			/* Light mode panel text (keeping shadcn style for panels) */
+			
+			/* Dock Styling */
+			.dock {
+				background-color: rgba(30, 30, 30, 0.5) !important;
+				backdrop-filter: blur(25px) !important;
+				-webkit-backdrop-filter: blur(25px) !important;
+				border: 1px solid rgba(255, 255, 255, 0.1) !important;
+				box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
+				border-radius: 24px !important;
+				padding: 10px 14px !important;
+			}
+			
+			.light-mode .dock {
+				background-color: rgba(255, 255, 255, 0.6) !important;
+				border: 1px solid rgba(0, 0, 0, 0.05) !important;
+				box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1) !important;
+			}
+
+			/* Button styles in panels */
 			.light-mode .panel button,
 			.light-mode .panel-header span,
 			.light-mode .panel-content {
-				color: rgba(17, 24, 39, 0.9) !important; /* shadcn text */
+				color: #1c1c1e !important; 
 			}
 			.light-mode .panel-header h3,
 			.light-mode .panel-header h4 {
-				color: rgba(17, 24, 39, 1) !important; /* shadcn heading */
-				font-weight: 500 !important;
+				color: #000000 !important; 
+				font-weight: 600 !important;
+				letter-spacing: -0.01em;
 			}
 			/* Light mode button hover states */
 			.light-mode .panel button:hover {
-				background-color: rgba(
-					243,
-					244,
-					246,
-					1
-				) !important; /* shadcn hover */
+				background-color: rgba(0, 0, 0, 0.05) !important; 
 			}
 			/* Light mode model buttons */
 			.light-mode .model-button {
-				background-color: rgba(
-					249,
-					250,
-					251,
-					1
-				) !important; /* shadcn background */
-				border-color: rgba(
-					229,
-					231,
-					235,
-					1
-				) !important; /* shadcn border */
-				color: rgba(17, 24, 39, 0.9) !important; /* shadcn text */
+				background-color: rgba(0, 0, 0, 0.03) !important; 
+				border-color: transparent !important; 
+				color: #1c1c1e !important; 
+				border-radius: 12px;
 			}
 			.light-mode .model-button:hover {
-				background-color: rgba(
-					243,
-					244,
-					246,
-					1
-				) !important; /* shadcn hover */
-				border-color: rgba(
-					209,
-					213,
-					219,
-					1
-				) !important; /* shadcn border hover */
+				background-color: rgba(0, 0, 0, 0.06) !important; 
 			}
 			.light-mode .model-button.active {
-				background-color: rgba(
-					239,
-					246,
-					255,
-					1
-				) !important; /* shadcn blue light */
-				border-color: rgba(
-					59,
-					130,
-					246,
-					0.5
-				) !important; /* shadcn blue */
-				color: rgba(37, 99, 235, 1) !important; /* shadcn blue dark */
+				background-color: #007AFF !important; 
+				border-color: transparent !important; 
+				color: white !important; 
+				box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
 			}
-			/* Light mode inputs and selects */
+			
+			/* Dark mode button improvements */
+			.model-button {
+				border-radius: 12px;
+				transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+			}
+			.model-button.active {
+				background-color: #0A84FF !important; /* Apple Blue Dark Mode */
+				border-color: transparent !important;
+				color: white !important;
+				box-shadow: 0 4px 12px rgba(10, 132, 255, 0.3);
+			}
+
+			/* Inputs and selects */
 			.light-mode input,
 			.light-mode select {
-				background-color: rgba(255, 255, 255, 1) !important;
-				border-color: rgba(229, 231, 235, 1) !important;
-				color: rgba(17, 24, 39, 1) !important;
+				background-color: rgba(255, 255, 255, 0.8) !important;
+				border-color: rgba(0, 0, 0, 0.1) !important;
+				color: #1c1c1e !important;
+				border-radius: 10px;
 			}
 			.light-mode input:focus,
 			.light-mode select:focus {
-				border-color: rgba(59, 130, 246, 0.5) !important;
-				box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+				border-color: #007AFF !important;
+				box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15) !important;
 			}
-
-			/* Audio Visualizer Panel */
-			.audio-backdrop {
-				position: fixed;
-				top: 0;
-				left: 0;
-				right: 0;
-				bottom: 0;
-				background-color: rgba(0, 0, 0, 0.5);
-				z-index: 99;
-				opacity: 0;
-				visibility: hidden;
-				transition: opacity 0.3s ease, visibility 0.3s ease;
-			}
-
-			.audio-backdrop.active {
-				opacity: 1;
-				visibility: visible;
-			}
-
-			.audio-panel {
-				position: fixed;
-				top: 50%;
-				left: 50%;
-				transform: translate(-50%, -50%);
-				width: 400px;
-				z-index: 100;
-				opacity: 0;
-				visibility: hidden;
-				transition: opacity 0.3s ease, visibility 0.3s ease;
-				pointer-events: none;
-			}
-
-			.audio-panel.active {
-				opacity: 1;
-				visibility: visible;
-				pointer-events: auto;
-			}
-
-			/* Audio waveform visualization */
-			.waveform-placeholder {
-				height: 80px;
-				border-radius: 0.375rem;
-				background: rgba(39, 39, 42, 0.5);
-				position: relative;
-				overflow: hidden;
-			}
-
-			.waveform-placeholder::before {
-				content: "";
-				position: absolute;
-				top: 50%;
-				left: 0;
-				right: 0;
-				height: 2px;
-				background: rgba(255, 255, 255, 0.2);
-			}
-
-			.waveform-placeholder .wave {
-				position: absolute;
-				bottom: 0;
-				left: 0;
-				width: 100%;
-				height: 100%;
-				display: flex;
-				align-items: center;
-				justify-content: space-between;
-				padding: 0 10px;
-			}
-
-			.waveform-placeholder .wave span {
-				width: 3px;
-				background: rgba(99, 102, 241, 0.6);
-				margin: 0 1px;
-				height: 5px;
-				border-radius: 1px;
-				animation: wave 1.5s infinite ease-in-out;
-			}
-
-			@keyframes wave {
-				0%,
-				100% {
-					height: 5px;
-				}
-				50% {
-					height: 30px;
-				}
-			}
-
-			.waveform-placeholder .wave span:nth-child(2n) {
-				animation-delay: 0.2s;
-			}
-
-			.waveform-placeholder .wave span:nth-child(3n) {
-				animation-delay: 0.4s;
-			}
-
-			.waveform-placeholder .wave span:nth-child(4n) {
-				animation-delay: 0.6s;
-			}
-
-			.waveform-placeholder .wave span:nth-child(5n) {
-				animation-delay: 0.8s;
-			}
-
-			/* File upload dropzone */
-			.file-dropzone {
-				border: 2px dashed rgba(99, 102, 241, 0.4);
-				border-radius: 0.5rem;
-				transition: all 0.2s ease;
-				background: rgba(39, 39, 42, 0.3);
-			}
-
-			.file-dropzone:hover {
-				border-color: rgba(99, 102, 241, 0.7);
-				background: rgba(39, 39, 42, 0.5);
-			}
-
-			/* Range slider styling */
+			
+			/* Range slider styling - Apple style */
 			.audio-slider {
 				-webkit-appearance: none;
 				width: 100%;
 				height: 4px;
 				border-radius: 2px;
-				background: rgba(82, 82, 91, 0.5);
+				background: rgba(128, 128, 128, 0.3);
 				outline: none;
 			}
 
 			.audio-slider::-webkit-slider-thumb {
 				-webkit-appearance: none;
 				appearance: none;
-				width: 16px;
-				height: 16px;
+				width: 20px;
+				height: 20px;
 				border-radius: 50%;
-				background: rgb(99, 102, 241);
+				background: #ffffff;
+				box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 				cursor: pointer;
 				transition: all 0.2s ease;
+				margin-top: -8px; /* Center thumb */
+			}
+			
+			.dark-mode .audio-slider::-webkit-slider-thumb {
+				background: #ffffff;
+			}
+			
+			.light-mode .audio-slider::-webkit-slider-thumb {
+				background: #ffffff;
+				border: 0.5px solid rgba(0,0,0,0.1);
 			}
 
 			.audio-slider::-webkit-slider-thumb:hover {
 				transform: scale(1.1);
-				box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+				box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
 			}
-
-			.audio-slider::-moz-range-thumb {
-				width: 16px;
-				height: 16px;
-				border-radius: 50%;
-				background: rgb(99, 102, 241);
-				cursor: pointer;
-				border: none;
-				transition: all 0.2s ease;
-			}
-
-			.audio-slider::-moz-range-thumb:hover {
-				transform: scale(1.1);
-				box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
-			}
-
 			/* Mobile styles */
 			@media (max-width: 640px) {
 				.dock-icon .dock-label {

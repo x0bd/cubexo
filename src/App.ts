@@ -612,28 +612,31 @@ export class App {
 		message: string,
 		type: "success" | "error" = "success"
 	): void {
-		// Create notification element with updated premium Japanese design
+		// Create notification element with Apple-style design
 		const notificationEl = document.createElement("div");
+		// Using refined glassmorphism and rounded corners
 		notificationEl.className =
-			"fixed bottom-6 right-6 py-2.5 px-3.5 rounded-lg shadow-xl flex items-center gap-3 z-50 " +
-			"bg-zinc-900/80 backdrop-blur-md border border-zinc-700/50 " +
-			(type === "success" ? "text-emerald-500" : "text-rose-500");
+			"fixed bottom-6 right-6 py-3 px-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50 " +
+			(type === "success" 
+				? "bg-white/80 dark:bg-zinc-800/80 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
+				: "bg-white/80 dark:bg-zinc-800/80 text-rose-600 dark:text-rose-400 border border-rose-500/20") +
+			" backdrop-blur-xl transition-all duration-300 transform translate-y-4 opacity-0";
 
 		// Add icon with premium styling
 		const iconEl = document.createElement("span");
 		iconEl.className = "flex items-center justify-center";
 
-		// Create SVG icon based on type
+		// Create SVG icon based on type - slightly refined sizing
 		if (type === "success") {
 			iconEl.innerHTML = `
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle">
+				<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle">
 					<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
 					<polyline points="22 4 12 14.01 9 11.01"/>
 				</svg>
 			`;
 		} else {
 			iconEl.innerHTML = `
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-circle">
+				<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-alert-circle">
 					<circle cx="12" cy="12" r="10"/>
 					<line x1="12" y1="8" x2="12" y2="12"/>
 					<line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -643,34 +646,29 @@ export class App {
 
 		notificationEl.appendChild(iconEl);
 
-		// Add message text with premium Japanese-style typography
+		// Add message text with Inter font
 		const messageEl = document.createElement("span");
 		messageEl.className =
-			"text-xs jp tracking-wide uppercase text-zinc-200";
+			"text-sm font-medium tracking-tight text-zinc-900 dark:text-zinc-100 font-sans";
 		messageEl.textContent = message;
 		notificationEl.appendChild(messageEl);
 
 		// Add to DOM
 		document.body.appendChild(notificationEl);
 
-		// Animate appearance
-		gsap.fromTo(
-			notificationEl,
-			{ y: 20, opacity: 0 },
-			{ y: 0, opacity: 1, duration: 0.3, ease: "power2.out" }
-		);
+		// Animate appearance (slide up + fade in)
+		requestAnimationFrame(() => {
+			notificationEl.classList.remove("translate-y-4", "opacity-0");
+		});
 
 		// Animate and remove after delay
 		setTimeout(() => {
-			gsap.to(notificationEl, {
-				y: 10,
-				opacity: 0,
-				duration: 0.4,
-				ease: "power3.in",
-				onComplete: () => {
+			notificationEl.classList.add("translate-y-4", "opacity-0");
+			setTimeout(() => {
+				if (document.body.contains(notificationEl)) {
 					document.body.removeChild(notificationEl);
-				},
-			});
+				}
+			}, 300); // Wait for transition to finish
 		}, 3000);
 	}
 
