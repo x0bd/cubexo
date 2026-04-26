@@ -1,37 +1,72 @@
 @import "tailwindcss";
 
-/* Notification animations (used by App.ts dynamic notifications) */
+/* Keep @tailwind base; @tailwind components; @tailwind utilities; if they were previously here or if you plan to add custom base styles/components. For a pure utility-first approach with minimal custom CSS, just @import "tailwindcss"; might be sufficient depending on the project setup. */
+
+/* Custom animations for notifications */
 @keyframes fadeIn {
-	from { opacity: 0; transform: translateY(8px) scale(0.97); }
-	to   { opacity: 1; transform: translateY(0) scale(1); }
+	from {
+		opacity: 0;
+		transform: translateY(20px) scale(0.95);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
 }
 
 @keyframes fadeOut {
-	from { opacity: 1; transform: translateY(0) scale(1); }
-	to   { opacity: 0; transform: translateY(8px) scale(0.97); }
+	from {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(20px) scale(0.95);
+	}
 }
 
-@layer utilities {
-	.animate-fade-in  { animation: fadeIn  0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-	.animate-fade-out { animation: fadeOut 0.2s  cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-}
-
-/* Model preview canvas (used by ModelSelector dynamic previews) */
 .model-preview canvas {
 	width: 100%;
 	height: 100%;
 	display: block;
-	object-fit: contain;
+	object-fit: contain; /* Ensure the canvas content is fully visible */
 }
 
 .model-preview {
 	position: relative;
 	width: 130px;
-	height: 130px;
+	height: 130px; /* Explicit height to ensure square aspect ratio */
 	aspect-ratio: 1;
-	background: rgba(255, 255, 255, 0.02);
-	border: 1px solid rgba(255, 255, 255, 0.04);
-	border-radius: 6px;
+	background-color: rgba(255, 255, 255, 0.03);
+	border: 1px solid rgba(255,255,255,0.05);
+	border-radius: 16px; /* Increased border radius */
 	overflow: hidden;
+	transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 	cursor: pointer;
+	margin: 6px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.model-preview:hover {
+	transform: translateY(-2px);
+	background-color: rgba(255, 255, 255, 0.08);
+	box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+	border-color: rgba(255,255,255,0.1);
+}
+
+@layer utilities {
+	.animate-fade-in {
+		animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	}
+
+	.animate-fade-out {
+		animation: fadeOut 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	}
+	
+	.apple-glass {
+		@apply backdrop-blur-xl bg-white/60 dark:bg-zinc-900/60 border border-white/20 dark:border-white/10 shadow-lg;
+	}
 }
